@@ -18,6 +18,7 @@ endif()
 add_library(sys_scan_core
   src/core/Scanner.cpp
   src/core/ScannerRegistry.cpp
+  src/core/RuleEngine.cpp
   src/core/Report.cpp
   src/core/Utils.cpp
   src/core/JSONWriter.cpp
@@ -37,6 +38,7 @@ add_library(sys_scan_core
   src/scanners/AuditdScanner.cpp
   src/scanners/ContainerScanner.cpp
   src/scanners/IntegrityScanner.cpp
+  src/scanners/YaraScanner.cpp
 )
 
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
@@ -87,6 +89,21 @@ if(BUILD_TESTS)
   add_executable(test_canonical_golden tests/test_canonical_golden.cpp)
   target_link_libraries(test_canonical_golden PRIVATE sys_scan_core)
   add_test(NAME canonical_golden COMMAND test_canonical_golden)
+  add_executable(test_rules_engine tests/test_rules_engine.cpp)
+  target_link_libraries(test_rules_engine PRIVATE sys_scan_core)
+  add_test(NAME rules_engine COMMAND test_rules_engine)
+  add_executable(test_rules_engine_unit tests/test_rules_engine_unit.cpp)
+  target_link_libraries(test_rules_engine_unit PRIVATE sys_scan_core)
+  add_test(NAME rules_engine_unit COMMAND test_rules_engine_unit)
+  add_executable(test_ndjson_mitre tests/test_ndjson_mitre.cpp)
+  target_link_libraries(test_ndjson_mitre PRIVATE sys_scan_core)
+  add_test(NAME ndjson_mitre COMMAND test_ndjson_mitre)
+  add_executable(test_rules_mitre_dedup tests/test_rules_mitre_dedup.cpp)
+  target_link_libraries(test_rules_mitre_dedup PRIVATE sys_scan_core)
+  add_test(NAME rules_mitre_dedup COMMAND test_rules_mitre_dedup)
+  add_executable(test_rules_engine_warnings_structured tests/test_rules_engine_warnings_structured.cpp)
+  target_link_libraries(test_rules_engine_warnings_structured PRIVATE sys_scan_core)
+  add_test(NAME rules_engine_warnings_structured COMMAND test_rules_engine_warnings_structured)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
