@@ -45,7 +45,7 @@ void MACScanner::scan(Report& report) {
     size_t apparmor_profiles=0; size_t apparmor_profiles_complain=0; size_t apparmor_unconfined_critical=0;
     std::vector<std::string> critical_bins = {"/usr/sbin/sshd","/usr/bin/dbus-daemon","/usr/sbin/nginx","/usr/bin/containerd","/usr/bin/dockerd"};
     // Scan processes attr/current for a few critical processes
-    for(const auto& entry : fs::directory_iterator("/proc")){
+    for(const auto& entry : fs::directory_iterator("/proc", fs::directory_options::skip_permission_denied)){
         if(!entry.is_directory()) continue; auto pid = entry.path().filename().string(); if(pid.empty() || pid[0]<'0'||pid[0]>'9') continue;
         auto commp = entry.path()/"comm"; std::ifstream cf(commp); if(!cf) continue; std::string comm; std::getline(cf, comm); if(comm.empty()) continue;
         auto attrp = entry.path()/"attr"/"current"; std::ifstream af(attrp); if(!af) continue; std::string label; std::getline(af,label); if(label.empty()) continue;
