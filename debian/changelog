@@ -1,0 +1,5 @@
+sys-scan (0.1.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging (CMake build, JSON security scanner).
+
+ -- Joseph Mazzini <joseph@mazzlabs.works>  Mon, 25 Aug 2025 14:30:00 +0000

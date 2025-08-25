@@ -1,0 +1,16 @@
+Source: sys-scan
+Section: admin
+Priority: optional
+Maintainer: Joseph Mazzini <joseph@mazzlabs.works>
+Build-Depends: debhelper-compat (= 13), cmake, g++ (>= 10), libssl-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/J-mazz/sys-scan
+Rules-Requires-Root: no
+
+Package: sys-scan
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Lightweight Linux security & hygiene scanner (process/network/module/IOC)
+ A fast C++20 system scanner producing structured JSON findings with noise reduction,
+ module integrity heuristics, and IOC aggregation. Includes optional process hashing
+ and anomaly-only modes for cleaner CI gating.
