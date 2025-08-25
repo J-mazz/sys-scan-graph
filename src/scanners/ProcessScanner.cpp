@@ -7,6 +7,9 @@
 #include <sstream>
 #include <pwd.h>
 #include <sys/stat.h>
+#ifdef SYS_SCAN_HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
 
 namespace fs = std::filesystem;
 namespace sys_scan {
@@ -45,6 +48,30 @@ void ProcessScanner::scan(Report& report) {
         f.description = cmd.empty()?"(no cmdline)":cmd;
         f.metadata["uid"] = uid;
         f.metadata["gid"] = gid;
+        if(config().process_hash){
+            // attempt to read /proc/PID/exe target and hash file contents (first 1MB stream for performance)
+            std::error_code ec; auto exe_link = entry.path()/"exe"; auto target = fs::read_symlink(exe_link, ec);
+            if(!ec){
+                auto real = target.string(); f.metadata["exe_path"] = real;
+#ifdef SYS_SCAN_HAVE_OPENSSL
+                std::ifstream efs(real, std::ios::binary);
+                if(efs){
+                    std::vector<unsigned char> buf(8192);
+                    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+                    if(ctx && EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr)==1){
+                        size_t total=0; while(efs && total < 1024*1024){ efs.read((char*)buf.data(), buf.size()); std::streamsize got = efs.gcount(); if(got<=0) break; EVP_DigestUpdate(ctx, buf.data(), (size_t)got); total += (size_t)got; }
+                        unsigned char md[32]; unsigned int mdlen=0; if(EVP_DigestFinal_ex(ctx, md, &mdlen)==1 && mdlen==32){
+                            static const char* hex="0123456789abcdef"; std::string hexhash; hexhash.reserve(64); for(unsigned i=0;i<32;i++){ hexhash.push_back(hex[md[i]>>4]); hexhash.push_back(hex[md[i]&0xF]); }
+                            f.metadata["sha256"] = hexhash;
+                        }
+                    }
+                    if(ctx) EVP_MD_CTX_free(ctx);
+                }
+#else
+                f.metadata["sha256"] = "(disabled - OpenSSL not found)";
+#endif
+            }
+        }
     report.add_finding(this->name(), std::move(f));
     ++emitted;
     }

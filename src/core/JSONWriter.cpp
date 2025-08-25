@@ -112,7 +112,8 @@ std::string JSONWriter::write(const Report& report) const {
     os << "\n    \"gid\": "<<host.gid<<",";
     os << "\n    \"egid\": "<<host.egid<<",";
     if(!host.cmdline.empty()) os << "\n    \"cmdline\": \""<<escape(host.cmdline)<<"\",";
-    os << "\n    \"tool_version\": \"0.1.0\""; // static for now
+    os << "\n    \"tool_version\": \"0.1.0\","; // static for now
+    os << "\n    \"json_schema_version\": \"1\""; // increment if breaking JSON structure changes
     os << "\n  },";
     os << "\n  \"summary\": {";
     os << "\n    \"scanner_count\": " << results.size() << ",";
