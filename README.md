@@ -14,7 +14,7 @@ Processes, Network, Kernel Params, Kernel Modules (summary / unsigned & out‑of
 Deterministic JSON (pretty / compact) with summary (counts, durations, severities, slowest). Severity filtering & fail-on threshold; aggregated findings reduce noise (env/process IOC, SUID alt paths, module summary).
 
 ### Noise Reduction
-Env IOC aggregation with allowlist downgrade, process IOC merging per exe, SUID inode dedupe, module summary mode.
+Env IOC aggregation with allowlist downgrade (via `--ioc-allow` / `--ioc-allow-file`), process IOC merging per exe, SUID inode dedupe (with expected baseline downgrade), module summary mode and anomalies-only options.
 
 ### Example Use
 ```
@@ -22,7 +22,7 @@ Env IOC aggregation with allowlist downgrade, process IOC merging per exe, SUID 
 ```
 
 ### Security Heuristic Highlights
-Network exposed listener severity lift; ld.so.preload anomaly detection; unsigned/out‑of‑tree kernel module markers (includes .ko.xz/.gz scan).
+Network exposed listener severity lift; ld.so.preload anomaly detection; unsigned/out‑of‑tree kernel module markers (includes .ko.xz/.gz scan); SUID expected baseline downgrades common utilities; IOC findings include `rule` metadata explaining trigger.
 
 ## CLI Overview
 ```
@@ -44,6 +44,13 @@ Network exposed listener severity lift; ld.so.preload anomaly detection; unsigne
 --network-states list         Comma-separated TCP states (LISTEN,ESTABLISHED,...)
 --ioc-allow list              Comma-separated substrings to downgrade env IOC
 --modules-summary             Collapse module list into single summary finding
+--modules-anomalies-only      Only emit unsigned/out-of-tree module entries (no summary)
+--process-hash                Include SHA256 hash of process executable (first 1MB) if OpenSSL available
+--process-inventory           Emit all processes (otherwise only IOC/anomalies)
+--ioc-allow-file FILE         Newline-delimited additional env allowlist patterns
+--fail-on-count N             Exit non-zero if total finding count >= N
+--suid-expected list          Extra expected SUID paths (comma list)
+--suid-expected-file FILE     Newline-delimited expected SUID paths
 --help                        Show usage
 ```
 
