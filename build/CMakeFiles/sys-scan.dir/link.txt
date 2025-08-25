@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG "CMakeFiles/sys-scan.dir/src/main.cpp.o" -o sys-scan  libsys_scan_core.a 
