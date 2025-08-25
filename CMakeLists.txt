@@ -44,6 +44,18 @@ if(OpenSSL_FOUND)
   target_link_libraries(sys_scan_core PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
+# Optional compression libraries for in-process module decompression (replaces popen to xz/gzip)
+find_package(ZLIB QUIET)
+if(ZLIB_FOUND)
+  target_link_libraries(sys_scan_core PUBLIC ZLIB::ZLIB)
+  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_ZLIB=1)
+endif()
+find_package(LibLZMA QUIET)
+if(LIBLZMA_FOUND)
+  target_link_libraries(sys_scan_core PUBLIC LibLZMA::LibLZMA)
+  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_LZMA=1)
+endif()
+
 add_executable(sys-scan src/main.cpp)
 
 target_link_libraries(sys-scan PRIVATE sys_scan_core)
