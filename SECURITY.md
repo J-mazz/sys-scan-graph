@@ -21,7 +21,7 @@ Use one of these private channels instead:
    This creates a private workspace where we can discuss details and coordinate a fix & disclosure timeline.
 
 2. **Email (fallback)**  
-   If you cannot use advisories, email: `REPLACE_WITH_CONTACT` (PGP optional).  
+   If you cannot use advisories, email: joseph@mazzlabs.works  
    Please include: affected version / commit, environment, reproduction steps, impact assessment, and any suggested fixes.
 
 ## What to Expect
