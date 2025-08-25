@@ -14,7 +14,7 @@ namespace sys_scan {
 void ModuleScanner::scan(Report& report) {
     std::ifstream ifs("/proc/modules"); if(!ifs) return; std::string line;
     auto& cfg = config();
-    if(!cfg.modules_summary_only){
+    if(!cfg.modules_summary_only && !cfg.modules_anomalies_only){
         while(std::getline(ifs,line)) {
             std::istringstream ls(line); std::string name; ls>>name; if(name.empty()) continue; Finding f; f.id = name; f.title = "Module "+name; f.severity="info"; f.description="Loaded kernel module"; report.add_finding(this->name(), std::move(f)); }
         return;
@@ -67,7 +67,13 @@ void ModuleScanner::scan(Report& report) {
             }
         }
         if(unsigned_mod){ ++unsigned_count; if(unsigned_sample.size()<unsigned_sample_limit) unsigned_sample.push_back(name); }
+        if(cfg.modules_anomalies_only){
+            if(oot || unsigned_mod){
+                Finding f; f.id = name; f.title = "Module anomaly: "+name; f.severity = unsigned_mod?"high":"medium"; f.description = unsigned_mod?"Unsigned kernel module detected":"Out-of-tree kernel module"; if(oot) f.metadata["out_of_tree"]="true"; if(unsigned_mod) f.metadata["unsigned"]="true"; if(!path.empty()) f.metadata["path"] = path; report.add_finding(this->name(), std::move(f));
+            }
+        }
     }
+    if(cfg.modules_anomalies_only) return; // done; no summary in anomalies-only mode
     Finding f; f.id = "module_summary"; f.title = "Kernel modules summary"; f.description="Loaded kernel modules inventory";
     // Severity escalation based on findings
     std::string sev = "info"; if(likely_out_of_tree>0) sev = "medium"; if(unsigned_count>0) sev = "high"; f.severity = sev;

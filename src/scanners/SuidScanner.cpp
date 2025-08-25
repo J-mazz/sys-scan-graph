@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <sys/stat.h>
 #include <unordered_map>
+#include <unordered_set>
 #include "../core/Config.h"
 
 namespace fs = std::filesystem;
@@ -36,8 +37,24 @@ void SuidScanner::scan(Report& report) {
             }
         }
     }
+    // Build expected baseline set (static minimal plus user additions). We match if primary ends with path element or full path match.
+    std::unordered_set<std::string> expected;
+    const char* base[] = {"/usr/bin/passwd","/usr/bin/sudo","/usr/bin/chsh","/usr/bin/chfn","/usr/bin/newgrp","/usr/bin/gpasswd","/usr/bin/mount","/usr/bin/umount","/usr/bin/su","/usr/bin/pkexec","/usr/bin/traceroute6.iputils","/usr/bin/ping","/usr/bin/ping6","/usr/bin/ssh-agent"};
+    for(auto b: base) expected.insert(b);
+    for(const auto& add : config().suid_expected_add) if(!add.empty()) expected.insert(add);
+
+    auto is_expected = [&](const std::string& path){ if(expected.count(path)) return true; // direct
+        // suffix match on filename for some distros differences
+        auto slash = path.find_last_of('/'); std::string fname = slash==std::string::npos?path:path.substr(slash+1);
+        for(const auto& e: expected){ auto eslash = e.find_last_of('/'); std::string ef = eslash==std::string::npos?e:e.substr(eslash+1); if(ef==fname) return true; }
+        return false;
+    };
     for(auto& kv : agg){
         Finding f; f.id = kv.second.primary; f.title = "SUID/SGID binary"; f.severity = kv.second.severity; f.description = "Binary has SUID or SGID bit set";
+        if(is_expected(kv.second.primary) && severity_rank(f.severity) <= severity_rank("medium")) {
+            f.metadata["expected"] = "true"; // downgrade expected common utilities
+            f.severity = "low"; // baseline safe expectation
+        }
         if(!kv.second.alt_paths.empty()){
             // join alt paths (limit to avoid huge output)
             std::string joined; size_t limit=5; for(size_t i=0;i<kv.second.alt_paths.size() && i<limit;i++){ if(i) joined += ","; joined += kv.second.alt_paths[i]; }
