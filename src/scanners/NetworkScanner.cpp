@@ -75,7 +75,7 @@ static void parse_tcp(const std::string& path, Report& report, const std::string
         ++line_no; if(line.find(':')==std::string::npos) continue; // quick filter
         // tokenize by whitespace (variable spacing)
         std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
-        if(tok.size() < 10) { if(config().network_debug) { Finding dbg; dbg.id = proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw tcp line"; dbg.severity="info"; dbg.description="Unparsed line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
+    if(tok.size() < 10) { if(config().network_debug) { Finding dbg; dbg.id = proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw tcp line"; dbg.severity=Severity::Info; dbg.description="Unparsed line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
         // columns (from /proc/net/tcp docs)
         // 0: sl, 1: local_address, 2: rem_address, 3: st, 4: tx_queue:rx_queue, 5: tr:when, 6: retrnsmt, 7: uid, 8: timeout, 9: inode
         const std::string& local = tok[1]; const std::string& rem = tok[2]; const std::string& st = tok[3];
@@ -88,7 +88,7 @@ static void parse_tcp(const std::string& path, Report& report, const std::string
     auto state_str = tcp_state(st);
     if(config().network_listen_only && state_str != "LISTEN") continue;
     if(!state_allowed(state_str)) continue;
-    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" "+state_str+" "+std::to_string(lport); f.severity="info"; f.description="TCP socket";
+    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" "+state_str+" "+std::to_string(lport); f.severity=Severity::Info; f.description="TCP socket";
         f.metadata["protocol"] = "tcp";
         f.metadata["state"] = tcp_state(st); f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["rport"] = std::to_string(rport); f.metadata["inode"] = inode_s;
     if(path.find("tcp6")!=std::string::npos){ f.metadata["lip"] = hex_ip6_to_str(lip_hex); f.metadata["rip"] = hex_ip6_to_str(rip_hex); }
@@ -97,13 +97,13 @@ static void parse_tcp(const std::string& path, Report& report, const std::string
         // severity heuristic after exe known
         if(f.metadata.count("exe")){
             auto sev = classify_tcp_severity(state_str, lport, f.metadata["exe"]);
-            f.severity = escalate_exposed(sev, state_str, f.metadata["lip"]);
+            f.severity = severity_from_string(escalate_exposed(sev, state_str, f.metadata["lip"]));
         } else {
             auto sev = classify_tcp_severity(state_str, lport, "");
-            f.severity = escalate_exposed(sev, state_str, f.metadata["lip"]);
+            f.severity = severity_from_string(escalate_exposed(sev, state_str, f.metadata["lip"]));
         }
         report.add_finding(proto, std::move(f)); ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
-    if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug tcp none parsed"; dbg.severity="low"; dbg.description="No TCP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
+    if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug tcp none parsed"; dbg.severity=Severity::Low; dbg.description="No TCP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
 }
 
 static std::string classify_udp_severity(unsigned port, const std::string& exe){
@@ -116,15 +116,15 @@ static void parse_udp(const std::string& path, Report& report, const std::string
     std::ifstream ifs(path); if(!ifs) return; std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
-        if(tok.size() < 10){ if(config().network_debug){ Finding dbg; dbg.id=proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw udp line"; dbg.severity="info"; dbg.description="Unparsed UDP line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
+    if(tok.size() < 10){ if(config().network_debug){ Finding dbg; dbg.id=proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw udp line"; dbg.severity=Severity::Info; dbg.description="Unparsed UDP line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
         const std::string& local = tok[1]; const std::string& inode_s = tok[9]; const std::string& uid_s = tok[7];
         auto pos = local.find(':'); if(pos==std::string::npos) continue; auto lip_hex = local.substr(0,pos); auto lport_hex = local.substr(pos+1); unsigned lport=0; std::stringstream ph; ph<<std::hex<<lport_hex; ph>>lport; if(lport==0) continue;
-    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" port "+std::to_string(lport); f.severity="info"; f.description="UDP socket"; f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["inode"] = inode_s; f.metadata["protocol"] = "udp";
+    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" port "+std::to_string(lport); f.severity=Severity::Info; f.description="UDP socket"; f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["inode"] = inode_s; f.metadata["protocol"] = "udp";
         if(path.find("udp6")!=std::string::npos) f.metadata["lip"] = hex_ip6_to_str(lip_hex); else f.metadata["lip"] = hex_ip_to_v4(lip_hex);
         auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = it->second.first; f.metadata["exe"] = it->second.second; }
-    f.severity = classify_udp_severity(lport, f.metadata.count("exe")? f.metadata["exe"] : "");
+    f.severity = severity_from_string(classify_udp_severity(lport, f.metadata.count("exe")? f.metadata["exe"] : ""));
     report.add_finding(proto, std::move(f)); ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
-    if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug udp none parsed"; dbg.severity="low"; dbg.description="No UDP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
+    if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug udp none parsed"; dbg.severity=Severity::Low; dbg.description="No UDP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
 }
 
 void NetworkScanner::scan(Report& report) {

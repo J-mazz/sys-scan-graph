@@ -5,15 +5,17 @@
 #include <chrono>
 #include <optional>
 #include <map>
+#include "Severity.h"
 
 namespace sys_scan {
 
 struct Finding {
     std::string id;
     std::string title;
-    std::string severity; // info, low, medium, high, critical
+    Severity severity = Severity::Info;
     std::string description;
     std::map<std::string, std::string> metadata; // flexible key/value pairs
+    int risk_score = 0; // derived from severity mapping at emit time
 };
 
 struct ScanResult {

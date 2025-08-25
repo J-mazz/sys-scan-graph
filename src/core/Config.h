@@ -39,6 +39,6 @@ struct Config {
 Config& config();
 void set_config(const Config& c);
 
-int severity_rank(const std::string& sev); // info=0 low=1 medium=2 high=3 critical=4 error=5
+int severity_rank(const std::string& sev); // compatibility wrapper (enum implemented in Severity.h)
 
 }

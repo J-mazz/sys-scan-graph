@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
     if(!cfg.fail_on_severity.empty()) {
         int thresh = severity_rank(cfg.fail_on_severity);
         const auto& results = report.results();
-        for(const auto& r: results){ for(const auto& f: r.findings){ if(severity_rank(f.severity) >= thresh) return 1; } }
+    for(const auto& r: results){ for(const auto& f: r.findings){ if(severity_rank_enum(f.severity) >= thresh) return 1; } }
     }
     if(cfg.fail_on_count > 0){
         size_t total=0; for(const auto& r: report.results()) total += r.findings.size();

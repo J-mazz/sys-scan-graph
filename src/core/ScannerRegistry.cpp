@@ -50,7 +50,7 @@ void ScannerRegistry::run_all(Report& report) {
             Finding f;
             f.id = s->name() + ":error";
             f.title = "Scanner error";
-            f.severity = "error";
+            f.severity = Severity::Error;
             f.description = ex.what();
             report.add_finding(s->name(), std::move(f));
         }

@@ -16,7 +16,7 @@ void ModuleScanner::scan(Report& report) {
     auto& cfg = config();
     if(!cfg.modules_summary_only && !cfg.modules_anomalies_only){
         while(std::getline(ifs,line)) {
-            std::istringstream ls(line); std::string name; ls>>name; if(name.empty()) continue; Finding f; f.id = name; f.title = "Module "+name; f.severity="info"; f.description="Loaded kernel module"; report.add_finding(this->name(), std::move(f)); }
+            std::istringstream ls(line); std::string name; ls>>name; if(name.empty()) continue; Finding f; f.id = name; f.title = "Module "+name; f.severity=Severity::Info; f.description="Loaded kernel module"; report.add_finding(this->name(), std::move(f)); }
         return;
     }
     // summary mode: gather stats
@@ -69,14 +69,14 @@ void ModuleScanner::scan(Report& report) {
         if(unsigned_mod){ ++unsigned_count; if(unsigned_sample.size()<unsigned_sample_limit) unsigned_sample.push_back(name); }
         if(cfg.modules_anomalies_only){
             if(oot || unsigned_mod){
-                Finding f; f.id = name; f.title = "Module anomaly: "+name; f.severity = unsigned_mod?"high":"medium"; f.description = unsigned_mod?"Unsigned kernel module detected":"Out-of-tree kernel module"; if(oot) f.metadata["out_of_tree"]="true"; if(unsigned_mod) f.metadata["unsigned"]="true"; if(!path.empty()) f.metadata["path"] = path; report.add_finding(this->name(), std::move(f));
+                Finding f; f.id = name; f.title = "Module anomaly: "+name; f.severity = unsigned_mod?Severity::High:Severity::Medium; f.description = unsigned_mod?"Unsigned kernel module detected":"Out-of-tree kernel module"; if(oot) f.metadata["out_of_tree"]="true"; if(unsigned_mod) f.metadata["unsigned"]="true"; if(!path.empty()) f.metadata["path"] = path; report.add_finding(this->name(), std::move(f));
             }
         }
     }
     if(cfg.modules_anomalies_only) return; // done; no summary in anomalies-only mode
     Finding f; f.id = "module_summary"; f.title = "Kernel modules summary"; f.description="Loaded kernel modules inventory";
     // Severity escalation based on findings
-    std::string sev = "info"; if(likely_out_of_tree>0) sev = "medium"; if(unsigned_count>0) sev = "high"; f.severity = sev;
+    Severity sev = Severity::Info; if(likely_out_of_tree>0) sev = Severity::Medium; if(unsigned_count>0) sev = Severity::High; f.severity = sev;
     f.metadata["total"] = std::to_string(total);
     f.metadata["sample"] = [&]{ std::string s; for(size_t i=0;i<sample.size();++i){ if(i) s+=","; s+=sample[i]; } return s; }();
     f.metadata["out_of_tree_count"] = std::to_string(likely_out_of_tree);

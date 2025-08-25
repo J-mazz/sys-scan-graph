@@ -15,7 +15,7 @@ void KernelParamScanner::scan(Report& report) {
     };
     for(auto& it: items){
         std::ifstream ifs(it.path); if(!ifs) continue; std::string val; std::getline(ifs, val);
-        Finding f; f.id = it.path; f.title = it.path; f.severity = (val==it.desired?"info":it.severity); f.description = it.desc; f.metadata["current"] = val; f.metadata["desired"] = it.desired; if(val!=it.desired) f.metadata["status"]="mismatch"; report.add_finding(this->name(), std::move(f));
+    Finding f; f.id = it.path; f.title = it.path; f.severity = (val==it.desired?Severity::Info:severity_from_string(it.severity)); f.description = it.desc; f.metadata["current"] = val; f.metadata["desired"] = it.desired; if(val!=it.desired) f.metadata["status"]="mismatch"; report.add_finding(this->name(), std::move(f));
     }
 }
 

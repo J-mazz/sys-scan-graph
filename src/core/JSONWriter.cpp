@@ -80,6 +80,7 @@ std::string JSONWriter::write(const Report& report) const {
     size_t scanners_with_findings = 0;
     long long slowest_ms = 0; std::string slowest_name;
     int min_rank = severity_rank(config().min_severity);
+    long long total_risk = 0;
     for(const auto& r : results){
         finding_total += r.findings.size();
         if(!r.findings.empty()) scanners_with_findings++;
@@ -88,7 +89,8 @@ std::string JSONWriter::write(const Report& report) const {
         auto elapsed = (r.end_time.time_since_epoch().count() && r.start_time.time_since_epoch().count()) ? std::chrono::duration_cast<std::chrono::milliseconds>(r.end_time-r.start_time).count() : 0;
         if(elapsed > slowest_ms) { slowest_ms = elapsed; slowest_name = r.scanner_name; }
         for(const auto& f : r.findings){
-            severity_counts[f.severity]++;
+            severity_counts[severity_to_string(f.severity)]++;
+            total_risk += f.risk_score;
         }
     }
     long long duration_ms = 0;
@@ -113,7 +115,8 @@ std::string JSONWriter::write(const Report& report) const {
     os << "\n    \"egid\": "<<host.egid<<",";
     if(!host.cmdline.empty()) os << "\n    \"cmdline\": \""<<escape(host.cmdline)<<"\",";
     os << "\n    \"tool_version\": \"0.1.0\","; // static for now
-    os << "\n    \"json_schema_version\": \"1\""; // increment if breaking JSON structure changes
+    os << "\n    \"json_schema_version\": \"2\","; // incremented due to structural changes (severity enum, risk, warnings)
+    os << "\n    \"$schema\": \"https://github.com/J-mazz/sys-scan/schema/v2.json\"";
     os << "\n  },";
     os << "\n  \"summary\": {";
     os << "\n    \"scanner_count\": " << results.size() << ",";
@@ -141,7 +144,7 @@ std::string JSONWriter::write(const Report& report) const {
         os << "\n      \"elapsed_ms\": " << elapsed_ms << ",";
         // Filter findings
         std::vector<const Finding*> filtered;
-        for(const auto& f : r.findings){ if(severity_rank(f.severity) >= min_rank) filtered.push_back(&f); }
+    for(const auto& f : r.findings){ if(severity_rank(config().min_severity)<= severity_rank_enum(f.severity)) filtered.push_back(&f); }
         os << "\n      \"finding_count\": " << filtered.size() << ",";
         os << "\n      \"findings\": [";
         for(size_t j=0;j<filtered.size();++j){
@@ -150,7 +153,8 @@ std::string JSONWriter::write(const Report& report) const {
             os << "\n        {";
             os << "\n          \"id\": \"" << escape(f.id) << "\",";
             os << "\n          \"title\": \"" << escape(f.title) << "\",";
-            os << "\n          \"severity\": \"" << escape(f.severity) << "\",";
+            os << "\n          \"severity\": \"" << escape(severity_to_string(f.severity)) << "\",";
+            os << "\n          \"risk_score\": " << f.risk_score << ",";
             os << "\n          \"description\": \"" << escape(f.description) << "\",";
             os << "\n          \"metadata\": {";
             // deterministic ordering of metadata keys
@@ -164,7 +168,18 @@ std::string JSONWriter::write(const Report& report) const {
         os << "]\n    }";
     }
     if(!results.empty()) os << "\n  ";
-    os << "]\n}\n";
+    os << "]";
+    // warnings & errors channels
+    const auto& warns = report.warnings();
+    const auto& errs = report.errors();
+    os << ",\n  \"collection_warnings\": [";
+    for(size_t i=0;i<warns.size();++i){ if(i) os << ","; os << "{\"scanner\":\""<<escape(warns[i].first)<<"\",\"message\":\""<<escape(warns[i].second)<<"\"}"; }
+    os << "],";
+    os << "\n  \"scanner_errors\": [";
+    for(size_t i=0;i<errs.size();++i){ if(i) os << ","; os << "{\"scanner\":\""<<escape(errs[i].first)<<"\",\"message\":\""<<escape(errs[i].second)<<"\"}"; }
+    os << "],";
+    os << "\n  \"summary_extension\": { \"total_risk_score\": "<< total_risk <<" }\n}"; // close root
+    os << "\n";
     // Always start from a minified baseline (deterministic), then pretty-format if requested.
     auto minify = [](const std::string& raw){
         std::string out; out.reserve(raw.size()); bool in_string=false; for(size_t i=0;i<raw.size();++i){ char c=raw[i]; if(c=='"' && (i==0 || raw[i-1] != '\\')) in_string=!in_string; if(!in_string && (c=='\n'||c=='\r'||c=='\t')) continue; if(!in_string && c==' '){ // skip spaces around structural

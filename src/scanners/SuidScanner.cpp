@@ -17,7 +17,7 @@ void SuidScanner::scan(Report& report) {
     struct Key { dev_t dev; ino_t ino; };
     struct KeyHash { size_t operator()(const Key& k) const noexcept { return std::hash<dev_t>()(k.dev) ^ (std::hash<ino_t>()(k.ino)<<1); } };
     struct KeyEq { bool operator()(const Key& a, const Key& b) const noexcept { return a.dev==b.dev && a.ino==b.ino; } };
-    struct Agg { std::string primary; std::vector<std::string> alt_paths; std::string severity; };
+    struct Agg { std::string primary; std::vector<std::string> alt_paths; Severity severity; };
     std::unordered_map<Key, Agg, KeyHash, KeyEq> agg;
     for(const auto& r : roots) {
         std::error_code ec;
@@ -28,12 +28,12 @@ void SuidScanner::scan(Report& report) {
             if(ps.find("/usr/local/")!=std::string::npos) sev = "high"; if(ps.find("/tmp/")!=std::string::npos) sev = "critical";
             auto itagg = agg.find(k);
             if(itagg==agg.end()) {
-                agg.emplace(k, Agg{ps, {}, sev});
+                agg.emplace(k, Agg{ps, {}, severity_from_string(sev)});
             } else {
                 // existing: add as alt path
                 if(itagg->second.primary != ps) itagg->second.alt_paths.push_back(ps);
                 // escalate severity if new path has higher severity rank
-                if(severity_rank(sev) > severity_rank(itagg->second.severity)) itagg->second.severity = sev;
+                if(severity_rank(sev) > severity_rank(severity_to_string(itagg->second.severity))) itagg->second.severity = severity_from_string(sev);
             }
         }
     }
@@ -50,10 +50,10 @@ void SuidScanner::scan(Report& report) {
         return false;
     };
     for(auto& kv : agg){
-        Finding f; f.id = kv.second.primary; f.title = "SUID/SGID binary"; f.severity = kv.second.severity; f.description = "Binary has SUID or SGID bit set";
-        if(is_expected(kv.second.primary) && severity_rank(f.severity) <= severity_rank("medium")) {
+    Finding f; f.id = kv.second.primary; f.title = "SUID/SGID binary"; f.severity = kv.second.severity; f.description = "Binary has SUID or SGID bit set";
+    if(is_expected(kv.second.primary) && severity_rank_enum(f.severity) <= severity_rank("medium")) {
             f.metadata["expected"] = "true"; // downgrade expected common utilities
-            f.severity = "low"; // baseline safe expectation
+            f.severity = Severity::Low; // baseline safe expectation
         }
         if(!kv.second.alt_paths.empty()){
             // join alt paths (limit to avoid huge output)
