@@ -1,0 +1,97 @@
+{
+"meta": {
+"hostname": "SurfTop888",
+"kernel": "6.14.0-28-generic",
+"arch": "x86_64",
+"os_pretty": "Ubuntu 24.04.3 LTS",
+"os_id": "ubuntu",
+"os_version": "24.04",
+"user": "joseph-mazzini",
+"uid": 1000,
+"euid": 1000,
+"gid": 1000,
+"egid": 1000,
+"cmdline": "./sys-scan--enable ioc --ioc-allow /snap/ --pretty ",
+"tool_version": "0.1.0"
+},
+"summary": {
+"scanner_count": 1,
+"finding_count_total": 5,
+"started_at": "2025-08-25T12:17:04Z",
+"finished_at": "2025-08-25T12:17:05Z",
+"duration_ms": 1331,
+"findings_per_second": 3.76,
+"scanners_with_findings": 1,
+"slowest_scanner": {
+"name": "ioc",
+"elapsed_ms": 1331
+},
+"severity_counts": {
+"high": 3,
+"low": 2
+}
+},
+"results": [
+{
+"scanner": "ioc",
+"start_time": "2025-08-25T12:17:04Z",
+"end_time": "2025-08-25T12:17:05Z",
+"elapsed_ms": 1331,
+"finding_count": 5,
+"findings": [
+{
+"id": "70093",
+"title": "Process IOC",
+"severity": "high",
+"description": "/home/joseph-mazzini/.vscode/extensions/ms-vscode.cpptools-1.26.3-linux-x64/bin/cpptools",
+"metadata": {
+"exe": "/home/joseph-mazzini/.vscode/extensions/ms-vscode.cpptools-1.26.3-linux-x64/bin/cpptools",
+"pattern_match": "true"
+}
+},
+{
+"id": "70405",
+"title": "Process IOC",
+"severity": "high",
+"description": "/home/joseph-mazzini/.vscode/extensions/ms-vscode.cpptools-1.26.3-linux-x64/bin/cpptools-srv",
+"metadata": {
+"exe": "/home/joseph-mazzini/.vscode/extensions/ms-vscode.cpptools-1.26.3-linux-x64/bin/cpptools-srv",
+"pattern_match": "true"
+}
+},
+{
+"id": "72234",
+"title": "Process IOC",
+"severity": "high",
+"description": "/home/joseph-mazzini/.vscode/extensions/ms-vscode.cpptools-1.26.3-linux-x64/bin/cpptools-srv",
+"metadata": {
+"exe": "/home/joseph-mazzini/.vscode/extensions/ms-vscode.cpptools-1.26.3-linux-x64/bin/cpptools-srv",
+"pattern_match": "true"
+}
+},
+{
+"id": "/snap/firefox/6700/usr/lib/firefox/crashhelper:env",
+"title": "Suspicious environment",
+"severity": "low",
+"description": "Environment references LD_* in temp paths",
+"metadata": {
+"exe": "/snap/firefox/6700/usr/lib/firefox/crashhelper",
+"pid_count": "1",
+"sample_pids": "64970"
+}
+},
+{
+"id": "/snap/firefox/6700/usr/lib/firefox/firefox:env",
+"title": "Suspicious environment",
+"severity": "low",
+"description": "Environment references LD_* in temp paths",
+"metadata": {
+"exe": "/snap/firefox/6700/usr/lib/firefox/firefox",
+"pid_count": "17",
+"sample_pids": "92994,77724,65185,65732,73820"
+}
+}
+]
+}
+]
+}

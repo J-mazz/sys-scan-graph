@@ -1,0 +1,19 @@
+Start testing: Aug 25 03:21 PDT
+----------------------------------------------------------
+1/1 Testing: basic
+1/1 Test: basic
+Command: "/home/joseph-mazzini/Documents/research/sys-scan/build/test_basic"
+Directory: /home/joseph-mazzini/Documents/research/sys-scan/build
+"basic" start time: Aug 25 03:21 PDT
+Output:
+----------------------------------------------------------
+Scanners run: 6
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"basic" end time: Aug 25 03:21 PDT
+"basic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 25 03:21 PDT

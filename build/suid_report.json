@@ -1,0 +1,234 @@
+{
+"meta": {
+"hostname": "SurfTop888",
+"kernel": "6.14.0-28-generic",
+"arch": "x86_64",
+"os_pretty": "Ubuntu 24.04.3 LTS",
+"os_id": "ubuntu",
+"os_version": "24.04",
+"user": "joseph-mazzini",
+"uid": 1000,
+"euid": 1000,
+"gid": 1000,
+"egid": 1000,
+"cmdline": "./sys-scan--enable suid_sgid --pretty ",
+"tool_version": "0.1.0"
+},
+"summary": {
+"scanner_count": 1,
+"finding_count_total": 19,
+"started_at": "2025-08-25T12:18:33Z",
+"finished_at": "2025-08-25T12:18:33Z",
+"duration_ms": 11,
+"findings_per_second": 1727.27,
+"scanners_with_findings": 1,
+"slowest_scanner": {
+"name": "suid_sgid",
+"elapsed_ms": 11
+},
+"severity_counts": {
+"medium": 19
+}
+},
+"results": [
+{
+"scanner": "suid_sgid",
+"start_time": "2025-08-25T12:18:33Z",
+"end_time": "2025-08-25T12:18:33Z",
+"elapsed_ms": 11,
+"finding_count": 19,
+"findings": [
+{
+"id": "/sbin/pppd",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/sbin/pppd"
+}
+},
+{
+"id": "/bin/umount",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/umount"
+}
+},
+{
+"id": "/bin/ssh-agent",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/ssh-agent"
+}
+},
+{
+"id": "/bin/mullvad-exclude",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/mullvad-exclude"
+}
+},
+{
+"id": "/bin/pkexec",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/pkexec"
+}
+},
+{
+"id": "/sbin/unix_chkpwd",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/sbin/unix_chkpwd"
+}
+},
+{
+"id": "/sbin/pam_extrausers_chkpwd",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/sbin/pam_extrausers_chkpwd"
+}
+},
+{
+"id": "/bin/crontab",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/crontab"
+}
+},
+{
+"id": "/bin/expiry",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/expiry"
+}
+},
+{
+"id": "/bin/gpasswd",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/gpasswd"
+}
+},
+{
+"id": "/bin/chsh",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/chsh"
+}
+},
+{
+"id": "/bin/chage",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/chage"
+}
+},
+{
+"id": "/bin/su",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/su"
+}
+},
+{
+"id": "/bin/newgrp",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/newgrp"
+}
+},
+{
+"id": "/bin/fusermount3",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/fusermount3"
+}
+},
+{
+"id": "/bin/sudo",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/sudo"
+}
+},
+{
+"id": "/bin/passwd",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/passwd"
+}
+},
+{
+"id": "/bin/mount",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/mount"
+}
+},
+{
+"id": "/bin/chfn",
+"title": "SUID/SGID binary",
+"severity": "medium",
+"description": "Binary has SUID or SGID bit set",
+"metadata": {
+"alt_path_count": "1",
+"alt_paths": "/usr/bin/chfn"
+}
+}
+]
+}
+]
+}

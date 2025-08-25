@@ -1,0 +1,56 @@
+{
+"meta": {
+"hostname": "SurfTop888",
+"kernel": "6.14.0-28-generic",
+"arch": "x86_64",
+"os_pretty": "Ubuntu 24.04.3 LTS",
+"os_id": "ubuntu",
+"os_version": "24.04",
+"user": "joseph-mazzini",
+"uid": 1000,
+"euid": 1000,
+"gid": 1000,
+"egid": 1000,
+"cmdline": "./sys-scan--enable modules --modules-summary --pretty ",
+"tool_version": "0.1.0"
+},
+"summary": {
+"scanner_count": 1,
+"finding_count_total": 1,
+"started_at": "2025-08-25T12:44:54Z",
+"finished_at": "2025-08-25T12:44:54Z",
+"duration_ms": 3,
+"findings_per_second": 333.33,
+"scanners_with_findings": 1,
+"slowest_scanner": {
+"name": "modules",
+"elapsed_ms": 3
+},
+"severity_counts": {
+"info": 1
+}
+},
+"results": [
+{
+"scanner": "modules",
+"start_time": "2025-08-25T12:44:54Z",
+"end_time": "2025-08-25T12:44:54Z",
+"elapsed_ms": 3,
+"finding_count": 1,
+"findings": [
+{
+"id": "module_summary",
+"title": "Kernel modules summary",
+"severity": "info",
+"description": "Loaded kernel modules inventory",
+"metadata": {
+"out_of_tree_count": "0",
+"sample": "zram,842_decompress,842_compress,lz4hc_compress,lz4_compress,tls,rfcomm,algif_hash,algif_skcipher,af_alg",
+"total": "205",
+"unsigned_count": "0"
+}
+}
+]
+}
+]
+}
