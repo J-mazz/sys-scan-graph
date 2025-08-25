@@ -22,7 +22,12 @@ void SuidScanner::scan(Report& report) {
     for(const auto& r : roots) {
         std::error_code ec;
         for(auto it = fs::recursive_directory_iterator(r, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it) {
-            if(ec) break; if(!it->is_regular_file(ec)) continue; const auto& path = it->path();
+            if(ec){
+                // Record traversal issue then stop descending this root to avoid spam
+                report.add_warning(this->name(), std::string("walk_error:")+ r +":"+ ec.message());
+                break;
+            }
+            if(!it->is_regular_file(ec)) continue; const auto& path = it->path();
             if(!has_suid_or_sgid(path)) continue; struct stat st{}; if(lstat(path.c_str(), &st)!=0) continue; Key k{st.st_dev, st.st_ino};
             auto sev = std::string("medium"); std::string ps = path.string();
             if(ps.find("/usr/local/")!=std::string::npos) sev = "high"; if(ps.find("/tmp/")!=std::string::npos) sev = "critical";
