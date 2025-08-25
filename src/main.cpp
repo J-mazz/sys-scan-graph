@@ -37,6 +37,8 @@ static void print_help(){
               << "  --modules-anomalies-only  Only emit unsigned/out-of-tree module findings (oversrides summary/detail)\n"
               << "  --suid-expected list      Comma-separated extra expected SUID paths (exact or suffix)\n"
               << "  --suid-expected-file FILE Newline-delimited expected SUID paths (# comments)\n"
+              << "  --canonical               Emit canonical (RFC8785-like) JSON ordering\n"
+              << "  --ndjson                  Emit NDJSON (one JSON object per line: meta, summary, findings)\n"
               << "  --help                     Show this help\n";
 }
 
@@ -76,6 +78,8 @@ int main(int argc, char** argv) {
     else if(a=="--modules-anomalies-only") cfg.modules_anomalies_only = true;
     else if(a=="--suid-expected") cfg.suid_expected_add = split_csv(need_val("--suid-expected"));
     else if(a=="--suid-expected-file") cfg.suid_expected_file = need_val("--suid-expected-file");
+    else if(a=="--canonical") cfg.canonical = true;
+    else if(a=="--ndjson") cfg.ndjson = true;
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }

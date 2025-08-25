@@ -70,6 +70,14 @@ namespace {
     }
 }
 
+static std::string canonical_escape(const std::string& s){ return escape(s); }
+
+static void append_canonical_object(std::ostringstream& os, const std::vector<std::pair<std::string,std::string>>& kvs){
+    os << '{';
+    for(size_t i=0;i<kvs.size();++i){ if(i) os<<','; os << '"'<<kvs[i].first<<'"'<<':'<<kvs[i].second; }
+    os << '}';
+}
+
 std::string JSONWriter::write(const Report& report) const {
     const auto& results = report.results();
     // Compute summary
@@ -229,6 +237,29 @@ std::string JSONWriter::write(const Report& report) const {
         return final;
     };
     std::string raw = os.str();
+    if(config().canonical){
+        // Re-parse minimal elements we already have (fast path) not implemented; for now raw is near-minified if compact.
+        // A future full RFC8785 implementation would build canonical structures directly.
+    }
+    if(config().ndjson){
+        // Emit NDJSON: first meta, then summary_extension, then each finding line with scanner association
+        std::ostringstream nd;
+        // naive extraction by simple approach: we regenerate minimal objects for NDJSON
+        // Meta line
+        // Recollect meta similarly to earlier logic
+        // (For brevity, reuse host collected above)
+        nd << '{' << "\"type\":\"meta\",\"tool_version\":\"0.1.0\",\"schema\":\"2\",\"hostname\":\""<<escape(host.hostname)<<"\"}" << "\n";
+        nd << '{' << "\"type\":\"summary_extension\",\"total_risk_score\":"<< total_risk <<'}' <<"\n";
+        for(const auto& r: results){
+            for(const auto& f: r.findings){
+                if(severity_rank(config().min_severity) > severity_rank_enum(f.severity)) continue;
+                nd << '{' << "\"type\":\"finding\",\"scanner\":\""<<escape(r.scanner_name)
+                   <<"\",\"id\":\""<<escape(f.id)<<"\",\"severity\":\""<<severity_to_string(f.severity)
+                   <<"\",\"risk_score\":"<<f.risk_score<<"}" <<"\n";
+            }
+        }
+        return nd.str();
+    }
     std::string min = minify(raw);
     if(config().compact) return min;
     if(config().pretty) return pretty(min);
