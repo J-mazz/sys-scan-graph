@@ -63,31 +63,31 @@ void MACScanner::scan(Report& report) {
 
     // SELinux Finding
     {
-        Finding f; f.id = "selinux"; f.title = "SELinux status"; f.severity = "info"; f.description = "SELinux detection";
+    Finding f; f.id = "selinux"; f.title = "SELinux status"; f.severity = Severity::Info; f.description = "SELinux detection";
         if(!selinux_present) {
             f.metadata["present"] = "false";
             // If AppArmor is enabled, absence of SELinux alone is not high severity (Ubuntu default)
-            if(apparmor_enabled) f.severity = in_container?"info":"low"; else f.severity = in_container?"info":"high";
+            if(apparmor_enabled) f.severity = in_container?Severity::Info:Severity::Low; else f.severity = in_container?Severity::Info:Severity::High;
         } else {
             f.metadata["present"] = "true"; f.metadata["enforcing"] = selinux_enforcing?"true":"false"; f.metadata["permissive"] = selinux_permissive?"true":"false"; if(selinux_cfg_mode.size()) f.metadata["config_mode"] = selinux_cfg_mode;
-            if(selinux_permissive) f.severity = "medium"; if(selinux_enforcing) f.severity = "info";
+            if(selinux_permissive) f.severity = Severity::Medium; if(selinux_enforcing) f.severity = Severity::Info;
         }
         report.add_finding(this->name(), std::move(f));
     }
 
     // AppArmor Finding
     {
-        Finding f; f.id = "apparmor"; f.title = "AppArmor status"; f.severity = "info"; f.description = "AppArmor detection";
-        if(!apparmor_enabled){ f.severity = in_container? "info":"high"; f.metadata["enabled"] = "false"; }
+    Finding f; f.id = "apparmor"; f.title = "AppArmor status"; f.severity = Severity::Info; f.description = "AppArmor detection";
+    if(!apparmor_enabled){ f.severity = in_container? Severity::Info:Severity::High; f.metadata["enabled"] = "false"; }
         else {
-            f.metadata["enabled"] = "true"; f.metadata["mode_line"] = apparmor_mode_line; f.metadata["profiles_seen"] = std::to_string(apparmor_profiles); f.metadata["complain_count"] = std::to_string(apparmor_profiles_complain); if(apparmor_unconfined_critical>0){ f.metadata["unconfined_critical"] = std::to_string(apparmor_unconfined_critical); f.severity = "medium"; }
+            f.metadata["enabled"] = "true"; f.metadata["mode_line"] = apparmor_mode_line; f.metadata["profiles_seen"] = std::to_string(apparmor_profiles); f.metadata["complain_count"] = std::to_string(apparmor_profiles_complain); if(apparmor_unconfined_critical>0){ f.metadata["unconfined_critical"] = std::to_string(apparmor_unconfined_critical); f.severity = Severity::Medium; }
         }
         report.add_finding(this->name(), std::move(f));
     }
 
     // Combined Advisory
-    if(!selinux_present && !apparmor_enabled){ Finding f; f.id="mac_none"; f.title="No MAC enforcement"; f.severity=in_container?"low":"high"; f.description="Neither SELinux nor AppArmor appears active"; report.add_finding(this->name(), std::move(f)); }
-    else if(selinux_present && apparmor_enabled){ Finding f; f.id="mac_dual"; f.title="Dual MAC layers"; f.severity="info"; f.description="Both SELinux and AppArmor appear present (double-check for conflicts)"; report.add_finding(this->name(), std::move(f)); }
+    if(!selinux_present && !apparmor_enabled){ Finding f; f.id="mac_none"; f.title="No MAC enforcement"; f.severity=in_container?Severity::Low:Severity::High; f.description="Neither SELinux nor AppArmor appears active"; report.add_finding(this->name(), std::move(f)); }
+    else if(selinux_present && apparmor_enabled){ Finding f; f.id="mac_dual"; f.title="Dual MAC layers"; f.severity=Severity::Info; f.description="Both SELinux and AppArmor appear present (double-check for conflicts)"; report.add_finding(this->name(), std::move(f)); }
 }
 
 }

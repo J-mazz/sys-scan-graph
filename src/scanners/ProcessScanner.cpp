@@ -16,6 +16,7 @@ namespace sys_scan {
 
 void ProcessScanner::scan(Report& report) {
     size_t emitted = 0;
+    bool inventory = config().process_inventory; // if false, we suppress routine process listings
     for(const auto& entry : fs::directory_iterator("/proc")) {
         if(!entry.is_directory()) continue;
         auto name = entry.path().filename().string();
@@ -41,14 +42,15 @@ void ProcessScanner::scan(Report& report) {
     // Additional noise reduction: skip bracketed names when no cmd or special states.
     if(!config().all_processes && !cmd.empty() && cmd.front()=='[' && cmd.back()==']') continue;
     if(config().max_processes>0 && emitted >= (size_t)config().max_processes) break;
-        Finding f;
-        f.id = name;
-        f.title = "Process " + name;
-        f.severity = "info";
-        f.description = cmd.empty()?"(no cmdline)":cmd;
-        f.metadata["uid"] = uid;
-        f.metadata["gid"] = gid;
-        if(config().process_hash){
+        if(inventory){
+            Finding f;
+            f.id = name;
+            f.title = "Process " + name;
+            f.severity = Severity::Info;
+            f.description = cmd.empty()?"(no cmdline)":cmd;
+            f.metadata["uid"] = uid;
+            f.metadata["gid"] = gid;
+            if(config().process_hash){
             // attempt to read /proc/PID/exe target and hash file contents (first 1MB stream for performance)
             std::error_code ec; auto exe_link = entry.path()/"exe"; auto target = fs::read_symlink(exe_link, ec);
             if(!ec){
@@ -71,9 +73,10 @@ void ProcessScanner::scan(Report& report) {
                 f.metadata["sha256"] = "(disabled - OpenSSL not found)";
 #endif
             }
+            }
+            report.add_finding(this->name(), std::move(f));
+            ++emitted;
         }
-    report.add_finding(this->name(), std::move(f));
-    ++emitted;
     }
 }
 

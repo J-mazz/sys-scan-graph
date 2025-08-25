@@ -84,7 +84,7 @@ void IOCScanner::scan(Report& report) {
         // Severity escalation hierarchy
         std::string sev = "high"; // base for pattern match
         if(a.any_deleted) sev = "critical"; else if(a.any_ww_exec) sev = "high"; // keep high
-    Finding f; f.id = (a.exe.empty()? kv.first : a.exe)+":proc_ioc"; f.title = "Process IOC"; f.severity = sev; f.description = a.first_cmd.empty()? kv.first : a.first_cmd;
+    Finding f; f.id = (a.exe.empty()? kv.first : a.exe)+":proc_ioc"; f.title = "Process IOC"; f.severity = severity_from_string(sev); f.description = a.first_cmd.empty()? kv.first : a.first_cmd;
     if(a.any_pattern){ f.metadata["pattern_match"] = "true"; f.metadata["rule"] = "cmd_path_pattern"; }
     if(a.any_deleted){ f.metadata["deleted_exe"] = "true"; f.metadata["rule"] = "deleted_executable"; }
     if(a.any_ww_exec){ f.metadata["world_writable_exec"] = "true"; f.metadata["rule"] = "exec_from_world_writable"; }
@@ -102,7 +102,7 @@ void IOCScanner::scan(Report& report) {
             // Determine severity: default medium; downgrade to low if allowlist match
             std::string sev = "medium";
             for(const auto& allow : cfg.ioc_allow){ if(!allow.empty() && key.find(allow) != std::string::npos){ sev = "low"; break; } }
-            Finding f; f.id = key+":env"; f.title = "Suspicious environment"; f.severity = sev; f.description = "Environment references LD_* in temp paths";
+            Finding f; f.id = key+":env"; f.title = "Suspicious environment"; f.severity = severity_from_string(sev); f.description = "Environment references LD_* in temp paths";
             f.metadata["rule"] = "ld_env_temp";
             f.metadata["exe"] = key;
             f.metadata["pid_count"] = std::to_string(agg.pids.size());
@@ -117,19 +117,19 @@ void IOCScanner::scan(Report& report) {
     std::vector<std::string> temp_roots = {"/tmp", "/dev/shm"};
     for(auto& root : temp_roots){
         std::error_code ec;
-    for(auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec) break; const auto& p = it->path(); if(!it->is_regular_file(ec)) continue; if(is_executable(p)){ Finding f; f.id = p.string(); f.title = "Executable in temp"; f.severity="high"; f.description="Executable file located in temporary directory"; f.metadata["rule"] = "executable_in_temp"; report.add_finding(this->name(), std::move(f)); } }
+    for(auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec) break; const auto& p = it->path(); if(!it->is_regular_file(ec)) continue; if(is_executable(p)){ Finding f; f.id = p.string(); f.title = "Executable in temp"; f.severity=Severity::High; f.description="Executable file located in temporary directory"; f.metadata["rule"] = "executable_in_temp"; report.add_finding(this->name(), std::move(f)); } }
     }
     // Heuristic 3: Unexpected SUID in home directories
     for(const auto& entry : fs::directory_iterator("/home")){
-    if(!entry.is_directory()) continue; std::error_code ec; for(auto it = fs::recursive_directory_iterator(entry.path(), fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec) break; if(!it->is_regular_file(ec)) continue; if(has_suid(it->path())) { Finding f; f.id = it->path().string(); f.title = "SUID in home"; f.severity="critical"; f.description="SUID binary present in user home"; f.metadata["rule"] = "suid_in_home"; report.add_finding(this->name(), std::move(f)); } }
+    if(!entry.is_directory()) continue; std::error_code ec; for(auto it = fs::recursive_directory_iterator(entry.path(), fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec) break; if(!it->is_regular_file(ec)) continue; if(has_suid(it->path())) { Finding f; f.id = it->path().string(); f.title = "SUID in home"; f.severity=Severity::Critical; f.description="SUID binary present in user home"; f.metadata["rule"] = "suid_in_home"; report.add_finding(this->name(), std::move(f)); } }
     }
 
     // Heuristic 4: /etc/ld.so.preload anomalies
     if(fs::exists("/etc/ld.so.preload")){
         std::ifstream pfs("/etc/ld.so.preload"); std::string line; while(std::getline(pfs,line)){ if(line.empty()) continue; std::string lib = line; struct stat st{}; if(stat(lib.c_str(), &st)==0){
-                bool ww = (st.st_mode & S_IWOTH); if(ww){ Finding f; f.id = lib; f.title="World-writable preload library"; f.severity="critical"; f.description="Library in ld.so.preload is world-writable"; f.metadata["rule"] = "preload_world_writable"; report.add_finding(this->name(), std::move(f)); }
+                bool ww = (st.st_mode & S_IWOTH); if(ww){ Finding f; f.id = lib; f.title="World-writable preload library"; f.severity=Severity::Critical; f.description="Library in ld.so.preload is world-writable"; f.metadata["rule"] = "preload_world_writable"; report.add_finding(this->name(), std::move(f)); }
             } else {
-                Finding f; f.id = lib; f.title="Missing preload library"; f.severity="medium"; f.description="Entry in ld.so.preload missing on disk"; f.metadata["rule"] = "preload_missing"; report.add_finding(this->name(), std::move(f)); }
+                Finding f; f.id = lib; f.title="Missing preload library"; f.severity=Severity::Medium; f.description="Entry in ld.so.preload missing on disk"; f.metadata["rule"] = "preload_missing"; report.add_finding(this->name(), std::move(f)); }
         }
     }
 }
