@@ -28,6 +28,7 @@ struct Config {
     // Extended tuning
     std::string ioc_allow_file; // file with newline-delimited allowlist patterns (comments starting with #)
     int fail_on_count = 0; // if >0, exit non-zero if total findings >= this
+    bool process_hash = false; // hash process executable (SHA256) if OpenSSL available
 };
 
 Config& config();

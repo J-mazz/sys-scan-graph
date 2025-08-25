@@ -30,6 +30,7 @@ static void print_help(){
               << "  --network-states list      Comma-separated TCP states (e.g. LISTEN,ESTABLISHED)\n"
               << "  --ioc-allow list           Comma-separated substrings to treat as benign for env-only IOC (e.g. /snap/,/usr/lib/firefox)\n"
               << "  --modules-summary          Collapse module list into single summary finding\n"
+              << "  --process-hash             Include SHA256 of process executable (if OpenSSL available)\n"
               << "  --ioc-allow-file FILE     Newline-delimited additional allowlist patterns (supports # comments)\n"
               << "  --fail-on-count N         Exit non-zero if total finding count >= N (after filtering)\n"
               << "  --help                     Show this help\n";
@@ -64,6 +65,7 @@ int main(int argc, char** argv) {
     else if(a=="--network-states") cfg.network_states = split_csv(need_val("--network-states"));
     else if(a=="--ioc-allow") cfg.ioc_allow = split_csv(need_val("--ioc-allow"));
     else if(a=="--modules-summary") cfg.modules_summary_only = true;
+    else if(a=="--process-hash") cfg.process_hash = true;
     else if(a=="--ioc-allow-file") cfg.ioc_allow_file = need_val("--ioc-allow-file");
     else if(a=="--fail-on-count") cfg.fail_on_count = std::stoi(need_val("--fail-on-count"));
         else if(a=="--help") { print_help(); return 0; }
