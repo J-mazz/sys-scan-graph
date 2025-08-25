@@ -70,7 +70,112 @@ namespace {
     }
 }
 
+// For tests seeking deterministic canonical output, environment variables can override host meta fields.
+static void apply_meta_overrides(HostMeta& hm){
+    auto get = [](const char* k)->const char*{ const char* v=getenv(k); return (v&&*v)?v:nullptr; };
+    if(auto v=get("SYS_SCAN_META_HOSTNAME")) hm.hostname=v;
+    if(auto v=get("SYS_SCAN_META_KERNEL")) hm.kernel=v;
+    if(auto v=get("SYS_SCAN_META_ARCH")) hm.arch=v;
+    if(auto v=get("SYS_SCAN_META_OS_ID")) hm.os_id=v;
+    if(auto v=get("SYS_SCAN_META_OS_VERSION")) hm.os_version=v;
+    if(auto v=get("SYS_SCAN_META_OS_PRETTY")) hm.os_pretty=v;
+    if(auto v=get("SYS_SCAN_META_USER")) hm.user=v;
+    if(auto v=get("SYS_SCAN_META_CMDLINE")) hm.cmdline=v;
+}
+
+// RFC 8785 JSON Canonicalization (JCS) subset implementation:
+// - Objects: lexicographically sorted by UTF-8 code units of property names
+// - Arrays: order preserved
+// - Strings: escaped per JSON spec (we reuse escape())
+// - Numbers: shortest round-trip form (we format integers directly; no non-integer numbers currently emitted)
+// Current data model only emits integers and strings, so floating normalization not required yet.
 static std::string canonical_escape(const std::string& s){ return escape(s); }
+
+struct CanonVal {
+    enum Type { T_OBJ, T_ARR, T_STR, T_NUM, T_BOOL, T_NULL } type;
+    std::map<std::string, CanonVal> obj; // sorted automatically
+    std::vector<CanonVal> arr;
+    std::string str; // also used for numbers canonical text
+};
+
+static void canon_emit(const CanonVal& v, std::ostringstream& os){
+    switch(v.type){
+        case CanonVal::T_NULL: os << "null"; return;
+        case CanonVal::T_BOOL: os << v.str; return; // "true" or "false"
+        case CanonVal::T_NUM: os << v.str; return;
+        case CanonVal::T_STR: os << '"' << canonical_escape(v.str) << '"'; return;
+        case CanonVal::T_ARR: {
+            os << '['; for(size_t i=0;i<v.arr.size();++i){ if(i) os<<','; canon_emit(v.arr[i], os);} os << ']'; return; }
+        case CanonVal::T_OBJ: {
+            os << '{'; bool first=true; for(const auto& kv : v.obj){ if(!first) os<<','; first=false; os<<'"'<<canonical_escape(kv.first)<<'"'<<':'; canon_emit(kv.second, os);} os << '}'; return; }
+    }
+}
+
+// Helper to build canonical value tree for our existing structured output so we avoid fragile string post-processing.
+// Only used when config().canonical is true and not sarif/ndjson.
+static CanonVal build_canonical(const Report& report, long long total_risk, size_t finding_total, size_t scanners_with_findings,
+                                long long duration_ms, const std::string& slowest_name, long long slowest_ms,
+                                std::chrono::system_clock::time_point earliest,
+                                std::chrono::system_clock::time_point latest,
+                                const std::map<std::string,size_t>& severity_counts, const HostMeta& host){
+    bool zero_time = !!std::getenv("SYS_SCAN_CANON_TIME_ZERO");
+    if(zero_time){ earliest = {}; latest = {}; duration_ms = 0; }
+    CanonVal root{CanonVal::T_OBJ};
+    // meta
+    CanonVal meta{CanonVal::T_OBJ};
+    meta.obj["$schema"].type=CanonVal::T_STR; meta.obj["$schema"].str="https://github.com/J-mazz/sys-scan/schema/v2.json";
+    auto put_str=[&](CanonVal& o, const std::string& k, const std::string& v){ o.obj[k].type=CanonVal::T_STR; o.obj[k].str=v; };
+    auto put_num=[&](CanonVal& o, const std::string& k, long long v){ o.obj[k].type=CanonVal::T_NUM; o.obj[k].str=std::to_string(v); };
+    put_str(meta, "arch", host.arch); put_str(meta, "cmdline", host.cmdline); put_str(meta, "egid", std::to_string(host.egid)); put_str(meta, "euid", std::to_string(host.euid));
+    put_str(meta, "gid", std::to_string(host.gid)); put_str(meta, "hostname", host.hostname); put_str(meta, "json_schema_version", "2");
+    put_str(meta, "kernel", host.kernel); put_str(meta, "os_id", host.os_id); put_str(meta, "os_pretty", host.os_pretty); put_str(meta, "os_version", host.os_version);
+    put_str(meta, "tool_version", "0.1.0"); put_str(meta, "uid", std::to_string(host.uid)); put_str(meta, "user", host.user);
+    root.obj["meta"] = std::move(meta);
+
+    // summary
+    CanonVal summary{CanonVal::T_OBJ};
+    put_num(summary, "duration_ms", duration_ms);
+    // findings_per_second: compute with double but convert to string shortest (strip trailing zeros)
+    double fps = (duration_ms>0)? (finding_total * 1000.0 / duration_ms) : 0.0;
+    {
+        std::ostringstream tmp; tmp.setf(std::ios::fixed); tmp<<std::setprecision(2)<<fps; std::string s=tmp.str();
+        while(s.size()>1 && s.back()=='0') s.pop_back(); if(!s.empty() && s.back()=='.') s.push_back('0');
+        summary.obj["findings_per_second"].type=CanonVal::T_NUM; summary.obj["findings_per_second"].str=s; }
+    put_num(summary, "finding_count_total", finding_total);
+    put_str(summary, "finished_at", time_to_iso(latest));
+    put_str(summary, "scanner_count", std::to_string(report.results().size()));
+    put_num(summary, "scanners_with_findings", scanners_with_findings);
+    // severity_counts object
+    CanonVal sev_obj{CanonVal::T_OBJ}; for(const auto& kv : severity_counts){ put_num(sev_obj, kv.first, kv.second); }
+    summary.obj["severity_counts"] = std::move(sev_obj);
+    CanonVal slow{CanonVal::T_OBJ}; put_str(slow, "elapsed_ms", std::to_string(slowest_ms)); put_str(slow, "name", slowest_name); summary.obj["slowest_scanner"]=std::move(slow);
+    put_str(summary, "started_at", time_to_iso(earliest));
+    root.obj["summary"] = std::move(summary);
+
+    // results array
+    CanonVal res_arr{CanonVal::T_ARR};
+    for(const auto& r : report.results()){
+        CanonVal rs{CanonVal::T_OBJ}; put_str(rs, "scanner", r.scanner_name); put_str(rs, "start_time", zero_time? std::string("") : time_to_iso(r.start_time)); put_str(rs, "end_time", zero_time? std::string("") : time_to_iso(r.end_time));
+        long long elapsed_ms = 0; if(!zero_time && r.start_time.time_since_epoch().count() && r.end_time.time_since_epoch().count() && r.end_time>=r.start_time) elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(r.end_time-r.start_time).count();
+        put_num(rs, "elapsed_ms", elapsed_ms);
+        std::vector<const Finding*> filtered; for(const auto& f : r.findings){ if(severity_rank(config().min_severity)<= severity_rank_enum(f.severity)) filtered.push_back(&f); }
+        put_num(rs, "finding_count", filtered.size());
+        CanonVal findings_arr{CanonVal::T_ARR};
+        for(const auto* fp : filtered){ const auto& f = *fp; CanonVal fv{CanonVal::T_OBJ}; put_str(fv, "description", f.description); put_str(fv, "id", f.id); put_str(fv, "risk_score", std::to_string(f.risk_score)); put_str(fv, "severity", severity_to_string(f.severity)); put_str(fv, "title", f.title);
+            // metadata object sorted
+            CanonVal meta_md{CanonVal::T_OBJ}; std::vector<std::pair<std::string,std::string>> meta_sorted(f.metadata.begin(), f.metadata.end()); std::sort(meta_sorted.begin(), meta_sorted.end(), [](auto& a, auto& b){ return a.first < b.first; }); for(const auto& kv : meta_sorted){ put_str(meta_md, kv.first, kv.second); }
+            fv.obj["metadata"] = std::move(meta_md); findings_arr.arr.push_back(std::move(fv)); }
+        rs.obj["findings"] = std::move(findings_arr); res_arr.arr.push_back(std::move(rs));
+    }
+    root.obj["results"] = std::move(res_arr);
+    // collection_warnings & scanner_errors arrays
+    CanonVal warns{CanonVal::T_ARR}; for(const auto& w : report.warnings()){ CanonVal wv{CanonVal::T_OBJ}; put_str(wv, "message", w.second); put_str(wv, "scanner", w.first); warns.arr.push_back(std::move(wv)); }
+    root.obj["collection_warnings"] = std::move(warns);
+    CanonVal errs{CanonVal::T_ARR}; for(const auto& e : report.errors()){ CanonVal ev{CanonVal::T_OBJ}; put_str(ev, "message", e.second); put_str(ev, "scanner", e.first); errs.arr.push_back(std::move(ev)); }
+    root.obj["scanner_errors"] = std::move(errs);
+    CanonVal se{CanonVal::T_OBJ}; put_num(se, "total_risk_score", total_risk); root.obj["summary_extension"] = std::move(se);
+    return root;
+}
 
 static void append_canonical_object(std::ostringstream& os, const std::vector<std::pair<std::string,std::string>>& kvs){
     os << '{';
@@ -108,6 +213,7 @@ std::string JSONWriter::write(const Report& report) const {
     double findings_per_second = (duration_ms>0) ? (finding_total * 1000.0 / duration_ms) : 0.0;
 
     auto host = collect_host_meta();
+    apply_meta_overrides(host);
     std::ostringstream os;
     os << "{\n  \"meta\": {";
     os << "\n    \"hostname\": \""<<escape(host.hostname)<<"\",";
@@ -237,9 +343,10 @@ std::string JSONWriter::write(const Report& report) const {
         return final;
     };
     std::string raw = os.str();
-    if(config().canonical){
-        // Re-parse minimal elements we already have (fast path) not implemented; for now raw is near-minified if compact.
-        // A future full RFC8785 implementation would build canonical structures directly.
+    if(config().canonical && !config().sarif && !config().ndjson){
+    CanonVal root = build_canonical(report, total_risk, finding_total, scanners_with_findings, duration_ms, slowest_name, slowest_ms, earliest, latest, severity_counts, host);
+        std::ostringstream canon_os; canon_emit(root, canon_os); std::string canon = canon_os.str();
+        if(config().pretty) return pretty(canon); if(config().compact || !config().pretty) return canon; // canonical form is already compact
     }
     if(config().sarif){
         // Minimal SARIF 2.1.0 output (single run, results mapped from findings)
