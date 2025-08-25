@@ -66,6 +66,9 @@ if(BUILD_TESTS)
   add_executable(test_sarif_smoke tests/test_sarif_smoke.cpp)
   target_link_libraries(test_sarif_smoke PRIVATE sys_scan_core)
   add_test(NAME sarif_smoke COMMAND test_sarif_smoke)
+  add_executable(test_canonical_golden tests/test_canonical_golden.cpp)
+  target_link_libraries(test_canonical_golden PRIVATE sys_scan_core)
+  add_test(NAME canonical_golden COMMAND test_canonical_golden)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
