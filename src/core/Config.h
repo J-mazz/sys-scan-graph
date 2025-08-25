@@ -37,6 +37,7 @@ struct Config {
     // Output formatting extensions
     bool canonical = false; // RFC 8785 JCS canonical JSON
     bool ndjson = false; // newline-delimited findings mode
+    bool sarif = false; // SARIF output mode
 };
 
 Config& config();

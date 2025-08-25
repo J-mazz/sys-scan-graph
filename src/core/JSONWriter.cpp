@@ -241,6 +241,17 @@ std::string JSONWriter::write(const Report& report) const {
         // Re-parse minimal elements we already have (fast path) not implemented; for now raw is near-minified if compact.
         // A future full RFC8785 implementation would build canonical structures directly.
     }
+    if(config().sarif){
+        // Minimal SARIF 2.1.0 output (single run, results mapped from findings)
+        std::ostringstream s;
+        s << "{\"version\":\"2.1.0\",\"$schema\":\"https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json\",\"runs\":[{";
+        s << "\"tool\":{\"driver\":{\"name\":\"sys-scan\",\"informationUri\":\"https://github.com/J-mazz/sys-scan\"}},";
+        s << "\"results\":[";
+        bool first=true; int minRank = severity_rank(config().min_severity);
+        for(const auto& r: results){ for(const auto& f: r.findings){ if(severity_rank_enum(f.severity) < minRank) continue; if(!first) s<<","; first=false; s << "{\"ruleId\":\""<<escape(f.id)<<"\",\"level\":\""<<escape(severity_to_string(f.severity))<<"\",\"message\":{\"text\":\""<<escape(f.title)<<" - "<<escape(f.description)<<"\"},\"properties\":{\"riskScore\":"<<f.risk_score<<"}}"; }}
+        s << "]}] }";
+        return s.str();
+    }
     if(config().ndjson){
         // Emit NDJSON: first meta, then summary_extension, then each finding line with scanner association
         std::ostringstream nd;
