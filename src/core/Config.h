@@ -38,6 +38,23 @@ struct Config {
     bool canonical = false; // RFC 8785 JCS canonical JSON
     bool ndjson = false; // newline-delimited findings mode
     bool sarif = false; // SARIF output mode
+    bool parallel = false; // execute scanners in parallel
+    int parallel_max_threads = 0; // 0 = hardware_concurrency
+    bool hardening = false; // enable additional hardening / attack-surface scanners
+    bool containers = false; // enable container / namespace awareness & findings
+    std::string container_id_filter; // if non-empty, limit process/network findings to this container id
+    bool modules_hash = false; // hash kernel module files (SHA256) when analyzing anomalies (OpenSSL only)
+    bool ioc_env_trust = false; // correlate LD_* env vars with executable trust (signed/known path heuristics)
+    bool ioc_exec_trace = false; // enable short-lived process execve trace (eBPF) run-to-completion sampling
+    int ioc_exec_trace_seconds = 0; // duration to run exec trace (0=default 3s) when enabled
+    bool network_advanced = false; // enable advanced network analytics (external exposure, fanout aggregation)
+    int network_fanout_threshold = 100; // total connections threshold for fanout alert
+    int network_fanout_unique_threshold = 50; // unique remote IP threshold
+    bool fs_hygiene = false; // enable advanced filesystem hygiene checks (PATH dir ww, setuid interpreters, setcap binaries, dangling suid hardlinks)
+        bool integrity = false; // enable integrity/package verification checks
+        bool integrity_ima = false; // include IMA measurement statistics
+        bool integrity_pkg_verify = false; // attempt dpkg/rpm verify
+        int integrity_pkg_limit = 200; // limit number of detailed mismatch findings (summary beyond)
 };
 
 Config& config();

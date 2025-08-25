@@ -8,25 +8,29 @@
 #include <filesystem>
 #include <string>
 #include "../core/Config.h"
+#include <tuple>
+#include <regex>
 
 namespace fs = std::filesystem;
 
 namespace sys_scan {
 
-static std::unordered_map<std::string, std::pair<std::string,std::string>> build_inode_map(){
-    // inode -> (pid, exe)
-    std::unordered_map<std::string, std::pair<std::string,std::string>> map;
+static std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>> build_inode_map(){
+    // inode -> (pid, exe, container_id) (first writer wins; reuse if duplicates)
+    std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>> map;
     std::error_code top_ec;
     for(auto pit = fs::directory_iterator("/proc", fs::directory_options::skip_permission_denied, top_ec); pit!=fs::directory_iterator(); ++pit){
         if(top_ec) break; if(!pit->is_directory()) continue; auto pid = pit->path().filename().string(); if(!std::all_of(pid.begin(),pid.end(),::isdigit)) continue;
         fs::path fd_dir = pit->path()/"fd"; std::error_code ec; if(!fs::exists(fd_dir, ec)) continue;
+        std::string container_id;
+        if(config().containers){ std::ifstream cg(pit->path().string()+"/cgroup"); if(cg){ std::string line; static std::regex re("([0-9a-f]{64}|[0-9a-f]{32})"); std::smatch m; while(std::getline(cg,line)){ if(std::regex_search(line,m,re)){ container_id = m.str(1).substr(0,12); break; } } } }
         std::error_code ec_dir;
         for(auto fit = fs::directory_iterator(fd_dir, fs::directory_options::skip_permission_denied, ec_dir); fit!=fs::directory_iterator(); ++fit){
             if(ec_dir){ break; }
             std::error_code ec2; auto target = fs::read_symlink(fit->path(), ec2); if(ec2) continue; std::string t = target.string(); // format: socket:[12345]
             auto pos = t.find("socket:["); if(pos==std::string::npos) continue; auto b = t.find('[', pos); auto e = t.find(']', b); if(b==std::string::npos||e==std::string::npos) continue; std::string inode = t.substr(b+1, e-b-1);
             std::string exe; std::error_code ec3; auto exepath = fs::read_symlink(pit->path()/"exe", ec3); if(!ec3) exe = exepath.string();
-            map.emplace(inode, std::make_pair(pid, exe));
+            if(!map.count(inode)) map.emplace(inode, std::make_tuple(pid, exe, container_id));
         }
     }
     return map;
@@ -71,7 +75,9 @@ static bool state_allowed(const std::string& st){
     return false;
 }
 
-static void parse_tcp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::pair<std::string,std::string>>& inode_map, size_t& emitted){
+struct FanoutAgg { size_t total=0; std::unordered_set<std::string> remote_ips; unsigned privileged_listen=0; unsigned wildcard_listen=0; };
+
+static void parse_tcp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>>& inode_map, size_t& emitted, std::unordered_map<std::string, FanoutAgg>* fanout){
     std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, std::string("net_file_unreadable:")+path); return; } std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; // quick filter
@@ -95,7 +101,8 @@ static void parse_tcp(const std::string& path, Report& report, const std::string
         f.metadata["state"] = tcp_state(st); f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["rport"] = std::to_string(rport); f.metadata["inode"] = inode_s;
     if(path.find("tcp6")!=std::string::npos){ f.metadata["lip"] = hex_ip6_to_str(lip_hex); f.metadata["rip"] = hex_ip6_to_str(rip_hex); }
     else { f.metadata["lip"] = hex_ip_to_v4(lip_hex); f.metadata["rip"] = hex_ip_to_v4(rip_hex); }
-        auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = it->second.first; f.metadata["exe"] = it->second.second; }
+    auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = std::get<0>(it->second); f.metadata["exe"] = std::get<1>(it->second); if(!std::get<2>(it->second).empty()) f.metadata["container_id"] = std::get<2>(it->second); }
+    if(config().containers && !config().container_id_filter.empty()) { if(f.metadata["container_id"] != config().container_id_filter) continue; }
         // severity heuristic after exe known
         if(f.metadata.count("exe")){
             auto sev = classify_tcp_severity(state_str, lport, f.metadata["exe"]);
@@ -104,7 +111,22 @@ static void parse_tcp(const std::string& path, Report& report, const std::string
             auto sev = classify_tcp_severity(state_str, lport, "");
             f.severity = severity_from_string(escalate_exposed(sev, state_str, f.metadata["lip"]));
         }
-        report.add_finding(proto, std::move(f)); ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
+        // Exposure & wildcard/high-privilege bind annotation
+        if(state_str == "LISTEN"){
+            bool wildcard=false; std::string lip = f.metadata["lip"]; if(lip=="0.0.0.0" || lip=="::" || lip=="0000:0000:0000:0000:0000:0000:0000:0000") wildcard=true; if(wildcard) f.metadata["wildcard_listen"]="true";
+            if(lport < 1024) f.metadata["privileged_port"]="true"; // escalate already handled partly in severity
+        }
+        report.add_finding(proto, std::move(f));
+        // Fanout aggregation (only if ESTABLISHED and advanced enabled)
+        if(config().network_advanced && fanout && state_str=="ESTABLISHED"){
+            auto it2 = inode_map.find(inode_s); if(it2!=inode_map.end()){ const std::string& pid = std::get<0>(it2->second); auto& agg = (*fanout)[pid]; agg.total++; // remote IP from rip field captured earlier; reconstruct quickly
+                // remote ip hex from rem address
+                std::string rip_hex = rem.substr(0, rem.find(':'));
+                std::string rip = (path.find("tcp6")!=std::string::npos) ? hex_ip6_to_str(rip_hex) : hex_ip_to_v4(rip_hex);
+                agg.remote_ips.insert(rip);
+            }
+        }
+        ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
     if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug tcp none parsed"; dbg.severity=Severity::Low; dbg.description="No TCP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
 }
 
@@ -114,7 +136,7 @@ static std::string classify_udp_severity(unsigned port, const std::string& exe){
     return "info";
 }
 
-static void parse_udp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::pair<std::string,std::string>>& inode_map, size_t& emitted){
+static void parse_udp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>>& inode_map, size_t& emitted){
     std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, std::string("net_file_unreadable:")+path); return; } std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
@@ -123,23 +145,28 @@ static void parse_udp(const std::string& path, Report& report, const std::string
         auto pos = local.find(':'); if(pos==std::string::npos) continue; auto lip_hex = local.substr(0,pos); auto lport_hex = local.substr(pos+1); unsigned lport=0; std::stringstream ph; ph<<std::hex<<lport_hex; ph>>lport; if(lport==0) continue;
     Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" port "+std::to_string(lport); f.severity=Severity::Info; f.description="UDP socket"; f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["inode"] = inode_s; f.metadata["protocol"] = "udp";
         if(path.find("udp6")!=std::string::npos) f.metadata["lip"] = hex_ip6_to_str(lip_hex); else f.metadata["lip"] = hex_ip_to_v4(lip_hex);
-        auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = it->second.first; f.metadata["exe"] = it->second.second; }
+    auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = std::get<0>(it->second); f.metadata["exe"] = std::get<1>(it->second); if(!std::get<2>(it->second).empty()) f.metadata["container_id"] = std::get<2>(it->second); }
+    if(config().containers && !config().container_id_filter.empty()) { if(f.metadata["container_id"] != config().container_id_filter) continue; }
     f.severity = severity_from_string(classify_udp_severity(lport, f.metadata.count("exe")? f.metadata["exe"] : ""));
     report.add_finding(proto, std::move(f)); ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
     if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug udp none parsed"; dbg.severity=Severity::Low; dbg.description="No UDP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
 }
 
 void NetworkScanner::scan(Report& report) {
-    auto inode_map = build_inode_map(); size_t emitted=0;
+    auto inode_map = build_inode_map(); size_t emitted=0; std::unordered_map<std::string, FanoutAgg> fanout; std::unordered_map<std::string, std::string> pid_to_exe;
+    for(auto& kv : inode_map){ pid_to_exe[std::get<0>(kv.second)] = std::get<1>(kv.second); }
     bool want_tcp = config().network_proto.empty() || config().network_proto=="tcp";
     bool want_udp = config().network_proto.empty() || config().network_proto=="udp";
     if(want_tcp){
-        parse_tcp("/proc/net/tcp", report, this->name(), inode_map, emitted); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
-        parse_tcp("/proc/net/tcp6", report, this->name(), inode_map, emitted); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
+        parse_tcp("/proc/net/tcp", report, this->name(), inode_map, emitted, config().network_advanced? &fanout : nullptr); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
+        parse_tcp("/proc/net/tcp6", report, this->name(), inode_map, emitted, config().network_advanced? &fanout : nullptr); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
     }
     if(want_udp){
         parse_udp("/proc/net/udp", report, this->name(), inode_map, emitted); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
         parse_udp("/proc/net/udp6", report, this->name(), inode_map, emitted);
+    }
+    if(config().network_advanced){
+        for(auto& kv : fanout){ auto& agg = kv.second; if((int)agg.total >= config().network_fanout_threshold || (int)agg.remote_ips.size() >= config().network_fanout_unique_threshold){ Finding f; f.id = kv.first+":net_fanout"; f.title = "High network fanout"; f.severity = Severity::Medium; if(agg.total > (size_t)config().network_fanout_threshold*2 || agg.remote_ips.size() > (size_t)config().network_fanout_unique_threshold*2) f.severity = Severity::High; f.description = "Process exceeding network fanout thresholds"; f.metadata["pid"] = kv.first; auto itexe = pid_to_exe.find(kv.first); if(itexe!=pid_to_exe.end()) f.metadata["exe"] = itexe->second; f.metadata["total_connections"] = std::to_string(agg.total); f.metadata["unique_remotes"] = std::to_string(agg.remote_ips.size()); int count=0; std::string sample; for(const auto& ip: agg.remote_ips){ if(count++) sample += ","; sample += ip; if(count>=5) break; } f.metadata["sample_remotes"] = sample; report.add_finding(this->name(), std::move(f)); } }
     }
 }
 
