@@ -30,6 +30,8 @@ static void print_help(){
               << "  --network-states list      Comma-separated TCP states (e.g. LISTEN,ESTABLISHED)\n"
               << "  --ioc-allow list           Comma-separated substrings to treat as benign for env-only IOC (e.g. /snap/,/usr/lib/firefox)\n"
               << "  --modules-summary          Collapse module list into single summary finding\n"
+              << "  --ioc-allow-file FILE     Newline-delimited additional allowlist patterns (supports # comments)\n"
+              << "  --fail-on-count N         Exit non-zero if total finding count >= N (after filtering)\n"
               << "  --help                     Show this help\n";
 }
 
@@ -62,10 +64,18 @@ int main(int argc, char** argv) {
     else if(a=="--network-states") cfg.network_states = split_csv(need_val("--network-states"));
     else if(a=="--ioc-allow") cfg.ioc_allow = split_csv(need_val("--ioc-allow"));
     else if(a=="--modules-summary") cfg.modules_summary_only = true;
+    else if(a=="--ioc-allow-file") cfg.ioc_allow_file = need_val("--ioc-allow-file");
+    else if(a=="--fail-on-count") cfg.fail_on_count = std::stoi(need_val("--fail-on-count"));
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }
     set_config(cfg);
+
+    // Post-parse: load IOC allowlist file if provided
+    if(!cfg.ioc_allow_file.empty()) {
+        std::ifstream af(cfg.ioc_allow_file); if(af){ std::string line; while(std::getline(af,line)) { if(line.empty()) continue; if(line[0]=='#') continue; cfg.ioc_allow.push_back(line); } }
+        set_config(cfg); // update global with merged allowlist
+    }
 
     ScannerRegistry registry;
     registry.register_all_default();
@@ -85,6 +95,10 @@ int main(int argc, char** argv) {
         int thresh = severity_rank(cfg.fail_on_severity);
         const auto& results = report.results();
         for(const auto& r: results){ for(const auto& f: r.findings){ if(severity_rank(f.severity) >= thresh) return 1; } }
+    }
+    if(cfg.fail_on_count > 0){
+        size_t total=0; for(const auto& r: report.results()) total += r.findings.size();
+        if(total >= static_cast<size_t>(cfg.fail_on_count)) return 1;
     }
     return 0;
 }

@@ -25,6 +25,9 @@ struct Config {
     // IOC tuning
     std::vector<std::string> ioc_allow; // substrings or prefixes that downgrade env-only IOC severity
     bool modules_summary_only = false; // if true, emit single summary with counts and notable modules
+    // Extended tuning
+    std::string ioc_allow_file; // file with newline-delimited allowlist patterns (comments starting with #)
+    int fail_on_count = 0; // if >0, exit non-zero if total findings >= this
 };
 
 Config& config();
