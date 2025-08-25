@@ -34,6 +34,9 @@ struct Config {
     // SUID expected baseline management
     std::vector<std::string> suid_expected_add; // user-specified additional expected SUID paths
     std::string suid_expected_file; // file containing newline-delimited expected SUID paths
+    // Output formatting extensions
+    bool canonical = false; // RFC 8785 JCS canonical JSON
+    bool ndjson = false; // newline-delimited findings mode
 };
 
 Config& config();
