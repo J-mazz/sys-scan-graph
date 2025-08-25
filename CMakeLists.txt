@@ -30,6 +30,7 @@ add_library(sys_scan_core
   src/scanners/WorldWritableScanner.cpp
   src/scanners/SuidScanner.cpp
   src/scanners/IOCScanner.cpp
+  src/scanners/MACScanner.cpp
 )
 
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party)

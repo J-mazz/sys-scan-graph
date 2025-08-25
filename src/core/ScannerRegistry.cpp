@@ -9,6 +9,7 @@
 #include "../scanners/WorldWritableScanner.h"
 #include "../scanners/SuidScanner.h"
 #include "../scanners/IOCScanner.h"
+#include "../scanners/MACScanner.h"
 
 namespace sys_scan {
 
@@ -24,6 +25,7 @@ void ScannerRegistry::register_all_default() {
     register_scanner(std::make_unique<WorldWritableScanner>());
     register_scanner(std::make_unique<SuidScanner>());
     register_scanner(std::make_unique<IOCScanner>());
+    register_scanner(std::make_unique<MACScanner>());
 }
 
 void ScannerRegistry::run_all(Report& report) {
