@@ -60,10 +60,14 @@ if(BUILD_TESTS)
   add_executable(test_modules_anomalies tests/test_modules_anomalies.cpp)
   target_link_libraries(test_modules_anomalies PRIVATE sys_scan_core)
   add_test(NAME modules_anomalies COMMAND test_modules_anomalies)
+  add_executable(test_json_schema_smoke tests/test_json_schema_smoke.cpp)
+  target_link_libraries(test_json_schema_smoke PRIVATE sys_scan_core)
+  add_test(NAME json_schema_smoke COMMAND test_json_schema_smoke)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
 install(DIRECTORY third_party/ DESTINATION include/sys-scan/third_party FILES_MATCHING PATTERN "*.hpp")
 install(DIRECTORY src/core/ DESTINATION include/sys-scan/core FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY src/scanners/ DESTINATION include/sys-scan/scanners FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY schema/ DESTINATION share/sys-scan/schema FILES_MATCHING PATTERN "*.json")
 
