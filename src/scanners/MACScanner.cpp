@@ -64,10 +64,14 @@ void MACScanner::scan(Report& report) {
     // SELinux Finding
     {
         Finding f; f.id = "selinux"; f.title = "SELinux status"; f.severity = "info"; f.description = "SELinux detection";
-        if(!selinux_present) { f.severity = in_container? "info" : "high"; f.metadata["present"] = "false"; }
-        else {
+        if(!selinux_present) {
+            f.metadata["present"] = "false";
+            // If AppArmor is enabled, absence of SELinux alone is not high severity (Ubuntu default)
+            if(apparmor_enabled) f.severity = in_container?"info":"low"; else f.severity = in_container?"info":"high";
+        } else {
             f.metadata["present"] = "true"; f.metadata["enforcing"] = selinux_enforcing?"true":"false"; f.metadata["permissive"] = selinux_permissive?"true":"false"; if(selinux_cfg_mode.size()) f.metadata["config_mode"] = selinux_cfg_mode;
-            if(selinux_permissive) f.severity = "medium"; if(selinux_enforcing) f.severity = "info"; }
+            if(selinux_permissive) f.severity = "medium"; if(selinux_enforcing) f.severity = "info";
+        }
         report.add_finding(this->name(), std::move(f));
     }
 

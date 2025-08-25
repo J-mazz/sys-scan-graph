@@ -31,8 +31,12 @@ static void print_help(){
               << "  --ioc-allow list           Comma-separated substrings to treat as benign for env-only IOC (e.g. /snap/,/usr/lib/firefox)\n"
               << "  --modules-summary          Collapse module list into single summary finding\n"
               << "  --process-hash             Include SHA256 of process executable (if OpenSSL available)\n"
+              << "  --process-inventory        Emit all processes (default: only anomalies)\n"
               << "  --ioc-allow-file FILE     Newline-delimited additional allowlist patterns (supports # comments)\n"
               << "  --fail-on-count N         Exit non-zero if total finding count >= N (after filtering)\n"
+              << "  --modules-anomalies-only  Only emit unsigned/out-of-tree module findings (oversrides summary/detail)\n"
+              << "  --suid-expected list      Comma-separated extra expected SUID paths (exact or suffix)\n"
+              << "  --suid-expected-file FILE Newline-delimited expected SUID paths (# comments)\n"
               << "  --help                     Show this help\n";
 }
 
@@ -66,8 +70,12 @@ int main(int argc, char** argv) {
     else if(a=="--ioc-allow") cfg.ioc_allow = split_csv(need_val("--ioc-allow"));
     else if(a=="--modules-summary") cfg.modules_summary_only = true;
     else if(a=="--process-hash") cfg.process_hash = true;
+    else if(a=="--process-inventory") cfg.process_inventory = true;
     else if(a=="--ioc-allow-file") cfg.ioc_allow_file = need_val("--ioc-allow-file");
     else if(a=="--fail-on-count") cfg.fail_on_count = std::stoi(need_val("--fail-on-count"));
+    else if(a=="--modules-anomalies-only") cfg.modules_anomalies_only = true;
+    else if(a=="--suid-expected") cfg.suid_expected_add = split_csv(need_val("--suid-expected"));
+    else if(a=="--suid-expected-file") cfg.suid_expected_file = need_val("--suid-expected-file");
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }
@@ -77,6 +85,10 @@ int main(int argc, char** argv) {
     if(!cfg.ioc_allow_file.empty()) {
         std::ifstream af(cfg.ioc_allow_file); if(af){ std::string line; while(std::getline(af,line)) { if(line.empty()) continue; if(line[0]=='#') continue; cfg.ioc_allow.push_back(line); } }
         set_config(cfg); // update global with merged allowlist
+    }
+    if(!cfg.suid_expected_file.empty()) {
+        std::ifstream ef(cfg.suid_expected_file); if(ef){ std::string line; while(std::getline(ef,line)){ if(line.empty()) continue; if(line[0]=='#') continue; cfg.suid_expected_add.push_back(line); } }
+        set_config(cfg);
     }
 
     ScannerRegistry registry;

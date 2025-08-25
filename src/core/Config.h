@@ -29,6 +29,11 @@ struct Config {
     std::string ioc_allow_file; // file with newline-delimited allowlist patterns (comments starting with #)
     int fail_on_count = 0; // if >0, exit non-zero if total findings >= this
     bool process_hash = false; // hash process executable (SHA256) if OpenSSL available
+    bool process_inventory = false; // list every process as finding (otherwise only anomalies via IOC scanner)
+    bool modules_anomalies_only = false; // only emit unsigned / out-of-tree module findings
+    // SUID expected baseline management
+    std::vector<std::string> suid_expected_add; // user-specified additional expected SUID paths
+    std::string suid_expected_file; // file containing newline-delimited expected SUID paths
 };
 
 Config& config();
