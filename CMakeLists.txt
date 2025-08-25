@@ -62,7 +62,7 @@ if(BUILD_TESTS)
   add_test(NAME modules_anomalies COMMAND test_modules_anomalies)
 endif()
 
-install(TARGETS sys-scan RUNTIME DESTINATION bin)
+install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
 install(DIRECTORY third_party/ DESTINATION include/sys-scan/third_party FILES_MATCHING PATTERN "*.hpp")
 install(DIRECTORY src/core/ DESTINATION include/sys-scan/core FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY src/scanners/ DESTINATION include/sys-scan/scanners FILES_MATCHING PATTERN "*.h")
