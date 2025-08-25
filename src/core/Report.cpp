@@ -1,5 +1,7 @@
 #include "Report.h"
 #include <algorithm>
+#include "RuleEngine.h"
+#include "Config.h"
 
 namespace sys_scan {
 
@@ -15,6 +17,7 @@ void Report::add_finding(const std::string& scanner, Finding finding) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = std::find_if(results_.begin(), results_.end(), [&](auto& r){ return r.scanner_name == scanner; });
     if(it != results_.end()) {
+    if(config().rules_enable){ rule_engine().apply(scanner, finding); }
     finding.risk_score = severity_risk_score(finding.severity);
         it->findings.push_back(std::move(finding));
     }

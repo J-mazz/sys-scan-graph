@@ -104,6 +104,9 @@ if(BUILD_TESTS)
   add_executable(test_rules_engine_warnings_structured tests/test_rules_engine_warnings_structured.cpp)
   target_link_libraries(test_rules_engine_warnings_structured PRIVATE sys_scan_core)
   add_test(NAME rules_engine_warnings_structured COMMAND test_rules_engine_warnings_structured)
+  add_executable(test_meta_suppression tests/test_meta_suppression.cpp)
+  target_link_libraries(test_meta_suppression PRIVATE sys_scan_core)
+  add_test(NAME meta_suppression COMMAND test_meta_suppression)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
