@@ -2,6 +2,7 @@
 #include "core/Report.h"
 #include "core/JSONWriter.h"
 #include "core/Logging.h"
+#include "core/RuleEngine.h"
 #include <iostream>
 #include <filesystem>
 #include <vector>
@@ -39,6 +40,9 @@ static void print_help(){
               << "  --integrity-ima            Include IMA measurement stats (if /sys/kernel/security/ima exists)\n"
               << "  --integrity-pkg-verify     Enable dpkg/rpm verify (where available)\n"
               << "  --integrity-pkg-limit N    Limit detailed package mismatch findings (default 200)\n"
+              << "  --rules-enable            Enable rule engine enrichment\n"
+              << "  --rules-dir DIR           Directory containing .rule files\n"
+              << "  --rules-allow-legacy      Do not fail if unsupported rule_version encountered (emit warning)\n"
               << "  --process-hash             Include SHA256 of process executable (if OpenSSL available)\n"
               << "  --process-inventory        Emit all processes (default: only anomalies)\n"
               << "  --ioc-allow-file FILE     Newline-delimited additional allowlist patterns (supports # comments)\n"
@@ -57,6 +61,9 @@ static void print_help(){
               << "                             (requires --containers)\n"
               << "  --ioc-env-trust           Correlate LD_* env vars with executable trust (unsigned/tmp paths escalate)\n"
               << "  --ioc-exec-trace [S]      Capture short-lived processes via eBPF execve trace for S seconds (default 3)\n"
+              << "  --no-user-meta            Suppress user/uid/gid/euid/egid in meta section\n"
+              << "  --no-cmdline-meta         Suppress process command line in meta section\n"
+              << "  --no-hostname-meta        Suppress hostname in meta section\n"
               << "  --help                     Show this help\n";
 }
 
@@ -98,6 +105,9 @@ int main(int argc, char** argv) {
     else if(a=="--integrity-ima") cfg.integrity_ima = true;
     else if(a=="--integrity-pkg-verify") cfg.integrity_pkg_verify = true;
     else if(a=="--integrity-pkg-limit") cfg.integrity_pkg_limit = std::stoi(need_val("--integrity-pkg-limit"));
+    else if(a=="--rules-enable") cfg.rules_enable = true;
+    else if(a=="--rules-dir") cfg.rules_dir = need_val("--rules-dir");
+    else if(a=="--rules-allow-legacy") cfg.rules_allow_legacy = true;
     else if(a=="--process-hash") cfg.process_hash = true;
     else if(a=="--process-inventory") cfg.process_inventory = true;
     else if(a=="--ioc-allow-file") cfg.ioc_allow_file = need_val("--ioc-allow-file");
@@ -115,6 +125,9 @@ int main(int argc, char** argv) {
     else if(a=="--container-id") cfg.container_id_filter = need_val("--container-id");
     else if(a=="--ioc-env-trust") cfg.ioc_env_trust = true;
     else if(a=="--ioc-exec-trace") { cfg.ioc_exec_trace = true; if(i+1<argc && argv[i+1][0] != '-') { cfg.ioc_exec_trace_seconds = std::stoi(argv[++i]); } }
+    else if(a=="--no-user-meta") cfg.no_user_meta = true;
+    else if(a=="--no-cmdline-meta") cfg.no_cmdline_meta = true;
+    else if(a=="--no-hostname-meta") cfg.no_hostname_meta = true;
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }
@@ -131,6 +144,11 @@ int main(int argc, char** argv) {
     }
 
     ScannerRegistry registry;
+    if(cfg.rules_enable){
+        std::string warn; rule_engine().load_dir(cfg.rules_dir, warn); if(!warn.empty()) Logger::instance().warn(std::string("rules:")+warn);
+        bool hasUnsupported=false; for(const auto& w : rule_engine().warnings()){ if(w.code=="unsupported_version") { hasUnsupported=true; break; } }
+        if(hasUnsupported && !cfg.rules_allow_legacy){ std::cerr << "Unsupported rule_version detected. Use --rules-allow-legacy to proceed.\n"; return 3; }
+    }
     registry.register_all_default();
 
     Report report;
