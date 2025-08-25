@@ -29,8 +29,8 @@ void IOCScanner::scan(Report& report) {
     // Gather world-writable dirs for quick membership (subset)
     std::vector<std::string> ww_dirs = {"/tmp", "/dev/shm", "/var/tmp"};
 
-    // Aggregate env-only LD_* temp path hits per executable
-    struct EnvAgg { std::unordered_set<std::string> pids; std::string exe; };
+    // Aggregate env-only LD_* temp path hits per executable; track escalation reasons
+    struct EnvAgg { std::unordered_set<std::string> pids; std::string exe; bool tmp_path=false; bool preload=false; bool libpath=false; bool untrusted=false; };
     std::unordered_map<std::string, EnvAgg> env_hits; // key = exe (or "<unknown>")
 
     // Process IOC aggregation structures
@@ -65,15 +65,16 @@ void IOCScanner::scan(Report& report) {
             if(deleted) agg.any_deleted = true;
             if(ww_exec) agg.any_ww_exec = true;
         }
-        // Suspicious environment variables (LD_PRELOAD, LD_LIBRARY_PATH pointing to tmp)
+        // Suspicious environment variables (LD_PRELOAD, LD_LIBRARY_PATH) with optional trust correlation
         auto environ_path = entry.path()/"environ"; std::ifstream efs(environ_path, std::ios::binary); if(efs){ std::string envdata((std::istreambuf_iterator<char>(efs)), {}); // null-delimited
-            bool has_ld = (envdata.find("LD_PRELOAD=")!=std::string::npos || envdata.find("LD_LIBRARY_PATH=")!=std::string::npos);
-            bool temp_ref = (envdata.find("/tmp")!=std::string::npos || envdata.find("/dev/shm")!=std::string::npos);
-            if(has_ld && temp_ref){
+            bool has_preload = envdata.find("LD_PRELOAD=")!=std::string::npos; bool has_libpath = envdata.find("LD_LIBRARY_PATH=")!=std::string::npos; if(has_preload || has_libpath){
+                bool temp_ref = (envdata.find("/tmp/")!=std::string::npos || envdata.find("/dev/shm/")!=std::string::npos);
                 std::string key = exe_target.empty()? std::string("<unknown>") : exe_target;
-                auto& agg = env_hits[key];
-                agg.pids.insert(pid);
-                if(agg.exe.empty()) agg.exe = key;
+                if(temp_ref || config().ioc_env_trust){ auto& agg = env_hits[key]; agg.pids.insert(pid); if(agg.exe.empty()) agg.exe=key; agg.tmp_path = agg.tmp_path || temp_ref; agg.preload = agg.preload || has_preload; agg.libpath = agg.libpath || has_libpath; if(config().ioc_env_trust){
+                        // Trust heuristic: path under /usr/bin or /bin or /usr/sbin considered trusted; else untrusted unless allowlisted
+                        bool trusted=false; if(!exe_target.empty()){ trusted = (exe_target.rfind("/usr/bin/",0)==0 || exe_target.rfind("/bin/",0)==0 || exe_target.rfind("/usr/sbin/",0)==0); }
+                        if(!trusted) agg.untrusted = true; }
+                }
             }
         }
     }
@@ -97,20 +98,19 @@ void IOCScanner::scan(Report& report) {
     // Emit aggregated env findings
     if(!env_hits.empty()){
         auto& cfg = config();
-        for(auto& kv : env_hits){
-            const auto& key = kv.first; auto& agg = kv.second;
-            // Determine severity: default medium; downgrade to low if allowlist match
-            std::string sev = "medium";
-            for(const auto& allow : cfg.ioc_allow){ if(!allow.empty() && key.find(allow) != std::string::npos){ sev = "low"; break; } }
-            Finding f; f.id = key+":env"; f.title = "Suspicious environment"; f.severity = severity_from_string(sev); f.description = "Environment references LD_* in temp paths";
-            f.metadata["rule"] = "ld_env_temp";
-            f.metadata["exe"] = key;
-            f.metadata["pid_count"] = std::to_string(agg.pids.size());
-            // Include up to first 5 pids
-            int count=0; std::string sample; for(const auto& p: agg.pids){ if(count++) sample += ","; sample += p; if(count>=5) break; }
-            f.metadata["sample_pids"] = sample;
-            report.add_finding(this->name(), std::move(f));
-        }
+        for(auto& kv : env_hits){ const auto& key = kv.first; auto& agg = kv.second; std::string sev = "medium"; std::string rule="ld_env"; std::string desc="LD_* environment usage";
+            if(agg.tmp_path){ rule += "_tmp"; desc += " referencing tmp"; }
+            if(agg.untrusted){ rule += "_untrusted_exe"; if(sev!="critical") sev = "high"; }
+            for(const auto& allow : cfg.ioc_allow){ if(!allow.empty() && key.find(allow) != std::string::npos){ if(sev!="critical") sev = "low"; break; } }
+            if(agg.preload && agg.tmp_path && agg.untrusted) sev = "critical";
+            Finding f; f.id = key+":env"; f.title = "Environment IOC"; f.severity = severity_from_string(sev); f.description = desc; f.metadata["rule"] = rule; f.metadata["exe"] = key; if(agg.tmp_path) f.metadata["tmp_path"]="true"; if(agg.preload) f.metadata["has_ld_preload"]="true"; if(agg.libpath) f.metadata["has_ld_library_path"]="true"; if(agg.untrusted) f.metadata["untrusted_exe"]="true"; f.metadata["pid_count"] = std::to_string(agg.pids.size()); int count=0; std::string sample; for(const auto& p: agg.pids){ if(count++) sample += ","; sample += p; if(count>=5) break; } f.metadata["sample_pids"] = sample; report.add_finding(this->name(), std::move(f)); }
+    }
+
+    // Optional short-lived process capture (placeholder user-space fallback if eBPF not available)
+    if(config().ioc_exec_trace){
+        int dur = config().ioc_exec_trace_seconds>0? config().ioc_exec_trace_seconds : 3;
+        // For now, create a placeholder finding noting feature not implemented fully (eBPF required)
+        Finding f; f.id = "exec_trace_session"; f.title = "Exec trace session"; f.severity = Severity::Info; f.description = "Short-lived process capture window "+std::to_string(dur)+"s (eBPF not yet implemented)"; f.metadata["duration_seconds"] = std::to_string(dur); report.add_finding(this->name(), std::move(f));
     }
 
     // Heuristic 2: Executables under /tmp or /dev/shm

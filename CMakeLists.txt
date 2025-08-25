@@ -31,6 +31,12 @@ add_library(sys_scan_core
   src/scanners/SuidScanner.cpp
   src/scanners/IOCScanner.cpp
   src/scanners/MACScanner.cpp
+  src/scanners/MountScanner.cpp
+  src/scanners/KernelHardeningScanner.cpp
+  src/scanners/SystemdUnitScanner.cpp
+  src/scanners/AuditdScanner.cpp
+  src/scanners/ContainerScanner.cpp
+  src/scanners/IntegrityScanner.cpp
 )
 
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party)

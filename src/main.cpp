@@ -28,8 +28,17 @@ static void print_help(){
               << "  --network-listen-only      Only include listening sockets (UDP all bound ports)\n"
               << "  --network-proto tcp|udp    Filter network scanner to protocol\n"
               << "  --network-states list      Comma-separated TCP states (e.g. LISTEN,ESTABLISHED)\n"
+              << "  --network-advanced         Enable advanced network analytics (exposure/fanout)\n"
+              << "  --network-fanout N         Threshold for total connections per process (default 100)\n"
+              << "  --network-fanout-unique N  Threshold for unique remote IPs per process (default 50)\n"
               << "  --ioc-allow list           Comma-separated substrings to treat as benign for env-only IOC (e.g. /snap/,/usr/lib/firefox)\n"
               << "  --modules-summary          Collapse module list into single summary finding\n"
+              << "  --modules-hash             Include SHA256 of module file (if OpenSSL available; anomalies/summary modes)\n"
+              << "  --fs-hygiene               Enable advanced filesystem hygiene checks (PATH ww dirs, setuid interpreters, setcap, dangling suid hardlinks)\n"
+              << "  --integrity                Enable integrity / package verification scanners\n"
+              << "  --integrity-ima            Include IMA measurement stats (if /sys/kernel/security/ima exists)\n"
+              << "  --integrity-pkg-verify     Enable dpkg/rpm verify (where available)\n"
+              << "  --integrity-pkg-limit N    Limit detailed package mismatch findings (default 200)\n"
               << "  --process-hash             Include SHA256 of process executable (if OpenSSL available)\n"
               << "  --process-inventory        Emit all processes (default: only anomalies)\n"
               << "  --ioc-allow-file FILE     Newline-delimited additional allowlist patterns (supports # comments)\n"
@@ -40,6 +49,14 @@ static void print_help(){
               << "  --canonical               Emit canonical (RFC8785-like) JSON ordering\n"
               << "  --ndjson                  Emit NDJSON (one JSON object per line: meta, summary, findings)\n"
               << "  --sarif                   Emit SARIF 2.1.0 JSON (subset)\n"
+              << "  --parallel                Run scanners in parallel (deterministic output order)\n"
+              << "  --parallel-threads N      Max parallel threads (default=hardware concurrency)\n"
+              << "  --hardening               Enable extended hardening/attack-surface checks\n"
+              << "  --containers              Enable container / namespace detection and attribution\n"
+              << "  --container-id ID         Limit certain scanners to a specific container id (heuristic)\n"
+              << "                             (requires --containers)\n"
+              << "  --ioc-env-trust           Correlate LD_* env vars with executable trust (unsigned/tmp paths escalate)\n"
+              << "  --ioc-exec-trace [S]      Capture short-lived processes via eBPF execve trace for S seconds (default 3)\n"
               << "  --help                     Show this help\n";
 }
 
@@ -70,8 +87,17 @@ int main(int argc, char** argv) {
     else if(a=="--network-listen-only") cfg.network_listen_only = true;
     else if(a=="--network-proto") cfg.network_proto = need_val("--network-proto");
     else if(a=="--network-states") cfg.network_states = split_csv(need_val("--network-states"));
+    else if(a=="--network-advanced") cfg.network_advanced = true;
+    else if(a=="--network-fanout") cfg.network_fanout_threshold = std::stoi(need_val("--network-fanout"));
+    else if(a=="--network-fanout-unique") cfg.network_fanout_unique_threshold = std::stoi(need_val("--network-fanout-unique"));
     else if(a=="--ioc-allow") cfg.ioc_allow = split_csv(need_val("--ioc-allow"));
     else if(a=="--modules-summary") cfg.modules_summary_only = true;
+    else if(a=="--modules-hash") cfg.modules_hash = true;
+    else if(a=="--fs-hygiene") cfg.fs_hygiene = true;
+    else if(a=="--integrity") cfg.integrity = true;
+    else if(a=="--integrity-ima") cfg.integrity_ima = true;
+    else if(a=="--integrity-pkg-verify") cfg.integrity_pkg_verify = true;
+    else if(a=="--integrity-pkg-limit") cfg.integrity_pkg_limit = std::stoi(need_val("--integrity-pkg-limit"));
     else if(a=="--process-hash") cfg.process_hash = true;
     else if(a=="--process-inventory") cfg.process_inventory = true;
     else if(a=="--ioc-allow-file") cfg.ioc_allow_file = need_val("--ioc-allow-file");
@@ -82,6 +108,13 @@ int main(int argc, char** argv) {
     else if(a=="--canonical") cfg.canonical = true;
     else if(a=="--ndjson") cfg.ndjson = true;
     else if(a=="--sarif") cfg.sarif = true;
+    else if(a=="--parallel") cfg.parallel = true;
+    else if(a=="--parallel-threads") cfg.parallel_max_threads = std::stoi(need_val("--parallel-threads"));
+    else if(a=="--hardening") cfg.hardening = true;
+    else if(a=="--containers") cfg.containers = true;
+    else if(a=="--container-id") cfg.container_id_filter = need_val("--container-id");
+    else if(a=="--ioc-env-trust") cfg.ioc_env_trust = true;
+    else if(a=="--ioc-exec-trace") { cfg.ioc_exec_trace = true; if(i+1<argc && argv[i+1][0] != '-') { cfg.ioc_exec_trace_seconds = std::stoi(argv[++i]); } }
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }

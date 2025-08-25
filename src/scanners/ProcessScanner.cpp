@@ -7,6 +7,8 @@
 #include <sstream>
 #include <pwd.h>
 #include <sys/stat.h>
+#include <regex>
+#include <unordered_map>
 #ifdef SYS_SCAN_HAVE_OPENSSL
 #include <openssl/evp.h>
 #endif
@@ -16,6 +18,17 @@ namespace sys_scan {
 
 void ProcessScanner::scan(Report& report) {
     size_t emitted = 0;
+    // Preload container id mapping if container mode
+    std::unordered_map<std::string,std::string> pid_to_container; // pid->container short id
+    if(config().containers){
+        for(const auto& entry : fs::directory_iterator("/proc", fs::directory_options::skip_permission_denied)){
+            if(!entry.is_directory()) continue; auto pid = entry.path().filename().string(); if(!std::all_of(pid.begin(), pid.end(), ::isdigit)) continue;
+            std::ifstream cg(entry.path().string()+"/cgroup"); if(!cg) continue; std::string line; while(std::getline(cg,line)){
+                // reuse container id heuristic from ContainerScanner (duplicate small logic to avoid dependency)
+                static std::regex re("([0-9a-f]{64}|[0-9a-f]{32})"); std::smatch m; if(std::regex_search(line,m,re)){ pid_to_container[pid] = m.str(1).substr(0,12); break; }
+            }
+        }
+    }
     bool inventory = config().process_inventory; // if false, we suppress routine process listings
     for(const auto& entry : fs::directory_iterator("/proc", fs::directory_options::skip_permission_denied)) {
         if(!entry.is_directory()) continue;
@@ -53,6 +66,7 @@ void ProcessScanner::scan(Report& report) {
             f.description = cmd.empty()?"(no cmdline)":cmd;
             f.metadata["uid"] = uid;
             f.metadata["gid"] = gid;
+            if(config().containers){ auto it = pid_to_container.find(name); if(it!=pid_to_container.end()){ f.metadata["container_id"] = it->second; if(!config().container_id_filter.empty() && it->second != config().container_id_filter) { continue; } } else { if(!config().container_id_filter.empty()) continue; } }
             if(config().process_hash){
             // attempt to read /proc/PID/exe target and hash file contents (first 1MB stream for performance)
             std::error_code ec; auto exe_link = entry.path()/"exe"; auto target = fs::read_symlink(exe_link, ec);
