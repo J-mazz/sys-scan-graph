@@ -21,6 +21,7 @@
 #include "../scanners/AuditdScanner.h"
 #include "../scanners/ContainerScanner.h"
 #include "../scanners/IntegrityScanner.h"
+#include "../scanners/YaraScanner.h"
 
 namespace sys_scan {
 
@@ -44,6 +45,9 @@ void ScannerRegistry::register_all_default() {
     register_scanner(std::make_unique<ContainerScanner>());
     if(config().integrity){
         register_scanner(std::make_unique<IntegrityScanner>());
+    }
+    if(config().rules_enable){
+        register_scanner(std::make_unique<YaraScanner>());
     }
 }
 

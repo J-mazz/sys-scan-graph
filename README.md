@@ -11,7 +11,37 @@ Lightweight Linux (Debian/Ubuntu focused) system security & hygiene scanner in m
 Processes, Network, Kernel Params, Kernel Modules (summary / unsigned & out‑of‑tree heuristics incl. compressed .ko scanning), World‑Writable, SUID/SGID (inode de‑dup), IOC (deleted execs, temp execution, LD_* env anomalies, preload issues, SUID in home), MAC (SELinux/AppArmor status & anomalies).
 
 ### Output & Reporting
-Deterministic JSON (pretty / compact) with summary (counts, durations, severities, slowest). Severity filtering & fail-on threshold; aggregated findings reduce noise (env/process IOC, SUID alt paths, module summary).
+Deterministic JSON (pretty / compact) with summary (counts, durations, severities, slowest) plus optional canonical RFC8785 mode (`--canonical`) for stable hashing, NDJSON streaming (`--ndjson`) and SARIF (`--sarif`) for pipeline / code‑scanning integrations. Severity filtering & fail-on threshold; aggregated findings reduce noise (env/process IOC, SUID alt paths, module summary).
+
+### Rule Engine
+Optional enrichment rules (`--rules-enable --rules-dir rules/`) provide:
+* Multi-condition AND / OR logic with scoped fields (id, title, description, metadata.*)
+* Regex conditions (pre‑compiled & length/ count guardrails)
+* Severity override & additive MITRE technique tagging (order‑preserving de‑dup)
+* Structured warnings surfaced for unsupported versions, excessive rules / conditions, invalid regex.
+
+Rule file example:
+```
+rule_version = 1
+
+rule "Upgrade suspicious finding" {
+	when {
+		id ~= "proc_.*deleted"
+		metadata.mitre_missing = "true"  # exact match example
+	}
+	severity = "high"
+	mitre_techniques = ["T1055","T1105"]
+	notes = "Escalate deleted executable with missing MITRE mapping"
+}
+```
+
+### Privacy & Metadata Suppression
+Flags to drop potentially sensitive host data from `meta`:
+* `--no-user-meta` (removes user, uid/gid/euid/egid)
+* `--no-cmdline-meta` (removes process invocation cmdline)
+* `--no-hostname-meta` (removes hostname)
+
+Test coverage (`meta_suppression`) ensures these fields are absent when flags set.
 
 ### Noise Reduction
 Env IOC aggregation with allowlist downgrade (via `--ioc-allow` / `--ioc-allow-file`), process IOC merging per exe, SUID inode dedupe (with expected baseline downgrade), module summary mode and anomalies-only options.
@@ -51,6 +81,15 @@ Network exposed listener severity lift; ld.so.preload anomaly detection; unsigne
 --fail-on-count N             Exit non-zero if total finding count >= N
 --suid-expected list          Extra expected SUID paths (comma list)
 --suid-expected-file FILE     Newline-delimited expected SUID paths
+--canonical                   Emit RFC8785 canonical JSON (stable ordering & formatting)
+--ndjson                      Emit newline-delimited meta/summary/finding lines (stream friendly)
+--sarif                       Emit SARIF 2.1.0 run with findings as results
+--rules-enable                Enable rule enrichment engine
+--rules-dir DIR               Directory containing .rule files
+--rules-allow-legacy          Allow loading legacy rule_version without hard fail
+--no-user-meta                Suppress user/uid/gid/euid/egid in meta
+--no-cmdline-meta             Suppress cmdline in meta
+--no-hostname-meta            Suppress hostname in meta
 --help                        Show usage
 ```
 
@@ -66,9 +105,16 @@ cmake --build build -j$(nproc)
 cd build
 ctest --output-on-failure
 ```
+Key tests:
+* `canonical_golden` – regression guard for canonical stable hash
+* `ndjson_mitre` – MITRE technique formatting in NDJSON
+* `rules_*` – rule engine multi-condition, version, warnings, MITRE de‑dup
+* `meta_suppression` – metadata privacy flags honor suppression
 ## Roadmap Ideas
 - Add hashing of binaries (optional OpenSSL/Blake3)
 - Add package integrity checks (dpkg --verify)
+ - Extract canonical IR structs (CanonVal) into shared header for potential external tooling
+ - Additional SARIF properties (locations, partial fingerprints)
 
 ## Operational Tips
 - Use `--modules-summary` to shrink report size in continuous runs.
