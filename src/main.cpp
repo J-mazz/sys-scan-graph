@@ -39,6 +39,7 @@ static void print_help(){
               << "  --suid-expected-file FILE Newline-delimited expected SUID paths (# comments)\n"
               << "  --canonical               Emit canonical (RFC8785-like) JSON ordering\n"
               << "  --ndjson                  Emit NDJSON (one JSON object per line: meta, summary, findings)\n"
+              << "  --sarif                   Emit SARIF 2.1.0 JSON (subset)\n"
               << "  --help                     Show this help\n";
 }
 
@@ -80,6 +81,7 @@ int main(int argc, char** argv) {
     else if(a=="--suid-expected-file") cfg.suid_expected_file = need_val("--suid-expected-file");
     else if(a=="--canonical") cfg.canonical = true;
     else if(a=="--ndjson") cfg.ndjson = true;
+    else if(a=="--sarif") cfg.sarif = true;
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }

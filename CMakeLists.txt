@@ -63,6 +63,9 @@ if(BUILD_TESTS)
   add_executable(test_json_schema_smoke tests/test_json_schema_smoke.cpp)
   target_link_libraries(test_json_schema_smoke PRIVATE sys_scan_core)
   add_test(NAME json_schema_smoke COMMAND test_json_schema_smoke)
+  add_executable(test_sarif_smoke tests/test_sarif_smoke.cpp)
+  target_link_libraries(test_sarif_smoke PRIVATE sys_scan_core)
+  add_test(NAME sarif_smoke COMMAND test_sarif_smoke)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
