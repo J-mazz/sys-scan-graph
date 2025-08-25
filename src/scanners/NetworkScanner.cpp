@@ -16,14 +16,16 @@ namespace sys_scan {
 static std::unordered_map<std::string, std::pair<std::string,std::string>> build_inode_map(){
     // inode -> (pid, exe)
     std::unordered_map<std::string, std::pair<std::string,std::string>> map;
-    for(const auto& proc : fs::directory_iterator("/proc")){
-        if(!proc.is_directory()) continue; auto pid = proc.path().filename().string(); if(!std::all_of(pid.begin(),pid.end(),::isdigit)) continue;
-        fs::path fd_dir = proc.path()/"fd"; std::error_code ec; if(!fs::exists(fd_dir, ec)) continue;
-        for(const auto& fd : fs::directory_iterator(fd_dir, fs::directory_options::skip_permission_denied, ec)){
-            if(ec) break; std::error_code ec2; auto target = fs::read_symlink(fd.path(), ec2); if(ec2) continue; std::string t = target.string(); // format: socket:[12345]
+    std::error_code top_ec;
+    for(auto pit = fs::directory_iterator("/proc", fs::directory_options::skip_permission_denied, top_ec); pit!=fs::directory_iterator(); ++pit){
+        if(top_ec) break; if(!pit->is_directory()) continue; auto pid = pit->path().filename().string(); if(!std::all_of(pid.begin(),pid.end(),::isdigit)) continue;
+        fs::path fd_dir = pit->path()/"fd"; std::error_code ec; if(!fs::exists(fd_dir, ec)) continue;
+        std::error_code ec_dir;
+        for(auto fit = fs::directory_iterator(fd_dir, fs::directory_options::skip_permission_denied, ec_dir); fit!=fs::directory_iterator(); ++fit){
+            if(ec_dir){ break; }
+            std::error_code ec2; auto target = fs::read_symlink(fit->path(), ec2); if(ec2) continue; std::string t = target.string(); // format: socket:[12345]
             auto pos = t.find("socket:["); if(pos==std::string::npos) continue; auto b = t.find('[', pos); auto e = t.find(']', b); if(b==std::string::npos||e==std::string::npos) continue; std::string inode = t.substr(b+1, e-b-1);
-            std::string exe;
-            std::error_code ec3; auto exepath = fs::read_symlink(proc.path()/"exe", ec3); if(!ec3) exe = exepath.string();
+            std::string exe; std::error_code ec3; auto exepath = fs::read_symlink(pit->path()/"exe", ec3); if(!ec3) exe = exepath.string();
             map.emplace(inode, std::make_pair(pid, exe));
         }
     }
@@ -70,7 +72,7 @@ static bool state_allowed(const std::string& st){
 }
 
 static void parse_tcp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::pair<std::string,std::string>>& inode_map, size_t& emitted){
-    std::ifstream ifs(path); if(!ifs) return; std::string header; std::getline(ifs, header);
+    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, std::string("net_file_unreadable:")+path); return; } std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; // quick filter
         // tokenize by whitespace (variable spacing)
@@ -113,7 +115,7 @@ static std::string classify_udp_severity(unsigned port, const std::string& exe){
 }
 
 static void parse_udp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::pair<std::string,std::string>>& inode_map, size_t& emitted){
-    std::ifstream ifs(path); if(!ifs) return; std::string header; std::getline(ifs, header);
+    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, std::string("net_file_unreadable:")+path); return; } std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
     if(tok.size() < 10){ if(config().network_debug){ Finding dbg; dbg.id=proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw udp line"; dbg.severity=Severity::Info; dbg.description="Unparsed UDP line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }

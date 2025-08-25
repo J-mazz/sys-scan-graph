@@ -14,8 +14,14 @@ void KernelParamScanner::scan(Report& report) {
         {"/proc/sys/net/ipv4/ip_forward", "0", "IP forwarding disabled unless a router", "info"}
     };
     for(auto& it: items){
-        std::ifstream ifs(it.path); if(!ifs) continue; std::string val; std::getline(ifs, val);
-    Finding f; f.id = it.path; f.title = it.path; f.severity = (val==it.desired?Severity::Info:severity_from_string(it.severity)); f.description = it.desc; f.metadata["current"] = val; f.metadata["desired"] = it.desired; if(val!=it.desired) f.metadata["status"]="mismatch"; report.add_finding(this->name(), std::move(f));
+        std::ifstream ifs(it.path);
+        if(!ifs){
+            // Emit a collection warning for missing/inaccessible kernel param (could indicate hardened kernel or permission issue)
+            report.add_warning(this->name(), std::string("param_unreadable:") + it.path);
+            continue;
+        }
+        std::string val; std::getline(ifs, val);
+        Finding f; f.id = it.path; f.title = it.path; f.severity = (val==it.desired?Severity::Info:severity_from_string(it.severity)); f.description = it.desc; f.metadata["current"] = val; f.metadata["desired"] = it.desired; if(val!=it.desired) f.metadata["status"]="mismatch"; report.add_finding(this->name(), std::move(f));
     }
 }
 
