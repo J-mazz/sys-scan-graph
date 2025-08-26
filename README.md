@@ -187,6 +187,7 @@ Streaming to SARIF‑aware platforms:
 ```bash
 ./sys-scan --sarif > results.sarif
 ```
+<<<<<<< HEAD
 
 ### Release Validation Helper
 The script `scripts/release_validate.py` provides lightweight invariants before tagging or publishing a build:
@@ -208,6 +209,8 @@ Exit code non‑zero if any invariant fails; manifest always written for inspect
 
 An automated GitHub Actions workflow (`.github/workflows/release-validate.yml`) runs the validator on every push to `main` and on tags (`v*`). On tag pushes it also generates and uploads an SPDX SBOM plus the manifest to the GitHub Release.
 
+=======
+>>>>>>> 7616f75 (docs: hybrid licensing, compliance integration tests, HTML compliance section, remediation enrichment)
 ---
 ## 14. Examples
 ### Canonical JSON (excerpt)
