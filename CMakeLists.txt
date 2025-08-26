@@ -8,6 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_TESTS "Build unit tests" ON)
 option(ENABLE_OPENSSL "Use OpenSSL for hashing if available" ON)
 option(SYS_SCAN_REPRO_BUILD "Enable reproducible build settings (avoid embedding timestamps, absolute paths)" OFF)
+option(ENABLE_SECCOMP "Enable optional seccomp-bpf sandbox (requires libseccomp)" ON)
+option(ENABLE_CAPABILITIES "Enable Linux capabilities privilege dropping (libcap)" ON)
+option(BUILD_FUZZERS "Build libFuzzer harnesses (Clang only)" OFF)
 
 set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
 
@@ -50,6 +53,7 @@ add_library(sys_scan_core
   src/scanners/ContainerScanner.cpp
   src/scanners/IntegrityScanner.cpp
   src/scanners/YaraScanner.cpp
+  src/core/Privilege.cpp
 )
 
 #-------------------- Build provenance (git commit, compiler, flags) --------------------
@@ -82,11 +86,37 @@ if(OpenSSL_FOUND)
   target_link_libraries(sys_scan_core PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
+# libseccomp (sandbox)
+if(ENABLE_SECCOMP)
+  find_library(LIBSECCOMP_LIB seccomp)
+  if(LIBSECCOMP_LIB)
+    target_link_libraries(sys_scan_core PUBLIC ${LIBSECCOMP_LIB})
+    target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_SECCOMP=1)
+  endif()
+endif()
+
+# libcap (capability dropping)
+if(ENABLE_CAPABILITIES)
+  find_library(LIBCAP_LIB cap)
+  if(LIBCAP_LIB)
+    target_link_libraries(sys_scan_core PUBLIC ${LIBCAP_LIB})
+    target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_LIBCAP=1)
+  endif()
+endif()
+
 # Optional compression libraries for in-process module decompression (replaces popen to xz/gzip)
 find_package(ZLIB QUIET)
 if(ZLIB_FOUND)
   target_link_libraries(sys_scan_core PUBLIC ZLIB::ZLIB)
   target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_ZLIB=1)
+endif()
+
+# Fuzzers (libFuzzer) – simple harness example
+if(BUILD_FUZZERS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_executable(fuzz_rules fuzz/fuzz_rules.cpp)
+  target_link_libraries(fuzz_rules PRIVATE sys_scan_core)
+  target_compile_options(fuzz_rules PRIVATE -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
+  target_link_options(fuzz_rules PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
 find_package(LibLZMA QUIET)
 if(LIBLZMA_FOUND)

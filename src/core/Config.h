@@ -69,6 +69,10 @@ struct Config {
     // Integrity & provenance
     bool sign_gpg = false; // after writing output file, produce detached ascii-armored signature
     std::string sign_gpg_key; // key id / fingerprint / email for gpg --detach-sign -u
+    bool drop_priv = false; // drop Linux capabilities early
+    bool keep_cap_dac = false; // retain CAP_DAC_READ_SEARCH when dropping
+    bool seccomp = false; // apply seccomp sandbox after initialization
+    std::string write_env_file; // path to write .env style file (binary hash, version, commit)
 };
 
 Config& config();
