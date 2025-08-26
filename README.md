@@ -110,6 +110,50 @@ Key tests:
 * `ndjson_mitre` – MITRE technique formatting in NDJSON
 * `rules_*` – rule engine multi-condition, version, warnings, MITRE de‑dup
 * `meta_suppression` – metadata privacy flags honor suppression
+* `canonical_golden` – also guards provenance field stability (hash updates only on intentional schema or provenance additions)
+
+## Result Integrity & Provenance
+
+Canonical JSON (`--canonical`) plus deterministic ordering (& optional `SYS_SCAN_CANON_TIME_ZERO=1`) enables stable hashing of reports. To attest integrity you can:
+
+1. Produce report: `./sys-scan --canonical --output report.json`
+2. (Optional) Zero timestamps for fully reproducible hash: `SYS_SCAN_CANON_TIME_ZERO=1 ./sys-scan --canonical --output report.json`
+3. Sign with GPG: `./sys-scan --canonical --output report.json --sign-gpg <KEYID>` (emits `report.json.asc` detached signature)
+
+The `meta.provenance` object embeds build metadata for supply‑chain transparency:
+```
+"provenance": {
+	"git_commit": "<short-hash>",
+	"compiler_id": "GNU|Clang|...",
+	"compiler_version": "<ver>",
+	"cxx_standard": "20",
+	"cxx_flags": "<merged flags>",
+	"slsa_level": "<declared level>",
+	"build_type": "Release|Debug"
+}
+```
+Runtime override: `--slsa-level` (or env `SYS_SCAN_SLSA_LEVEL_RUNTIME`) if you want to declare an attested SLSA build level at execution time.
+
+### Reproducible Builds
+
+The project avoids embedding volatile timestamps (unless you rely on external libraries that do so). For stricter reproducibility:
+
+Recommended invocation:
+```
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
+	-DSYS_SCAN_REPRO_BUILD=ON -DSYS_SCAN_SLSA_LEVEL=1 \
+	-DCMAKE_CXX_FLAGS_RELEASE="-O2 -g0 -ffile-prefix-map=$(pwd)=. -fdebug-prefix-map=$(pwd)=."
+cmake --build build -j$(nproc)
+SOURCE_DATE_EPOCH=1700000000 SYS_SCAN_CANON_TIME_ZERO=1 ./build/sys-scan --canonical --output report.json
+sha256sum report.json
+```
+Notes:
+* `SYS_SCAN_REPRO_BUILD=ON` scrubs `__DATE__/__TIME__` and marks build reproducible.
+* `SYS_SCAN_CANON_TIME_ZERO=1` normalizes all timestamps to epoch and sets `meta.normalized_time=true`.
+* Use toolchain packaged compilers for determinism; ensure locale + TZ stable (e.g. `LC_ALL=C TZ=UTC`).
+* Provide `--sign-gpg` to generate a detached signature after writing the file.
+
+Future options may add cosign / age signing modes; current implementation focuses on ubiquitous GPG.
 ## Roadmap Ideas
 - Add hashing of binaries (optional OpenSSL/Blake3)
 - Add package integrity checks (dpkg --verify)
