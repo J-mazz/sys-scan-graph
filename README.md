@@ -93,6 +93,8 @@ Network exposed listener severity lift; ld.so.preload anomaly detection; unsigne
 --drop-priv                   Drop Linux capabilities early (best-effort; requires libcap)
 --keep-cap-dac                Retain CAP_DAC_READ_SEARCH when using --drop-priv
 --seccomp                     Apply restrictive seccomp-bpf profile after initialization (libseccomp)
+* `--seccomp` – installs a minimal allowlist seccomp-bpf program early, before scanning.
+* `--seccomp-strict` – treat failure to apply seccomp as fatal (exit code 4).
 --sign-gpg KEYID              Detached ASCII armored signature (requires --output)
 --write-env FILE              Emit .env file with version, git commit (if available), binary SHA256
 --slsa-level N                Declare SLSA build level (meta.provenance)
@@ -121,6 +123,7 @@ Key tests:
 ## Result Integrity & Provenance
 
 Canonical JSON (`--canonical`) plus deterministic ordering (& optional `SYS_SCAN_CANON_TIME_ZERO=1`) enables stable hashing of reports. To attest integrity you can:
+Provenance override environment variables (if set, override embedded build constants): `SYS_SCAN_PROV_GIT_COMMIT`, `SYS_SCAN_PROV_COMPILER_ID`, `SYS_SCAN_PROV_COMPILER_VERSION`, `SYS_SCAN_PROV_CXX_STANDARD`, `SYS_SCAN_PROV_CXX_FLAGS`, `SYS_SCAN_PROV_SLSA_LEVEL`, `SYS_SCAN_PROV_BUILD_TYPE`.
 
 1. Produce report: `./sys-scan --canonical --output report.json`
 2. (Optional) Zero timestamps for fully reproducible hash: `SYS_SCAN_CANON_TIME_ZERO=1 ./sys-scan --canonical --output report.json`

@@ -72,6 +72,7 @@ struct Config {
     bool drop_priv = false; // drop Linux capabilities early
     bool keep_cap_dac = false; // retain CAP_DAC_READ_SEARCH when dropping
     bool seccomp = false; // apply seccomp sandbox after initialization
+    bool seccomp_strict = false; // if true, failure to apply seccomp is fatal
     std::string write_env_file; // path to write .env style file (binary hash, version, commit)
 };
 

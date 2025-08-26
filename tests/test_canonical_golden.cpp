@@ -53,9 +53,17 @@ int main(){
     setenv("SYS_SCAN_META_USER","user",1);
     setenv("SYS_SCAN_META_CMDLINE","cmd",1);
     setenv("SYS_SCAN_CANON_TIME_ZERO","1",1);
+    // Stabilize provenance via environment overrides
+    setenv("SYS_SCAN_PROV_COMPILER_ID","cc",1);
+    setenv("SYS_SCAN_PROV_COMPILER_VERSION","0",1);
+    setenv("SYS_SCAN_PROV_GIT_COMMIT","deadbeef",1);
+    setenv("SYS_SCAN_PROV_CXX_STANDARD","20",1);
+    setenv("SYS_SCAN_PROV_CXX_FLAGS"," ",1); // single space matches normalized build flags format
+    setenv("SYS_SCAN_PROV_SLSA_LEVEL","0",1);
+    setenv("SYS_SCAN_PROV_BUILD_TYPE","Rel",1);
     JSONWriter w; auto json = w.write(r);
     auto h = sha256(json);
     // Golden hash computed once (update if canonical structure changes intentionally)
-    const std::string expected_hash = "1f8a614f191908466cd12df47d96ccc1b37975db75ca9ee0f9bdabc7a178e67c"; // updated after privilege/sandbox scaffolding (no structural change besides provenance ordering)
+    const std::string expected_hash = "62c1f753d2a66fb702fae2165445dea454679ecfa026a528898d353d2733ab02"; // stabilized with provenance env overrides (including single-space cxx_flags)
     if(h!=expected_hash){ std::cerr << "Canonical hash mismatch: got="<<h<<" expected="<<expected_hash<<"\n"; return 1; }
     std::cout << "Canonical golden test passed" << std::endl; return 0; }
