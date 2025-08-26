@@ -18,6 +18,38 @@ from .audit import log_stage, hash_text
 import yaml
 from .baseline import process_feature_vector
 import yaml as _yaml
+import uuid as _uuid
+from .config import load_config
+import concurrent.futures
+
+# -----------------
+# Internal helpers (risk recomputation & error logging)
+# -----------------
+
+def _recompute_finding_risk(f: Finding):
+    """Recompute risk fields after any risk_subscores mutation.
+    Safe no-op if subscores absent; logs errors instead of raising."""
+    try:
+        subs = getattr(f, 'risk_subscores', None)
+        if not subs:
+            return
+        weights = load_persistent_weights()
+        score, raw = compute_risk(subs, weights)
+        f.risk_score = score
+        f.risk_total = score
+        subs["_raw_weighted_sum"] = round(raw, 3)
+        f.probability_actionable = apply_probability(raw)
+    except Exception as e:  # pragma: no cover (defensive)
+        try:
+            log_stage('risk_recompute_error', error=str(e), type=type(e).__name__)
+        except Exception:
+            pass
+
+def _log_error(stage: str, e: Exception):
+    try:
+        log_stage(f'{stage}_error', error=str(e), type=type(e).__name__)
+    except Exception:
+        pass
 
 # Node functions (imperative; future step: convert to LangGraph graph)
 
@@ -151,21 +183,33 @@ def augment(state: AgentState) -> AgentState:
                 f.host_role = role
                 if not f.host_role_rationale:
                     f.host_role_rationale = role_signals
-                # Role-based impact adjustment: downgrade ip_forward kernel_param impact on router roles, upgrade on workstation
                 if f.category == 'kernel_param' and f.metadata.get('sysctl_key') == 'net.ipv4.ip_forward' and f.risk_subscores:
+                    impact_changed = False
                     if role in {'lightweight_router','container_host'}:
-                        # Soften impact (natural for routers/container hosts)
-                        f.risk_subscores['impact'] = round(max(0.5, f.risk_subscores['impact'] * 0.6),2)
-                        if f.rationale:
-                            f.rationale.append(f"host_role {role} => ip_forward normalized (impact adjusted)")
-                        else:
-                            f.rationale = [f"host_role {role} => ip_forward normalized (impact adjusted)"]
+                        new_imp = round(max(0.5, f.risk_subscores['impact'] * 0.6),2)
+                        if new_imp != f.risk_subscores['impact']:
+                            f.risk_subscores['impact'] = new_imp; impact_changed = True
+                        note = f"host_role {role} => ip_forward normalized (impact adjusted)"
                     elif role in {'workstation','dev_workstation'}:
-                        f.risk_subscores['impact'] = round(min(10.0, f.risk_subscores['impact'] * 1.2 + 0.5),2)
+                        new_imp = round(min(10.0, f.risk_subscores['impact'] * 1.2 + 0.5),2)
+                        if new_imp != f.risk_subscores['impact']:
+                            f.risk_subscores['impact'] = new_imp; impact_changed = True
+                        note = f"host_role {role} => ip_forward unusual (impact raised)"
+                    else:
+                        note = None
+                    if note:
                         if f.rationale:
-                            f.rationale.append(f"host_role {role} => ip_forward unusual (impact raised)")
+                            f.rationale.append(note)
                         else:
-                            f.rationale = [f"host_role {role} => ip_forward unusual (impact raised)"]
+                            f.rationale = [note]
+                    if impact_changed:
+                        _recompute_finding_risk(f)
+    # Initial risk computation for findings lacking risk_score
+    if state.report:
+        for sr in state.report.results:
+            for f in sr.findings:
+                if f.risk_subscores and f.risk_score is None:
+                    _recompute_finding_risk(f)
     return state
 
 
@@ -178,7 +222,21 @@ def correlate(state: AgentState) -> AgentState:
     for r in state.report.results:
         for f in r.findings:
             all_findings.append(f)
-    correlator = Correlator(DEFAULT_RULES)
+    cfg = load_config()
+    # Merge default + rule dirs (dedupe by id keeping first)
+    from .rules import load_rules_dir, DEFAULT_RULES
+    merged = []
+    seen = set()
+    for rd in (cfg.paths.rule_dirs or []):
+        for rule in load_rules_dir(rd):
+            rid = rule.get('id')
+            if rid and rid in seen: continue
+            merged.append(rule); seen.add(rid)
+    for rule in DEFAULT_RULES:
+        rid = rule.get('id')
+        if rid and rid in seen: continue
+        merged.append(rule); seen.add(rid)
+    correlator = Correlator(merged)
     state.correlations = correlator.apply(all_findings)
     # back-reference correlation ids (simple example: attach first correlation id)
     corr_map = {}
@@ -269,50 +327,76 @@ def baseline_rarity(state: AgentState, baseline_path: Path = Path("agent_baselin
                 comp_hash = comp  # composite hash from earlier
                 try:
                     store.log_calibration_observation(host_id, state.report.meta.scan_id, comp_hash, raw)
-                except Exception:
-                    pass
+                except Exception as e:
+                    _log_error('calibration_observe', e)
     return state
 
 
-def process_novelty(state: AgentState, baseline_path: Path = Path("agent_baseline.db"), distance_threshold: float = 0.35, anomaly_boost: float = 1.5) -> AgentState:
+def process_novelty(state: AgentState, baseline_path: Path = Path("agent_baseline.db"), distance_threshold: float | None = None, anomaly_boost: float = 1.5) -> AgentState:
     """Assign lightweight embedding-based novelty for process findings.
-    For each process-category finding, compute deterministic feature vector, assign to cluster in baseline.
-    If assigned to new cluster or distance > threshold -> tag finding with process_novel and boost anomaly subscore.
-    """
+    Uses config threshold if distance_threshold not provided.
+    Parallelizes feature vector computation if configured (CPU-bound hashing/light transforms)."""
     if not state.report:
         return state
+    cfg = load_config()
+    if distance_threshold is None:
+        distance_threshold = cfg.thresholds.process_novelty_distance
     env_path = os.environ.get('AGENT_BASELINE_DB')
     if env_path:
         baseline_path = Path(env_path)
     store = BaselineStore(baseline_path)
     host_id = state.report.meta.host_id or "unknown_host"
+    # Collect candidate findings
+    candidates: List[Finding] = []
     for sr in state.report.results:
         if sr.scanner.lower() != 'process':
             continue
         for f in sr.findings:
-            cmd = f.metadata.get('cmdline') or f.title or f.metadata.get('process') or ''
-            vec = process_feature_vector(cmd)
-            cid, dist, is_new = store.assign_process_vector(host_id, vec, distance_threshold=distance_threshold)
-            if is_new or dist > distance_threshold:
-                if 'process_novel' not in f.tags:
-                    f.tags.append('process_novel')
-                if f.risk_subscores:
-                    # Boost anomaly within reasonable cap
-                    prev = f.risk_subscores.get('anomaly', 0.0)
-                    f.risk_subscores['anomaly'] = round(min(prev + anomaly_boost, 3.0),2)
-                rationale_note = f"novel process cluster (cid={cid} dist={dist:.2f})"
-                if f.rationale:
-                    f.rationale.append(rationale_note)
-                else:
-                    f.rationale = [rationale_note]
+            candidates.append(f)
+    if not candidates:
+        return state
+    # Pre-compute feature vectors (parallel if enabled)
+    vecs: dict[str, list[float]] = {}
+    def _build_vec(f: Finding):
+        cmd = f.metadata.get('cmdline') or f.title or f.metadata.get('process') or ''
+        return f.id, process_feature_vector(cmd)
+    if cfg.performance.parallel_baseline and len(candidates) > 4:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=cfg.performance.workers) as ex:
+            for fid, v in ex.map(_build_vec, candidates):
+                vecs[fid] = v
+    else:
+        for f in candidates:
+            fid, v = _build_vec(f)
+            vecs[fid] = v
+    for f in candidates:
+        vec = vecs.get(f.id)
+        if vec is None:
+            # Fallback empty vector -> skip novelty
+            continue
+        cid, dist, is_new = store.assign_process_vector(host_id, vec, distance_threshold=distance_threshold)
+        if is_new or dist > distance_threshold:
+            if 'process_novel' not in f.tags:
+                f.tags.append('process_novel')
+            if f.risk_subscores:
+                prev = f.risk_subscores.get('anomaly', 0.0)
+                from .risk import CAPS
+                cap = CAPS.get('anomaly', 2.0)
+                new_anom = round(min(prev + anomaly_boost, cap),2)
+                if new_anom != prev:
+                    f.risk_subscores['anomaly'] = new_anom
+                    _recompute_finding_risk(f)
+            rationale_note = f"novel process cluster (cid={cid} dist={dist:.2f})"
+            if f.rationale:
+                f.rationale.append(rationale_note)
             else:
-                # Optionally record rationale for existing cluster if distance moderately high
-                if dist > distance_threshold * 0.8:
-                    note = f"near-novel process (cid={cid} dist={dist:.2f})"
-                    if f.rationale:
-                        f.rationale.append(note)
-                    else:
-                        f.rationale = [note]
+                f.rationale = [rationale_note]
+        else:
+            if dist > distance_threshold * 0.8:
+                note = f"near-novel process (cid={cid} dist={dist:.2f})"
+                if f.rationale:
+                    f.rationale.append(note)
+                else:
+                    f.rationale = [note]
     return state
 
 
@@ -351,10 +435,10 @@ def sequence_correlation(state: AgentState) -> AgentState:
             for (i_idx, i_f) in ip_forward_indices[:2]:
                 related.append(i_f.id)
             # Avoid duplicate correlation creation
-            already = any(c.id == 'sequence_anom_1' for c in state.correlations)
+            already = any(c.related_finding_ids == related and 'sequence_anomaly' in (c.tags or []) for c in state.correlations)
             if not already:
                 corr = Correlation(
-                    id='sequence_anom_1',
+                    id=f'seq_{_uuid.uuid4().hex[:10]}',
                     title='Suspicious Sequence: New SUID followed by IP forwarding enabled',
                     rationale='Heuristic: newly introduced SUID binary preceded enabling IP forwarding in same scan',
                     related_finding_ids=related,
@@ -381,8 +465,8 @@ def reduce(state: AgentState) -> AgentState:
 
 def summarize(state: AgentState) -> AgentState:
     client = LLMClient()
-    # Skip logic: if sum risk_total of medium+high below threshold and no new findings, reuse previous
-    threshold = 150  # heuristic budget
+    cfg = load_config()
+    threshold = cfg.thresholds.summarization_risk_sum
     high_med_sum = 0
     new_found = False
     all_findings = [f for r in state.report.results for f in r.findings] if state.report else []
@@ -425,14 +509,14 @@ def summarize(state: AgentState) -> AgentState:
                 'techniques': sorted(techniques),
                 'tag_hits': tag_hits
             }
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('attack_coverage', e)
     # Experimental causal hypotheses
     try:
         if state.summaries:
             state.summaries.causal_hypotheses = generate_causal_hypotheses(state)
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('causal_hypotheses', e)
     return state
 
 
@@ -461,7 +545,8 @@ def build_output(state: AgentState, raw_path: Path) -> EnrichedOutput:
             else:
                 # minimal status with sha only
                 integrity_status = {'sha256_actual': sha}
-    except Exception:
+    except Exception as e:
+        _log_error('integrity_verify', e)
         integrity_status = {'sha256_actual': sha, 'error': 'integrity_check_failed'}
     flat_findings = []
     if state.report:
@@ -482,6 +567,54 @@ def build_output(state: AgentState, raw_path: Path) -> EnrichedOutput:
     multi_host_correlation=state.multi_host_correlation or None,
     integrity=integrity_status
     )
+
+
+# -----------------
+# Optional External Corpus Integration (Hugging Face datasets)
+# -----------------
+
+def _augment_with_corpus_insights(state: AgentState):
+    """Optionally load external cybersecurity corpora (if token & pandas available) to
+    attach high-level corpus metrics to summaries.metrics for adaptive reasoning.
+
+    Controlled by env AGENT_LOAD_HF_CORPUS=1. Lightweight: only counts / sample hash.
+    Avoids loading if already present in metrics. Silent (logs on error)."""
+    if not os.environ.get('AGENT_LOAD_HF_CORPUS'):
+        return state
+    try:
+        from . import hf_loader  # lazy import
+    except Exception as e:  # module absent
+        _log_error('corpus_import', e)
+        return state
+    try:
+        jsonl_df = hf_loader.load_cybersec_jsonl()
+        parquet_df = hf_loader.load_cybersec_parquet()
+        j_rows = int(len(jsonl_df)) if jsonl_df is not None else None
+        p_rows = int(len(parquet_df)) if parquet_df is not None else None
+        # Minimal content fingerprint (no sensitive data): column name hash
+        import hashlib as _hl
+        def _col_fprint(df):
+            if df is None: return None
+            h = _hl.sha256()
+            for c in sorted(df.columns):
+                h.update(c.encode())
+            return h.hexdigest()[:16]
+        metrics_add = {
+            'corpus.jsonl_rows': j_rows,
+            'corpus.parquet_rows': p_rows,
+            'corpus.jsonl_schema_fprint': _col_fprint(jsonl_df),
+            'corpus.parquet_schema_fprint': _col_fprint(parquet_df)
+        }
+        if state.summaries:
+            base = state.summaries.metrics or {}
+            # Do not overwrite existing keys unless None
+            for k,v in metrics_add.items():
+                if k not in base or base[k] is None:
+                    base[k] = v
+            state.summaries.metrics = base
+    except Exception as e:
+        _log_error('corpus_insights', e)
+    return state
 
 
 def generate_causal_hypotheses(state: AgentState, max_hypotheses: int = 3) -> list[dict]:
@@ -547,41 +680,41 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     state = load_report(state, report_path)
     try:
         log_stage('load_report', file=str(report_path), sha256=hashlib.sha256(report_path.read_bytes()).hexdigest())
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('load_report_log', e)
     state = augment(state)
     # Policy enforcement (denylist executable paths)
     try:
         state = apply_policy(state)
         log_stage('policy_enforce')
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('policy_enforce', e)
     try:
         log_stage('augment', findings=sum(len(r.findings) for r in (state.report.results if state.report else [])))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('augment_log', e)
     state = correlate(state)
     try:
         log_stage('correlate', correlations=len(state.correlations))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('correlate_log', e)
     # Temporal sequence correlations
     try:
         state = sequence_correlation(state)
         log_stage('sequence_correlation')
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('sequence_correlation', e)
     state = baseline_rarity(state)
     try:
         log_stage('baseline_rarity')
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('baseline_rarity_log', e)
     # Embedding-based process novelty
     try:
         state = process_novelty(state)
         log_stage('process_novelty')
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('process_novelty', e)
     # Metric drift detection: derive simple metrics and record; synthesize findings if z>|threshold|
     if state.report and state.report.meta and state.report.meta.host_id and state.report.meta.scan_id:
         host_id = state.report.meta.host_id
@@ -620,7 +753,10 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
                 # Build synthetic finding
                 fid = f"metric:{mname}:drift"
                 z_for_sev = abs(z) if z is not None else 0
-                anomaly_val = min(2.0, (abs(z)/3.0)) if z is not None else 1.0
+                from .risk import CAPS
+                anomaly_cap = CAPS.get('anomaly', 2.0)
+                raw_anom = (abs(z)/3.0) if z is not None else 1.0
+                anomaly_val = min(anomaly_cap, raw_anom)
                 drift = Finding(
                     id=fid,
                     title="Metric Drift Detected",
@@ -652,27 +788,24 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     state = reduce(state)
     try:
         log_stage('reduce', top_findings=len(state.reductions.top_findings))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('reduce_log', e)
     state = actions(state)
     try:
         log_stage('actions', actions=len(state.actions))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('actions_log', e)
     # Cross-host anomaly: module simultaneous emergence
     try:
         if state.report and state.report.results:
             store = BaselineStore(Path(os.environ.get('AGENT_BASELINE_DB','agent_baseline.db')))
             recent = store.recent_module_first_seen(within_seconds=86400)
-            # threshold for propagation suspicion
             threshold = int(os.environ.get('PROPAGATION_HOST_THRESHOLD','3'))
-            # We need current host id to exclude older modules; we use module_summary if available
-            current_host = state.report.meta.host_id if state.report.meta else None
+            current_host = state.report.meta.host_id if state.report.meta else None  # reserved for future filtering
             for module, hosts in recent.items():
                 if len(hosts) >= threshold:
                     corr = MultiHostCorrelation(type='module_propagation', key=module, host_ids=hosts, rationale=f"Module '{module}' first appeared on {len(hosts)} hosts within 24h window")
                     state.multi_host_correlation.append(corr)
-                    # Create synthetic cluster finding (once per module for this run)
                     fid = f"multi_host_module:{module}"
                     synth = Finding(
                         id=fid,
@@ -682,18 +815,11 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
                         metadata={'module': module, 'host_cluster_size': len(hosts)},
                         category='cross_host',
                         tags=['synthetic','cross_host','module_propagation'],
-                        risk_subscores={'impact': 5.0, 'exposure': 0.0, 'anomaly': 1.5, 'confidence': 0.8},
+                        risk_subscores={'impact': 5.0, 'exposure': 0.0, 'anomaly': min(1.5, (__import__('agent.risk', fromlist=['CAPS']).CAPS.get('anomaly',2.0))), 'confidence': 0.8},
                         baseline_status='new'
                     )
-                    weights = load_persistent_weights()
-                    score, raw = compute_risk(synth.risk_subscores or {}, weights)
-                    synth.risk_score = score
-                    synth.risk_total = score
-                    synth.probability_actionable = apply_probability(raw)
+                    _recompute_finding_risk(synth)
                     synth.rationale = [f"Module simultaneously observed on {len(hosts)} hosts (>= {threshold})"]
-                    # Attach correlation ref id artificially (same as finding id)
-                    synth.correlation_refs = []
-                    # Append into results so summary & summarizer see it
                     added = False
                     for sr in state.report.results:
                         if sr.scanner == 'multi_host':
@@ -703,8 +829,8 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
                             break
                     if not added:
                         state.report.results.append(ScannerResult(scanner='multi_host', finding_count=1, findings=[synth]))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('multi_host_correlation', e)
     # Follow-up planning/execution (deterministic gate)
     # Criteria: finding tagged ioc:development-tool and not allowlisted
     if state.report:
@@ -731,8 +857,8 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
                     state.followups.append(FollowupResult(finding_id=f.id, plan=plan, results=results))
                     try:
                         log_stage('followup_execute', finding_id=f.id, plan=";".join(plan))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _log_error('followup_execute', e)
     # Post follow-up aggregation / severity adjustments
     if state.followups and state.report:
         # Load trusted manifest
@@ -741,7 +867,8 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
         if trust_path.exists():
             try:
                 trusted = yaml.safe_load(trust_path.read_text()) or {}
-            except Exception:
+            except Exception as e:
+                _log_error('trusted_manifest_load', e)
                 trusted = {}
         trust_map = trusted.get('trusted', {})
         report_results = state.report.results or []
@@ -792,12 +919,16 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
                     sev_tag = f"severity:{downgrade}"
                     if fobj.tags and sev_tag not in fobj.tags:
                         fobj.tags.append(sev_tag)
+                    # Recompute risk if impact/exposure might depend on severity externally later
+                    _recompute_finding_risk(fobj)
     state = summarize(state)
+    # Optional external corpus insights after summaries produced
+    state = _augment_with_corpus_insights(state)
     try:
         metrics = (state.summaries.metrics if state.summaries else {}) or {}
         log_stage('summarize', tokens_prompt=metrics.get('tokens_prompt'), tokens_completion=metrics.get('tokens_completion'))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_error('summarize_log', e)
     return build_output(state, report_path)
 
 
@@ -811,6 +942,13 @@ SEVERITY_ORDER = ["info","low","medium","high","critical"]
 def _load_policy_allowlist() -> set[str]:
     import yaml
     paths: set[str] = set()
+    # Config-based allowlist
+    try:
+        cfg = load_config()
+        for p in cfg.paths.policy_allowlist:
+            paths.add(p)
+    except Exception:
+        pass
     # File allowlist
     allow_file = Path('policy_allowlist.yaml')
     if allow_file.exists():
@@ -819,8 +957,8 @@ def _load_policy_allowlist() -> set[str]:
             for p in (data.get('allow_executables') or []):
                 if isinstance(p, str):
                     paths.add(p)
-        except Exception:
-            pass
+        except Exception as e:
+            _log_error('policy_allowlist_load', e)
     # Env variable (colon separated)
     import os as _os
     env_list = _os.environ.get('AGENT_POLICY_ALLOWLIST','')
@@ -842,6 +980,13 @@ def apply_policy(state: AgentState) -> AgentState:
         return state
     allow = _load_policy_allowlist()
     approved = _approved_dirs()
+    # Resolve approved dirs to absolute canonical paths
+    approved_real = []
+    for d in approved:
+        try:
+            approved_real.append(str(Path(d).resolve()))
+        except Exception:
+            approved_real.append(d)
     for sr in state.report.results:
         for f in sr.findings:
             exe = f.metadata.get('exe') if isinstance(f.metadata, dict) else None
@@ -850,7 +995,19 @@ def apply_policy(state: AgentState) -> AgentState:
             # Already allowlisted
             if exe in allow:
                 continue
-            if not any(exe.startswith(d + '/') or exe == d for d in approved):
+            try:
+                exe_real = str(Path(exe).resolve())
+            except Exception:
+                exe_real = exe
+            in_approved = False
+            for d in approved_real:
+                try:
+                    if os.path.commonpath([exe_real, d]) == d:
+                        in_approved = True
+                        break
+                except Exception:
+                    continue
+            if not in_approved:
                 # Escalate severity to at least high unless already critical
                 try:
                     sev_idx = SEVERITY_ORDER.index(f.severity.lower()) if f.severity else 0
@@ -875,6 +1032,9 @@ def apply_policy(state: AgentState) -> AgentState:
                                 f.tags.append(sev_tag)
                 # risk_subscores impact bump (optional)
                 if f.risk_subscores:
-                    f.risk_subscores['impact'] = min(10.0, (f.risk_subscores.get('impact',0)+1.0))
+                    new_imp = min(10.0, (f.risk_subscores.get('impact',0)+1.0))
+                    if new_imp != f.risk_subscores.get('impact'):
+                        f.risk_subscores['impact'] = new_imp
+                        _recompute_finding_risk(f)
     return state
 

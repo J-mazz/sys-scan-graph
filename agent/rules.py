@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Dict, Any
 from .models import Finding, Correlation
 from collections import defaultdict
-import os, json, hashlib
+import os, json, hashlib, time
 try:
     import yaml  # optional; rule dir may use YAML
 except ImportError:  # fallback if PyYAML not installed (should be via requirements)
@@ -10,6 +10,43 @@ except ImportError:  # fallback if PyYAML not installed (should be via requireme
 
 # Simple deterministic correlation rules (Phase 1)
 # Rules operate on already emitted findings (post-scanner)
+
+# ---- Rule cache (Phase 10 optimization) ----
+RULE_CACHE: dict[str, dict[str, Any]] = {}
+# structure: { path: { 'rules': [...], 'mtimes': {file: mtime}, 'last_load': ts } }
+CACHE_TTL = 30  # seconds safety; reload if exceeded even if mtime same (defense against clock skew)
+
+def _collect_rule_files(rules_dir: str) -> list[str]:
+    files = []
+    try:
+        for name in sorted(os.listdir(rules_dir)):
+            if name.endswith(('.yml','.yaml','.json')):
+                files.append(os.path.join(rules_dir, name))
+    except Exception:
+        return []
+    return files
+
+def _needs_reload(path: str, record: dict[str, Any]) -> bool:
+    files = _collect_rule_files(path)
+    mtimes_new = {}
+    changed = False
+    for f in files:
+        try:
+            mt = os.path.getmtime(f)
+            mtimes_new[f] = mt
+            if record['mtimes'].get(f) != mt:
+                changed = True
+        except Exception:
+            changed = True
+    # Detect deleted files
+    for old in list(record['mtimes'].keys()):
+        if old not in mtimes_new:
+            changed = True
+    if not changed and (time.time() - record.get('last_load',0) > CACHE_TTL):
+        changed = True
+    if changed:
+        record['mtimes'] = mtimes_new
+    return changed
 
 class Correlator:
     def __init__(self, rules: List[Dict]):
@@ -123,34 +160,42 @@ DEFAULT_RULES = [
 def load_rules_dir(rules_dir: str) -> List[Dict[str, Any]]:
     if not rules_dir or not os.path.isdir(rules_dir):
         return []
-    out: List[Dict[str, Any]] = []
-    for name in sorted(os.listdir(rules_dir)):
-        if not (name.endswith('.yml') or name.endswith('.yaml') or name.endswith('.json')):
-            continue
-        path = os.path.join(rules_dir, name)
-        try:
-            with open(path, 'r') as f:
-                if name.endswith('.json'):
-                    data = json.load(f)
-                else:
-                    if not yaml:
-                        continue
-                    data = yaml.safe_load(f)
-        except Exception:
-            continue
-        if isinstance(data, dict):
-            out.append(data)
-        elif isinstance(data, list):
-            out.extend([d for d in data if isinstance(d, dict)])
-    # Ensure unique ids
-    seen = set()
-    for r in out:
-        if not r.get('id'):
-            r['id'] = 'auto_' + hashlib.sha256(json.dumps(r, sort_keys=True).encode()).hexdigest()[:10]
-        if r['id'] in seen:
-            r['id'] += '_dup'
-        seen.add(r['id'])
-    return out
+    rec = RULE_CACHE.get(rules_dir)
+    if rec is None:
+        rec = {'rules': [], 'mtimes': {}, 'last_load': 0}
+        RULE_CACHE[rules_dir] = rec
+    # Decide reload
+    if _needs_reload(rules_dir, rec):
+        out: List[Dict[str, Any]] = []
+        for path in _collect_rule_files(rules_dir):
+            name = os.path.basename(path)
+            try:
+                with open(path, 'r') as f:
+                    if name.endswith('.json'):
+                        data = json.load(f)
+                    else:
+                        if not yaml:
+                            continue
+                        data = yaml.safe_load(f)
+            except Exception:
+                continue
+            if isinstance(data, dict):
+                out.append(data)
+            elif isinstance(data, list):
+                out.extend([d for d in data if isinstance(d, dict)])
+        # Ensure unique ids
+        seen = set()
+        for r in out:
+            if not r.get('id'):
+                r['id'] = 'auto_' + hashlib.sha256(json.dumps(r, sort_keys=True).encode()).hexdigest()[:10]
+            if r['id'] in seen:
+                r['id'] += '_dup'
+            seen.add(r['id'])
+        rec['rules'] = out
+        rec['last_load'] = time.time()
+    return rec['rules']
+
+# Legacy compatibility: existing functions below unchanged except load_rules_dir above
 
 def canonical_condition_signature(rule: Dict[str, Any]) -> str:
     conds = rule.get('conditions') or []

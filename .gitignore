@@ -50,3 +50,7 @@ Testing/
 # Temporary
 *.tmp
 *.bak
+
+# Environment / secrets
+.env
+.env.*
