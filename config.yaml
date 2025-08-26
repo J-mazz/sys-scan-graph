@@ -1,0 +1,46 @@
+# sys-scan agent baseline configuration (Phase 10)
+# All keys optional; defaults shown. Adjust and commit to version control for reproducibility.
+
+weights:
+  # Risk weighting factors (can also override via env: AGENT_WEIGHT_IMPACT, etc.)
+  impact: 1.0
+  exposure: 1.0
+  anomaly: 1.0
+
+thresholds:
+  # Sum of risk_total for medium+ findings below this (and no new findings) => skip expensive summarization
+  summarization_risk_sum: 150
+  # Distance threshold for process novelty clustering
+  process_novelty_distance: 0.35
+  # Z-score threshold for metric drift synthetic findings
+  metric_drift_z: 2.5
+
+performance:
+  # Enable light parallelization for process novelty feature vector generation
+  parallel_baseline: true
+  # Worker threads (CPU bound but lightweight hashing)
+  workers: 4
+
+paths:
+  # Additional rule directories (loaded & cached with mtime checks). Example: ["rules/custom", "rules/experimental" ]
+  rule_dirs: []
+  # Additional executable allowlist paths merged with file + env sources
+  policy_allowlist: []
+
+notifications:
+  # Slack incoming webhook URL (omit / leave null to disable). Example: https://hooks.slack.com/services/T000/B000/XXXXX
+  slack_webhook: null
+  # Generic alternative webhook (JSON POST {"text": message}) used if slack_webhook unset
+  webhook: null
+  # Trigger notification when average probability_actionable delta >= this OR new high severity baseline:new finding
+  actionable_delta_threshold: 0.15
+
+reports:
+  # Generate static HTML artifact (no external JS)
+  html_enabled: true
+  html_path: enriched_report.html
+  diff_markdown_path: enriched_diff.md
+
+bundle:
+  # Manifest file capturing version, rule pack SHA, embedding model hash, weights
+  manifest_path: manifest.json
