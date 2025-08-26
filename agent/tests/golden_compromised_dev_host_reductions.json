@@ -1,0 +1,42 @@
+{
+  "module_summary": {},
+  "network_summary": {
+    "known_org_count": [],
+    "listen_count": 1,
+    "top_listen_ports": [
+      [
+        "5555",
+        1
+      ]
+    ]
+  },
+  "suid_summary": {
+    "suid_total": 1,
+    "unexpected_suid": [
+      "/opt/dev/tools/bash-suid"
+    ]
+  },
+  "top_findings": [
+    {
+      "id": "ioc_ldp1",
+      "risk_score": 95,
+      "severity": "critical",
+      "tags": [],
+      "title": "Suspicious LD_PRELOAD"
+    },
+    {
+      "id": "ioc_suidbash",
+      "risk_score": 85,
+      "severity": "high",
+      "tags": [],
+      "title": "Unexpected SUID bash copy"
+    },
+    {
+      "id": "net_rev5555",
+      "risk_score": 80,
+      "severity": "high",
+      "tags": [],
+      "title": "TCP 5555 listening (possible reverse shell)"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# Example rule: escalate untrusted LD_PRELOAD temp usage to critical and tag with ATT&CK T1574.006
+id=env_preload_temp_untrusted
+type=env
+field=rule
+equals=ld_env_tmp_untrusted_exe
+severity=critical
+mitre=T1574.006
+tag.category=persistence

@@ -1,0 +1,21 @@
+ports:
+  "22":
+    service: ssh
+    privilege_implication: remote_admin
+    tags: ["service:ssh","remote_access"]
+  "53":
+    service: dns
+    privilege_implication: infra
+    tags: ["service:dns","infra"]
+  "80":
+    service: http
+    privilege_implication: web_surface
+    tags: ["service:http","web"]
+  "443":
+    service: https
+    privilege_implication: web_surface
+    tags: ["service:https","web","tls"]
+  "631":
+    service: ipp
+    privilege_implication: peripheral
+    tags: ["service:ipp","printing"]

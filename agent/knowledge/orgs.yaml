@@ -1,0 +1,11 @@
+orgs:
+  github:
+    cidrs: ["140.82.112.0/20"]
+    tags: ["org:github", "known_good", "code_hosting"]
+  cloudflare:
+    cidrs: ["104.16.0.0/12"]
+    tags: ["org:cloudflare", "known_good", "cdn"]
+  amazon:
+    cidrs: ["18.0.0.0/8"]
+    tags: ["org:amazon", "cloud", "known_good"]
+# Extend this file with additional organizations as needed.

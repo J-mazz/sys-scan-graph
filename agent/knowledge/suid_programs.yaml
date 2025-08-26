@@ -1,0 +1,8 @@
+distro_defaults:
+  generic:
+    expected:
+      - su
+      - sudo
+      - ping
+      - passwd
+    unexpected_tags: ["suid_unexpected"]

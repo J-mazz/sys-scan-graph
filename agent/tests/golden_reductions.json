@@ -1,0 +1,124 @@
+{
+  "module_summary": {
+    "avg_rarity_score": 0.0,
+    "distinct_modules": 3,
+    "module_count": 3,
+    "module_family_counts": [],
+    "notable_modules": [
+      "br_netfilter",
+      "xt_MASQUERADE"
+    ],
+    "top_rare_modules": [],
+    "uncommon_modules": [
+      "uncommonX"
+    ]
+  },
+  "network_summary": {
+    "known_org_count": [],
+    "listen_count": 2,
+    "top_listen_ports": [
+      [
+        "53",
+        1
+      ],
+      [
+        "22",
+        1
+      ]
+    ]
+  },
+  "suid_summary": {
+    "suid_total": 1,
+    "unexpected_suid": [
+      "/usr/bin/pppd"
+    ]
+  },
+  "top_findings": [
+    {
+      "id": "suid1",
+      "risk_score": 50,
+      "severity": "medium",
+      "tags": [],
+      "title": "SUID binary /usr/bin/pppd"
+    },
+    {
+      "id": "mod1",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "Kernel module br_netfilter"
+    },
+    {
+      "id": "mod2",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "Kernel module xt_MASQUERADE"
+    },
+    {
+      "id": "mod3",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "Kernel module uncommonX"
+    },
+    {
+      "id": "net1",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "TCP 53 listening"
+    },
+    {
+      "id": "net2",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "TCP 22 listening"
+    }
+  ],
+  "top_risks": [
+    {
+      "id": "suid1",
+      "risk_score": 50,
+      "severity": "medium",
+      "tags": [],
+      "title": "SUID binary /usr/bin/pppd"
+    },
+    {
+      "id": "mod1",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "Kernel module br_netfilter"
+    },
+    {
+      "id": "mod2",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "Kernel module xt_MASQUERADE"
+    },
+    {
+      "id": "mod3",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "Kernel module uncommonX"
+    },
+    {
+      "id": "net1",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "TCP 53 listening"
+    },
+    {
+      "id": "net2",
+      "risk_score": 10,
+      "severity": "info",
+      "tags": [],
+      "title": "TCP 22 listening"
+    }
+  ]
+}
