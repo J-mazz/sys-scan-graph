@@ -21,6 +21,7 @@ add_library(sys_scan_core
   src/core/RuleEngine.cpp
   src/core/Report.cpp
   src/core/Utils.cpp
+  src/core/JsonUtil.cpp
   src/core/JSONWriter.cpp
   src/core/Logging.cpp
   src/core/Config.cpp
