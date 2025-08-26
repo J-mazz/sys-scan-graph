@@ -1,6 +1,7 @@
 #pragma once
 #include "Scanner.h"
 #include <mutex>
+#include <map>
 
 namespace sys_scan {
 
@@ -20,7 +21,11 @@ private:
     std::vector<ScanResult> results_;
     std::vector<std::pair<std::string,std::string>> warnings_; // (scanner, message)
     std::vector<std::pair<std::string,std::string>> errors_;
+    std::map<std::string, std::map<std::string,std::string>> compliance_summary_; // standard -> metrics (stringified)
     std::mutex mutex_;
+public:
+    const std::map<std::string,std::map<std::string,std::string>>& compliance_summary() const { return compliance_summary_; }
+    void set_compliance_metric(const std::string& standard, const std::string& key, const std::string& value){ std::lock_guard<std::mutex> lock(mutex_); compliance_summary_[standard][key]=value; }
 };
 
 }
