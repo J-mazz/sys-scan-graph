@@ -481,3 +481,18 @@ Taint flags, numeric risk scoring, allowlist file (`--ioc-allow-file`), package 
 
 ## License
 Licensed under the MIT License. See `LICENSE` for full text.
+
+---
+### Phase 10 Productization Demo
+A quick end-to-end demonstration (two scans, enrichment, HTML generation, diff, manifest, timing):
+```bash
+./scripts/demo_phase10.sh
+```
+Outputs:
+- report_demo_1.json / report_demo_2.json (raw C++ scanner outputs)
+- enriched_demo_1.json / enriched_demo_2.json (Python agent enriched)
+- enriched_report.html (static dashboard)
+- enriched_diff.md (risk movement & new/removed findings)
+- manifest.json (version, rule pack SHA, embedding model hash, weights)
+
+The script prints total wall time for two enrichment runs; single-run latency should target <1.5s on a modern laptop for typical host sizes.
