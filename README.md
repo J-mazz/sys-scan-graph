@@ -90,6 +90,12 @@ Network exposed listener severity lift; ld.so.preload anomaly detection; unsigne
 --no-user-meta                Suppress user/uid/gid/euid/egid in meta
 --no-cmdline-meta             Suppress cmdline in meta
 --no-hostname-meta            Suppress hostname in meta
+--drop-priv                   Drop Linux capabilities early (best-effort; requires libcap)
+--keep-cap-dac                Retain CAP_DAC_READ_SEARCH when using --drop-priv
+--seccomp                     Apply restrictive seccomp-bpf profile after initialization (libseccomp)
+--sign-gpg KEYID              Detached ASCII armored signature (requires --output)
+--write-env FILE              Emit .env file with version, git commit (if available), binary SHA256
+--slsa-level N                Declare SLSA build level (meta.provenance)
 --help                        Show usage
 ```
 
