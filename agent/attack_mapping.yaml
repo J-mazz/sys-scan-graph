@@ -1,0 +1,12 @@
+# tag -> MITRE ATT&CK technique IDs (subset example)
+# Extend as needed; multiple tags can map to same technique; one tag can map to multiple techniques (list)
+# Format:
+# tag: [Txxxx, ...]
+
+suid: [T1548]
+baseline:new: [T1078]
+process_novel: [T1059]
+module_propagation: [T1105]
+routing: [T1021]
+metric_drift: [T1562]
+sequence_anomaly: [T1068]

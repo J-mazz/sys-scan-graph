@@ -1,0 +1,52 @@
+from __future__ import annotations
+import json
+from pathlib import Path
+from agent.pipeline import run_pipeline
+
+
+def test_policy_escalation(tmp_path, monkeypatch):
+    monkeypatch.setenv('AGENT_APPROVED_DIRS', '/bin:/usr/bin')
+    report = {
+        "meta": {"hostname": "h"},
+        "summary": {"finding_count_total": 1, "finding_count_emitted": 1},
+        "results": [
+            {"scanner": "ioc", "finding_count": 1, "findings": [
+                {"id": "f1", "title": "Exec outside approved", "severity": "low", "risk_score": 10, "metadata": {"exe": "/tmp/evil/run.sh"}}
+            ]}
+        ],
+        "collection_warnings": [],
+        "scanner_errors": [],
+        "summary_extension": {"total_risk_score": 10}
+    }
+    rp = tmp_path / 'r.json'
+    rp.write_text(json.dumps(report))
+    enriched = run_pipeline(rp)
+    assert enriched.enriched_findings is not None
+    f = enriched.enriched_findings[0]
+    assert f.severity.lower() == 'high'
+    assert 'policy:denied_path' in f.tags
+    assert f.rationale and any('policy escalation' in r for r in f.rationale)
+
+
+def test_policy_allowlist(tmp_path, monkeypatch):
+    monkeypatch.setenv('AGENT_APPROVED_DIRS', '/bin:/usr/bin')
+    monkeypatch.setenv('AGENT_POLICY_ALLOWLIST', '/tmp/ok.sh')
+    report = {
+        "meta": {"hostname": "h"},
+        "summary": {"finding_count_total": 1, "finding_count_emitted": 1},
+        "results": [
+            {"scanner": "ioc", "finding_count": 1, "findings": [
+                {"id": "f1", "title": "Whitelisted exec", "severity": "low", "risk_score": 10, "metadata": {"exe": "/tmp/ok.sh"}}
+            ]}
+        ],
+        "collection_warnings": [],
+        "scanner_errors": [],
+        "summary_extension": {"total_risk_score": 10}
+    }
+    rp = tmp_path / 'r.json'
+    rp.write_text(json.dumps(report))
+    enriched = run_pipeline(rp)
+    assert enriched.enriched_findings is not None
+    f = enriched.enriched_findings[0]
+    assert f.severity.lower() == 'low'
+    assert not any(t == 'policy:denied_path' for t in f.tags)

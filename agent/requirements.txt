@@ -1,0 +1,12 @@
+pydantic>=2.7,<3
+sqlalchemy>=2.0,<3
+typer>=0.12,<0.13
+rich>=13.0,<14
+click>=8.1.0,<8.2.0
+pyyaml>=6.0,<7
+langchain>=0.2.0,<0.3
+langgraph>=0.1.0,<0.2
+orjson>=3.9,<4
+jsonschema>=4.21,<5
+pytest>=8.0,<9
+PyNaCl>=1.5,<2

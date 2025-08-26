@@ -1,0 +1,14 @@
+# Example minimal rule file
+# Escalate severity of any finding whose id contains /tmp
+id=tmp_path_escalate
+field=id
+contains=/tmp
+severity=High
+mitre=T1074.001
+
+# Escalate severity and tag specific world-writable demo file (create /tmp/ww_rule_demo to test)
+id=ww_demo
+field=id
+contains=ww_rule_demo
+severity=High
+mitre=T1059

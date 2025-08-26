@@ -1,0 +1,10 @@
+modules:
+  br_netfilter:
+    family: netfilter
+    tags: ["kernel_module","network_surface"]
+  xt_MASQUERADE:
+    family: netfilter_nat
+    tags: ["kernel_module","nat","routing"]
+  uncommonX:
+    family: unknown
+    tags: ["kernel_module","uncommon"]

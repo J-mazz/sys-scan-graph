@@ -1,0 +1,11 @@
+trusted:
+  cpptools:
+    sha256:
+      - ad7317a7de17326ce82aff583a6466b52966a7ad43866f27a9ed3cb045e44916  # cpptools-srv real hash observed
+      - c0fbd47e52708271f455a31943eb23fc76e8193c5fcdd6aeddb8854d305f6e6b  # cpptools real hash observed
+      - deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  # placeholder retained (legacy)
+    downgrade_severity_to: low
+  passwd:
+    sha256:
+      - ca3fc307dda8259f585bb38c70e82bd15af61e8574cd0d6e430292e328bb3477
+    downgrade_severity_to: low
