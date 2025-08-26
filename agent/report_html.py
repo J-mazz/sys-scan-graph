@@ -31,6 +31,23 @@ def render(output: EnrichedOutput) -> str:
     findings = output.enriched_findings or []
     corrs = output.correlations or []
     metrics = (output.summaries.metrics if output.summaries else {}) or {}
+    # Compliance summary table & gaps rendering
+    comp = metrics.get('compliance_summary') if isinstance(metrics, dict) else None
+    comp_rows = ''
+    if comp:
+        comp_rows = '<table class="table"><tr><th>Standard</th><th>Passed</th><th>Failed</th><th>N/A</th><th>Total</th><th>Score</th></tr>'
+        for std, vals in comp.items():
+            passed = vals.get('passed'); failed = vals.get('failed'); na = vals.get('not_applicable') or 0
+            total = vals.get('total_controls'); score = vals.get('score')
+            comp_rows += f"<tr><td>{html.escape(str(std))}</td><td>{passed}</td><td>{failed}</td><td>{na}</td><td>{total}</td><td>{score}</td></tr>"
+        comp_rows += '</table>'
+    gaps = metrics.get('compliance_gaps') if isinstance(metrics, dict) else None
+    gap_rows = ''
+    if gaps:
+        gap_rows = '<table class="table"><tr><th>Standard</th><th>Control</th><th>Severity</th><th>Hint</th></tr>'
+        for g in gaps[:30]:
+            gap_rows += f"<tr><td>{html.escape(str(g.get('standard')))}</td><td>{html.escape(str(g.get('control_id')))}</td><td>{html.escape(str(g.get('severity') or ''))}</td><td>{html.escape(str(g.get('remediation_hint') or ''))}</td></tr>"
+        gap_rows += '</table>'
     rows = []
     for f in findings[:400]:  # safety cap
         sev = (f.severity or 'info').lower()
@@ -53,8 +70,10 @@ def render(output: EnrichedOutput) -> str:
 <div class='flex'>
 <div class='card'><h3>Metrics</h3><pre>{html.escape(json.dumps(metrics, indent=2)[:4000])}</pre></div>
 {attack_html}
+<div class='card'><h3>Compliance</h3>{comp_rows if comp_rows else '<small>No compliance data</small>'}</div>
 <div class='card'><h3>Correlations</h3><p>{len(corrs)} correlation(s)</p></div>
 </div>
+{('<section class="summary-block"><h2>Compliance Gaps</h2>' + gap_rows + '</section>') if gap_rows else ''}
 <h2>Findings ({len(findings)})</h2>
 {''.join(rows)}
 <h2>Correlations</h2>

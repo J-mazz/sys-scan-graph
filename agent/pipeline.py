@@ -247,6 +247,63 @@ def correlate(state: AgentState) -> AgentState:
         f.correlation_refs = corr_map.get(f.id, [])
     return state
 
+def integrate_compliance(state: AgentState) -> AgentState:
+    """Extract compliance summary/gaps from raw report (if present) and surface in metrics for downstream summarization.
+    Adds keys:
+      metrics.compliance_summary.<standard> = {passed, failed, score, total_controls}
+      metrics.compliance_gap_count
+      metrics.compliance_gaps (first N gap dicts)
+    """
+    if not state.report or not state.raw_report:
+        return state
+    meta = state.raw_report
+    comp_sum = meta.get('compliance_summary') or {}
+    gaps = meta.get('compliance_gaps') or []
+    # Enrich gaps with standardized severity normalization & richer remediation hints if minimal
+    if gaps:
+        # Static mapping (could later externalize) control_id/keyword -> remediation & severity normalization
+        remediation_map = {
+            '2.2.4': 'Baseline and harden system services; disable or remove unused services.',
+            '164.312(e)': 'Ensure transmission security: enforce TLS 1.2+, disable weak ciphers, encrypt PHI in transit.',
+            '164.308(a)(1)': 'Implement risk management processes; document risk analysis and ongoing monitoring.',
+            'ID.AM-01': 'Maintain accurate asset inventory (automated discovery + periodic reconciliation).',
+            'PR.AC-01': 'Centralize access control; enforce MFA for privileged accounts.',
+            'PR.DS-01': 'Encrypt sensitive data at rest with strong algorithms and manage keys securely.'
+        }
+        sev_order = {'info':0,'low':1,'medium':2,'moderate':2,'high':3,'critical':4}
+        # Normalize severities and backfill remediation_hints
+        for g in gaps:
+            cid = str(g.get('control_id') or '')
+            # severity normalization
+            sev = (g.get('severity') or '').lower()
+            if sev and sev not in sev_order:
+                # map alternative labels
+                if sev in {'moderate'}:
+                    g['severity'] = 'medium'
+            # add mapped remediation if existing is missing or too short
+            hint = g.get('remediation_hint') or ''
+            if len(hint.strip()) < 12:
+                mapped = remediation_map.get(cid)
+                if mapped:
+                    g['remediation_hint'] = mapped
+    # Attach into summaries.metrics (create if absent)
+    if not state.summaries:
+        from .models import Summaries
+        state.summaries = Summaries(metrics={})
+    metrics = state.summaries.metrics or {}
+    comp_export = {}
+    for std, vals in comp_sum.items():
+        # filter numeric fields
+        comp_export[std] = {k: vals.get(k) for k in ['passed','failed','score','total_controls','not_applicable'] if k in vals}
+    if comp_export:
+        metrics['compliance_summary'] = comp_export
+    if gaps:
+        metrics['compliance_gap_count'] = len(gaps)
+        # only include first 50 to cap size
+        metrics['compliance_gaps'] = gaps[:50]
+    state.summaries.metrics = metrics
+    return state
+
 
 def baseline_rarity(state: AgentState, baseline_path: Path = Path("agent_baseline.db")) -> AgentState:
     """Update findings with rarity/anomaly score based on baseline store.
@@ -683,6 +740,7 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     except Exception as e:
         _log_error('load_report_log', e)
     state = augment(state)
+    state = integrate_compliance(state)
     # Policy enforcement (denylist executable paths)
     try:
         state = apply_policy(state)

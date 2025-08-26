@@ -1,3 +1,11 @@
+.venv/
+agent/.venv/
+__pycache__/
+*.pyc
+build/
+cmake-build-debug/
+*.sqlite*
+agent_baseline.db
 # Build directories
 /build/
 /build-*/
