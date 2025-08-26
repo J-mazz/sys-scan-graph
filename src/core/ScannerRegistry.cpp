@@ -50,8 +50,17 @@ void ScannerRegistry::register_all_default() {
     if(config().rules_enable){
         register_scanner(std::make_unique<YaraScanner>());
     }
-    // Compliance scanners (initial: PCI). Future: conditional by config.
-    register_scanner(std::make_unique<PCIComplianceScanner>());
+    // Compliance scanners (initial: PCI). Conditional on cfg.compliance
+    if(config().compliance) {
+        bool include_pci = true;
+        const auto& subset = config().compliance_standards;
+        if(!subset.empty()) {
+            include_pci = std::find(subset.begin(), subset.end(), "pci_dss_4_0") != subset.end();
+        }
+        if(include_pci) {
+            register_scanner(std::make_unique<PCIComplianceScanner>());
+        }
+    }
 }
 
 void ScannerRegistry::run_all(Report& report) {
