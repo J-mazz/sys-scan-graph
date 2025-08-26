@@ -59,6 +59,7 @@ Combination & Aggregation:
 Linking or executing the open source Core together with the proprietary
 Intelligence Layer in combined workflows does not convert the license of either
 component; each part retains its respective license.
+<<<<<<< HEAD
 
 Third-Party Components:
 Third-party libraries remain under their original licenses. Nothing herein
@@ -78,3 +79,24 @@ Intelligence Layer: LicenseRef-Proprietary-Intelligence
 
 Files may include an SPDX header specifying one of the above.
 For commercial licensing or redistribution inquiries, contact: Joseph@Mazzlabs.works
+=======
+
+Third-Party Components:
+Third-party libraries remain under their original licenses. Nothing herein
+grants rights to third-party marks or code outside their stated terms.
+
+Contributions:
+Pull requests affecting Core code are accepted under the MIT license (you agree
+your contribution is MIT licensed). Contributions to the Intelligence Layer are
+not accepted unless explicitly requested; unsolicited submissions become the
+property of the project maintainers without obligation.
+
+Commercial Inquiries: <add contact>
+
+SPDX Summary Tags:
+Core: MIT
+Intelligence Layer: LicenseRef-Proprietary-Intelligence
+
+Files may include an SPDX header specifying one of the above.
+
+>>>>>>> 7616f75 (docs: hybrid licensing, compliance integration tests, HTML compliance section, remediation enrichment)
