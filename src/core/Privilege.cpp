@@ -30,10 +30,11 @@ bool apply_seccomp_profile(){
 #ifdef SYS_SCAN_HAVE_SECCOMP
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_KILL); if(!ctx) return false;
     auto allow=[&](int call){ return seccomp_rule_add(ctx, SCMP_ACT_ALLOW, call, 0)==0; };
-    int calls[] = { SCMP_SYS(read), SCMP_SYS(write), SCMP_SYS(openat), SCMP_SYS(close), SCMP_SYS(fstat), SCMP_SYS(newfstatat),
+    int calls[] = { SCMP_SYS(read), SCMP_SYS(write), SCMP_SYS(open), SCMP_SYS(openat), SCMP_SYS(close), SCMP_SYS(fstat), SCMP_SYS(newfstatat),
                     SCMP_SYS(lseek), SCMP_SYS(mmap), SCMP_SYS(mprotect), SCMP_SYS(munmap), SCMP_SYS(brk), SCMP_SYS(rt_sigaction),
                     SCMP_SYS(rt_sigprocmask), SCMP_SYS(getpid), SCMP_SYS(gettid), SCMP_SYS(clock_gettime), SCMP_SYS(nanosleep),
-                    SCMP_SYS(getrandom), SCMP_SYS(ioctl), SCMP_SYS(getdents64), SCMP_SYS(prlimit64), SCMP_SYS(statx), SCMP_SYS(access) };
+                    SCMP_SYS(getrandom), SCMP_SYS(ioctl), SCMP_SYS(getdents64), SCMP_SYS(prlimit64), SCMP_SYS(statx), SCMP_SYS(access),
+                    SCMP_SYS(readlink), SCMP_SYS(readlinkat), SCMP_SYS(getuid), SCMP_SYS(geteuid), SCMP_SYS(getgid), SCMP_SYS(getegid) };
     for(int c: calls){ if(!allow(c)){ seccomp_release(ctx); return false; } }
     if(seccomp_load(ctx)!=0){ seccomp_release(ctx); return false; }
     seccomp_release(ctx); return true;

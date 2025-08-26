@@ -70,6 +70,7 @@ static void print_help(){
               << "  --drop-priv               Drop Linux capabilities early (retain none unless --keep-cap-dac)\n"
               << "  --keep-cap-dac            Retain CAP_DAC_READ_SEARCH when dropping capabilities\n"
               << "  --seccomp                 Apply restrictive seccomp-bpf profile post-initialization\n"
+              << "  --seccomp-strict          Treat seccomp apply failure as fatal (exit non-zero)\n"
               << "  --write-env FILE          Write env-style provenance (.env) file with binary hash/version\n"
               << "  --help                     Show this help\n";
 }
@@ -158,6 +159,8 @@ int main(int argc, char** argv) {
 
     ScannerRegistry registry;
     if(cfg.drop_priv){ drop_capabilities(cfg.keep_cap_dac); }
+    // Apply seccomp earlier (after capability drop, before scanning) for stronger containment
+    if(cfg.seccomp){ if(!apply_seccomp_profile()){ std::cerr << "Failed to apply seccomp profile"; if(cfg.seccomp_strict) return 4; else std::cerr << " (continuing)\n"; } }
     if(cfg.rules_enable){
         std::string warn; rule_engine().load_dir(cfg.rules_dir, warn); if(!warn.empty()) Logger::instance().warn(std::string("rules:")+warn);
         bool hasUnsupported=false; for(const auto& w : rule_engine().warnings()){ if(w.code=="unsupported_version") { hasUnsupported=true; break; } }
@@ -187,6 +190,7 @@ int main(int argc, char** argv) {
         envf << "SYS_SCAN_BINARY_SHA256="<<hexhash<<"\n";
     }
     if(cfg.seccomp){ if(!apply_seccomp_profile()){ std::cerr << "Failed to apply seccomp profile (continuing)\n"; } }
+    // (seccomp applied earlier)
 
     // Optional GPG signing
     if(cfg.sign_gpg){
