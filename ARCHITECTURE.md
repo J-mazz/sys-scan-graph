@@ -9,7 +9,7 @@
 - Report (`Report`): Thread-safe append-only container of `ScanResult` objects (mutex protected) to allow future parallelization.
 - Finding model: Plain struct with `id`, `title`, `severity` (string), `description`, and sorted `metadata` map for stable output ordering.
 - Config (`Config`): Parsed once in `main.cpp`, stored globally (singleton pattern via `config()` accessor). Provides feature flags & thresholds.
-- JSONWriter: Builds canonical string, minifies, then optionally pretty‑prints. Adds `tool_version` and `json_schema_version` for forward compatibility.
+- JSONWriter: Builds canonical string, minifies, then optionally pretty‑prints. Adds `tool_version` and `json_schema_version` for forward compatibility. Emits optional `compliance_summary` and (when gap analysis enabled) `compliance_gaps` with remediation hint scaffolding.
 
 ## Scanner Flow
 1. `ScannerRegistry::register_all_default()` pushes concrete scanner instances into an internal vector.
@@ -25,6 +25,7 @@
 - suid: Aggregates SUID/SGID binaries by inode, collects alternate hardlink paths & escalates severity for unusual locations.
 - ioc: Heuristic Indicators of Compromise (deleted executables, execution from temp, suspicious LD_* env usage, ld.so.preload anomalies, SUID in home, temp executables). Aggregates per executable for noise reduction, with allowlist downgrade via `--ioc-allow` / `--ioc-allow-file`.
 - mac: Captures SELinux/AppArmor status, complain counts, unconfined critical processes (heuristic).
+- compliance (conditional): Aggregates control pass/fail across selected standards (PCI DSS 4.0, HIPAA Security Rule, NIST CSF 2.0) and surfaces per-standard counts + score.
 
 ## Determinism & Ordering
 - Scanners run sequentially in a fixed registration order to keep JSON ordering stable (facilitates diffing & caching).
@@ -50,11 +51,13 @@
 3. Register in `ScannerRegistry::register_all_default()` at an appropriate position (ordering impacts JSON diff stability).
 4. Use concise, deterministic `Finding.id` (stable key for future suppression/correlation).
 5. Keep heavy per-item metadata optional behind a config flag to control output volume.
+6. For compliance extensions: isolate standard-specific control logic in dedicated registration helpers; ensure scores remain pure functions of counts (no hidden state) to preserve determinism.
 
 ## Future Refactors (Planned)
 - Replace severity strings with `enum class Severity` plus central mapping for rank & JSON string emission.
 - Introduce a lightweight `Result` / `expected` wrapper for file parsing to differentiate IO error vs absence.
 - Structured warning channel (array) to surface non-fatal scanner errors distinct from security findings.
+- Externalized remediation hint knowledge base (YAML) merged at JSONWriter layer (current hints are heuristic inline strings).
 - Remove shell decompression dependency by embedding minimal xz/gzip readers.
 
 ## JSON Schema Versioning
@@ -72,7 +75,23 @@ CLI -> Config -> ScannerRegistry -> [Scanner Loop]
 
 ## Known Limitations
 - No structured distinction between collection errors and security findings yet.
-- Severity taxonomy coarse; lacks numeric risk scoring (planned).
+- Severity taxonomy coarse; lacks numeric risk scoring (planned for Core; Intelligence layer adds risk_subscores & probability modeling).
+- Compliance remediation hints currently heuristic; deeper mapping pending external knowledge base.
+
+## Intelligence Layer (Proprietary) Overview
+The optional `agent/` Python layer ingests Core JSON, enriches with:
+- Baseline rarity & anomaly scoring
+- Deterministic correlations & sequence analysis
+- Compliance gap normalization & richer remediation mapping
+- HTML reporting & diff generation
+It is licensed separately (see LICENSE) and not required for Core scanning.
+
+## Licensing Architecture
+The project adopts a hybrid model:
+- Core scanner: MIT (allows broad reuse & embedding)
+- Intelligence layer: Proprietary evaluation license
+
+Design separation is enforced at directory boundaries; no proprietary symbols are required to compile or run the Core binary.
 - Pretty printer is bespoke; may not preserve ordering if future nested objects added (evaluate rapidjson or nlohmann/json purely for formatting when pretty enabled).
 
 ---

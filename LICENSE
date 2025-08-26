@@ -1,27 +1,80 @@
-Proprietary License
+Hybrid License Notice
+=====================
+
+This repository contains two logically separated components with different licenses:
+
+Section A. Open Source Core Scanner ("Core")
+--------------------------------------------
+Directories: `src/`, `rules/`, `schema/`, `fuzz/`, `scripts/`, top‑level CMake / build files, and C++ headers/sources (except files explicitly marked otherwise).
+
+License: MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the Core and associated documentation files (the "Core Software"), to deal
+in the Core Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Core Software, and to permit persons to whom the Core Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Core Software.
+
+THE CORE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE CORE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE CORE SOFTWARE.
+
+Section B. Proprietary Intelligence Layer ("Intelligence Layer")
+----------------------------------------------------------------
+Directory: `agent/` and any subdirectories (Python enrichment / correlation / HTML reporting) and generated enriched artifacts unless otherwise noted.
+
+License: Restricted Proprietary License
 
 Copyright (c) 2025 J-mazz. All rights reserved.
 
-This software and its associated documentation (the "Software") are
-proprietary and confidential. Unauthorized copying, distribution, modification,
-publication, sublicensing, or disclosure in whole or in part is strictly
-prohibited without prior written permission from the copyright holder.
+You are granted a limited, non-transferable, non-sublicensable right to use the
+Intelligence Layer internally for evaluation or operation on systems you own or
+administer in conjunction with the open source Core. Any modification,
+redistribution (source or binary), sublicensing, external hosting (SaaS), or
+commercial use of the Intelligence Layer requires a separate commercial
+agreement or written permission from the copyright holder.
 
-You are granted a limited, non-transferable, non-sublicensable right to use
-the Software internally for evaluation or operation on systems you own or
-administer. All other rights are expressly reserved.
+You may not:
+1. Publicly redistribute the Intelligence Layer source code or derived works.
+2. Offer the Intelligence Layer as a hosted or managed service to third parties.
+3. Remove or alter proprietary notices.
 
-NO WARRANTY: The Software is provided "AS IS" without warranty of any kind,
-express or implied, including but not limited to the warranties of
-merchantability, fitness for a particular purpose, title and noninfringement.
-In no event shall the authors or copyright holder be liable for any claim,
-damages or other liability, whether in an action of contract, tort or
-otherwise, arising from, out of or in connection with the Software or the use
-or other dealings in the Software.
+Limited Derivative Works Clause:
+You may create internal derivatives (patches, custom integrations) of the
+Intelligence Layer for your own organizational use provided they are not
+distributed externally.
 
-You may not remove or obscure any proprietary notices, marks, or labels.
+NO WARRANTY: The Intelligence Layer is provided "AS IS" without warranties of
+any kind (same warranty disclaimer as MIT above applies).
 
-Third-party components, if any, are licensed under their respective licenses.
-Nothing in this license grants any rights with respect to third-party code.
+Combination & Aggregation:
+Linking or executing the open source Core together with the proprietary
+Intelligence Layer in combined workflows does not convert the license of either
+component; each part retains its respective license.
 
+Third-Party Components:
+Third-party libraries remain under their original licenses. Nothing herein
+grants rights to third-party marks or code outside their stated terms.
+
+Contributions:
+Pull requests affecting Core code are accepted under the MIT license (you agree
+your contribution is MIT licensed). Contributions to the Intelligence Layer are
+not accepted unless explicitly requested; unsolicited submissions become the
+property of the project maintainers without obligation.
+
+Commercial Inquiries: <add contact>
+
+SPDX Summary Tags:
+Core: MIT
+Intelligence Layer: LicenseRef-Proprietary-Intelligence
+
+Files may include an SPDX header specifying one of the above.
 For commercial licensing or redistribution inquiries, contact: Joseph@Mazzlabs.works

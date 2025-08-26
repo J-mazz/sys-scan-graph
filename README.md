@@ -1,6 +1,6 @@
 # sys-scan
 
-![CI](https://github.com/J-mazz/sys-scan/actions/workflows/ci.yml/badge.svg) ![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)
+![CI](https://github.com/J-mazz/sys-scan/actions/workflows/ci.yml/badge.svg) ![License: Hybrid](https://img.shields.io/badge/License-Hybrid-blue.svg)
 
 I started sys-scan as a way to refine my C++ skills and practice prompt engineering while creating something genuinely useful for myself as a Linux user and for the small network of machines I administer. I initially used GitHub Copilot in agent mode to scaffold the project, then manually refactored and extended it with new features, relying on Copilot only as an assistant rather than the driver for most of the development. I’m still learning C++, and this project has been a hands-on way to grow while building a tool I hope others will also find valuable. I plan to keep expanding sys-scan, and I welcome contributions from anyone interested in practical, free security utilities.
 
@@ -56,6 +56,8 @@ Minimal pipelines (stdout):
 * Security hardening: capability drop, optional seccomp sandbox.
 * Provenance block (compiler, commit, flags, SLSA level) with runtime overrides.
 * Reproducibility toggles & timestamp zeroing (`SYS_SCAN_CANON_TIME_ZERO=1`).
+* Optional multi-standard compliance assessment (PCI DSS 4.0, HIPAA Security Rule, NIST CSF 2.0) with summarized pass/fail/score metrics (Core emits structured compliance_summary).
+* Gap analysis mode producing focused `compliance_gaps` with remediation hints & normalized severities (Core + Intelligence Layer enrichment).
 * Fast: avoids expensive full file reads (bounded hashing window, selective parsing).
 
 ---
@@ -70,6 +72,7 @@ Minimal pipelines (stdout):
 | SUID/SGID | Privileged binaries | Unexpected SUID set, baseline expected set downgrade |
 | IOC | Execution context | ld.so.preload abuse, deleted binaries, env risk aggregation |
 | MAC | SELinux/AppArmor status | Missing MAC, downgrade logic if one present |
+| Compliance (opt) | PCI / HIPAA / NIST CSF controls | Pass/fail aggregation + gap analysis (when enabled) |
 | Integrity (opt) | Future pkg/IMA | Placeholders for package & IMA measurement stats |
 | Rules | Post-processing layer | MITRE tagging, severity escalation |
 
@@ -102,49 +105,8 @@ rule_version = 1
 
 rule "Escalate deleted suspicious binary" {
 	when {
-		id ~= "proc_.*deleted"
-		metadata.out_of_tree = "true"
-	}
-	severity = "high"
-	mitre_techniques = ["T1055"]
-}
-```
-Enable with:
-```bash
-./sys-scan --rules-enable --rules-dir rules/
-```
-
----
-## 6. Privacy & Noise Reduction
-Privacy flags: `--no-user-meta`, `--no-cmdline-meta`, `--no-hostname-meta` (validated by tests).
-
-Noise reduction layers:
-* Aggregated IOC metadata rather than one finding per raw trigger.
-* Module summary mode consolidates inventory.
-* Expected SUID baseline downgrades common paths.
-* Allowlist (`--ioc-allow` / `--ioc-allow-file`) downgrades environment-only IOC noise.
-
----
-## 7. Security Hardening Model
-| Mechanism | Trigger | Purpose | Notes |
-|-----------|---------|---------|-------|
-| Capability drop | `--drop-priv` | Reduce ambient privilege | Optionally retain read search (`--keep-cap-dac`) |
-| Seccomp sandbox | `--seccomp` | Limit syscall surface | Minimal allowlist; `--seccomp-strict` -> fatal on failure |
-| Hashing (OpenSSL) | `--process-hash` / `--modules-hash` | Integrity & inventory | Guarded; fallback string if OpenSSL absent |
-| GPG signing | `--sign-gpg` (with `--output`) | Report authenticity | Detached `.asc` signature |
-
-Future (roadmap): Landlock / chroot isolation, package verification, extended IMA.
-
----
-## 8. Determinism, Reproducibility & Provenance
-Provenance (`meta.provenance`): compiler id/version, commit (short), cxx standard, flags, build type, SLSA level.
-
 Runtime overrides via env (`SYS_SCAN_PROV_*`) or `--slsa-level`. Deterministic canonical mode + optional timestamp zeroing yields stable hashes for attestations or artifact promotion.
 
-Repro build tips:
-```bash
-cmake -B b -S . -DCMAKE_BUILD_TYPE=Release -DSYS_SCAN_REPRO_BUILD=ON
-cmake --build b -j$(nproc)
 SYS_SCAN_CANON_TIME_ZERO=1 ./b/sys-scan --canonical > r.json
 sha256sum r.json
 ```
@@ -214,15 +176,10 @@ Debian packaging skeleton under `debian/` (invoke standard `dpkg-buildpackage` f
 ---
 ## 13. CI / Pipeline Integration
 Suggested stages:
-1. Build (Release + tests) -> run tests.
-2. Produce canonical report; compute & store SHA256.
 3. Optional signing (`--sign-gpg`).
 4. Policy gate: severity & count thresholds.
 5. Upload artifacts (report.json + report.json.asc + build.env).
 
-Example gating pattern:
-```bash
-./sys-scan --canonical --min-severity medium --fail-on high --fail-on-count 400 --output report.json || {
 	echo "Gate failed" >&2; exit 1; }
 ```
 
@@ -230,18 +187,12 @@ Streaming to SARIF‑aware platforms:
 ```bash
 ./sys-scan --sarif > results.sarif
 ```
-
 ---
 ## 14. Examples
 ### Canonical JSON (excerpt)
 ```json
 {
 	"meta":{"hostname":"host","tool_version":"0.1.0","json_schema_version":"2"},
-	"summary":{"finding_count_total":42,"finding_count_emitted":13},
-	"summary_extension":{"total_risk_score":880,"emitted_risk_score":310}
-	// ...
-}
-```
 
 ### NDJSON (first lines)
 ```json
@@ -317,7 +268,7 @@ See also inline comments / issues. Near‑term concepts:
 * Enhanced network exposure heuristics & fan‑out thresholds.
 * Additional output signing backends (cosign, age).
 
-### Intelligence Layer (Agent MVP)
+### Intelligence Layer (Agent MVP – Proprietary)
 
 An experimental Python intelligence layer prototype now lives under `agent/` providing:
 * Schema validation & typed parsing (Pydantic subset + extensions: host_id, scan_id, tags, risk_subscores)
@@ -345,11 +296,15 @@ Planned next phases:
 5. Multi-format outputs (analyst markdown, slack snippet, remediation playbook YAML)
 6. Action planner triggering optional secondary collection tasks
 
-This layer stays optional and out-of-path for the core C++ scanner; it consumes the existing stable JSON.
+This layer stays optional and out-of-path for the core C++ scanner; it consumes the existing stable JSON. It is distributed under a proprietary license (see `LICENSE`) while the Core scanner remains MIT.
 
 ---
 ## 17. License & Usage
-This fork is distributed under a proprietary license; all rights reserved. See `LICENSE` for detailed terms. External redistribution, sublicensing, or commercial hosting requires prior written permission. Internal evaluation and operation on owned/administered systems is permitted. For commercial licensing inquiries, contact the maintainer.
+Hybrid model:
+* Core scanner (C++ code under `src/`, schemas, rules) – MIT License.
+* Intelligence Layer (`agent/`) – Proprietary (internal evaluation use only unless separately licensed).
+
+See `LICENSE` for full hybrid terms and SPDX identifiers.
 
 
 ## CLI Overview
