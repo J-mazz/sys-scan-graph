@@ -64,6 +64,8 @@ static void print_help(){
               << "  --no-user-meta            Suppress user/uid/gid/euid/egid in meta section\n"
               << "  --no-cmdline-meta         Suppress process command line in meta section\n"
               << "  --no-hostname-meta        Suppress hostname in meta section\n"
+              << "  --sign-gpg KEYID          Detached ASCII-armored GPG sign output file (requires --output)\n"
+              << "  --slsa-level N            Declare SLSA provenance level (propagated in metadata)\n"
               << "  --help                     Show this help\n";
 }
 
@@ -128,6 +130,8 @@ int main(int argc, char** argv) {
     else if(a=="--no-user-meta") cfg.no_user_meta = true;
     else if(a=="--no-cmdline-meta") cfg.no_cmdline_meta = true;
     else if(a=="--no-hostname-meta") cfg.no_hostname_meta = true;
+    else if(a=="--sign-gpg") { cfg.sign_gpg = true; cfg.sign_gpg_key = need_val("--sign-gpg"); }
+    else if(a=="--slsa-level") { /* override provided at runtime if not baked */ setenv("SYS_SCAN_SLSA_LEVEL_RUNTIME", need_val("--slsa-level").c_str(), 1); }
         else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }
@@ -161,6 +165,18 @@ int main(int argc, char** argv) {
         // very naive pretty: insert newlines after commas that precede quotes and braces already present; JSON already mostly formatted.
     }
     if(cfg.output_file.empty()) std::cout << json; else { std::ofstream ofs(cfg.output_file); ofs<<json; }
+
+    // Optional GPG signing
+    if(cfg.sign_gpg){
+        if(cfg.output_file.empty()){
+            std::cerr << "--sign-gpg requires --output FILE (cannot sign stdout)\n";
+        } else {
+            std::string sigfile = cfg.output_file + ".asc";
+            std::string cmd = "gpg --batch --yes --armor --detach-sign -u " + cfg.sign_gpg_key + " -o " + sigfile + " " + cfg.output_file;
+            int rc = std::system(cmd.c_str());
+            if(rc!=0){ std::cerr << "GPG signing failed (rc="<<rc<<") for command: "<<cmd<<"\n"; }
+        }
+    }
 
     if(!cfg.fail_on_severity.empty()) {
         int thresh = severity_rank(cfg.fail_on_severity);

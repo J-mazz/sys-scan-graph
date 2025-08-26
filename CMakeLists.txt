@@ -7,6 +7,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BUILD_TESTS "Build unit tests" ON)
 option(ENABLE_OPENSSL "Use OpenSSL for hashing if available" ON)
+option(SYS_SCAN_REPRO_BUILD "Enable reproducible build settings (avoid embedding timestamps, absolute paths)" OFF)
+
+set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
+
+if(SYS_SCAN_REPRO_BUILD)
+  # Common reproducible build suggestions (user can still override externally)
+  add_compile_definitions(SYS_SCAN_REPRO_BUILD=1)
+  # Avoid __DATE__/__TIME__ if used anywhere
+  add_compile_definitions(__DATE__="1970-01-01" __TIME__="00:00:00")
+endif()
 
 include(CheckIncludeFile)
 include(CheckLibraryExists)
@@ -41,6 +51,25 @@ add_library(sys_scan_core
   src/scanners/IntegrityScanner.cpp
   src/scanners/YaraScanner.cpp
 )
+
+#-------------------- Build provenance (git commit, compiler, flags) --------------------
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
+                  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                  OUTPUT_VARIABLE GIT_COMMIT
+                  OUTPUT_STRIP_TRAILING_WHITESPACE)
+else()
+  set(GIT_COMMIT "unknown")
+endif()
+
+# Merge relevant flags into a single string (escape quotes)
+set(ALL_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}" )
+string(REPLACE "\n" " " ALL_CXX_FLAGS "${ALL_CXX_FLAGS}")
+string(REPLACE "\"" "'" ALL_CXX_FLAGS "${ALL_CXX_FLAGS}")
+
+configure_file(${CMAKE_SOURCE_DIR}/BuildInfo.h.in ${CMAKE_BINARY_DIR}/generated/BuildInfo.h @ONLY)
+target_include_directories(sys_scan_core PUBLIC ${CMAKE_BINARY_DIR}/generated)
 
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 

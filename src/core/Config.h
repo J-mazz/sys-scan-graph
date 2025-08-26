@@ -66,6 +66,9 @@ struct Config {
     bool no_user_meta = false;     // suppress user/uid/euid/gid/egid fields
     bool no_cmdline_meta = false;  // suppress process command line
     bool no_hostname_meta = false; // suppress hostname
+    // Integrity & provenance
+    bool sign_gpg = false; // after writing output file, produce detached ascii-armored signature
+    std::string sign_gpg_key; // key id / fingerprint / email for gpg --detach-sign -u
 };
 
 Config& config();
