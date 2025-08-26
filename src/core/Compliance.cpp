@@ -48,7 +48,16 @@ void ComplianceScanner::scan(Report& report) {
         ScanResult sr; sr.scanner_name = name(); sr.start_time = std::chrono::system_clock::now(); sr.end_time = sr.start_time; sr.findings = std::move(findings); report.add_result(std::move(sr));
     }
     // store summary into report meta extension for now (future: dedicated structure)
-    // NOTE: We embed under meta.compliance_summary.<standard>.* via report extension API if added later.
+    for(const auto& kv : by_standard){
+        const auto& std_name = kv.first; const auto& sum = kv.second;
+        report.set_compliance_metric(std_name, "total_controls", std::to_string(sum.total_controls));
+        report.set_compliance_metric(std_name, "passed", std::to_string(sum.passed));
+        report.set_compliance_metric(std_name, "failed", std::to_string(sum.failed));
+        report.set_compliance_metric(std_name, "not_applicable", std::to_string(sum.not_applicable));
+        int denom = (sum.passed + sum.failed) > 0 ? (sum.passed + sum.failed) : 1;
+        double score = static_cast<double>(sum.passed)/denom;
+        report.set_compliance_metric(std_name, "score", std::to_string(score));
+    }
 }
 
 // --- PCI Implementation (skeleton) ---
