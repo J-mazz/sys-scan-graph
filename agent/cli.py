@@ -17,6 +17,12 @@ from .calibration import load_calibration, save_calibration
 from .baseline import BaselineStore
 import time
 from jsonschema import validate as js_validate, ValidationError
+# Phase 10 imports
+from .config import load_config, write_manifest
+from .report_html import write_html
+from .report_diff import write_diff
+import os
+import urllib.request
 
 app = typer.Typer(help="sys-scan intelligence layer (agent MVP)")
 
@@ -27,7 +33,9 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
             checkpoint_dir: Path = typer.Option(None, help="Directory to write per-node state checkpoints (graph mode only)"),
             schema: Path = typer.Option(None, help="Path to JSON schema for validation (graph mode)"),
             index_dir: Path = typer.Option(None, help="Directory to append time-series index entries (graph mode)"),
-            dry_run: bool = typer.Option(False, help="Sandbox dry-run (no external commands executed)")):
+            dry_run: bool = typer.Option(False, help="Sandbox dry-run (no external commands executed)"),
+            prev: Path = typer.Option(None, help="Previous enriched report for diff")):
+    cfg = load_config()
     if dry_run:
         sandbox_config(dry_run=True)
     if graph:
@@ -36,6 +44,30 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
         enriched = run_pipeline(report)
     out.write_text(enriched.model_dump_json(indent=2))
     print(f"[green]Wrote enriched output -> {out} (graph={graph})")
+    # HTML artifact
+    if cfg.reports.html_enabled:
+        write_html(enriched, Path(cfg.reports.html_path))
+        print(f"[cyan]HTML report -> {cfg.reports.html_path}")
+    # Diff markdown
+    if prev and prev.exists():
+        try:
+            from .models import EnrichedOutput
+            prev_obj = EnrichedOutput.model_validate(json.loads(prev.read_text()))
+            write_diff(prev_obj, enriched, Path(cfg.reports.diff_markdown_path))
+            print(f"[cyan]Diff markdown -> {cfg.reports.diff_markdown_path}")
+            # Notification trigger
+            prob_prev = [f.probability_actionable or 0 for f in prev_obj.enriched_findings or []]
+            prob_curr = [f.probability_actionable or 0 for f in enriched.enriched_findings or []]
+            avg_prev = sum(prob_prev)/len(prob_prev) if prob_prev else 0
+            avg_curr = sum(prob_curr)/len(prob_curr) if prob_curr else 0
+            delta = avg_curr - avg_prev
+            high_new = any((f.severity or '').lower() == 'high' and any(t == 'baseline:new' for t in (f.tags or [])) for f in enriched.enriched_findings or [])
+            if (high_new or delta >= cfg.notifications.actionable_delta_threshold):
+                _notify(cfg, message=f"sys-scan: delta_prob={delta:+.2f} high_new={high_new} report={out}")
+        except Exception as e:
+            print(f"[red]Diff/notify error: {e}")
+    # Manifest
+    write_manifest(cfg)
     if graph and checkpoint_dir:
         print(f"[cyan]Checkpoints in {checkpoint_dir}")
     if graph and index_dir:
@@ -352,6 +384,20 @@ def verify(report: Path = typer.Option(..., exists=True, help='Raw report path')
 def verify_signature(report: Path = typer.Option(..., exists=True, help='Raw report path'),
                      verify_key: Path = typer.Option(..., exists=True, help='Base64 verify key file')):
     return verify(report=report, verify_key=verify_key)
+
+# Notification helper
+
+def _notify(cfg, message: str):
+    payload = json.dumps({'text': message}).encode()
+    url = cfg.notifications.slack_webhook or cfg.notifications.webhook
+    if not url:
+        return
+    try:
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type':'application/json'})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            resp.read()
+    except Exception as e:
+        print(f"[red]Notification failed: {e}")
 
 if __name__ == "__main__":
     app()
