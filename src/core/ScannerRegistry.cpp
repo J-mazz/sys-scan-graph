@@ -22,6 +22,7 @@
 #include "../scanners/ContainerScanner.h"
 #include "../scanners/IntegrityScanner.h"
 #include "../scanners/YaraScanner.h"
+#include "Compliance.h"
 
 namespace sys_scan {
 
@@ -49,6 +50,8 @@ void ScannerRegistry::register_all_default() {
     if(config().rules_enable){
         register_scanner(std::make_unique<YaraScanner>());
     }
+    // Compliance scanners (initial: PCI). Future: conditional by config.
+    register_scanner(std::make_unique<PCIComplianceScanner>());
 }
 
 void ScannerRegistry::run_all(Report& report) {
