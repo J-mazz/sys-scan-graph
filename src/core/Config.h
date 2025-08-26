@@ -74,6 +74,9 @@ struct Config {
     bool seccomp = false; // apply seccomp sandbox after initialization
     bool seccomp_strict = false; // if true, failure to apply seccomp is fatal
     std::string write_env_file; // path to write .env style file (binary hash, version, commit)
+    // Compliance
+    bool compliance = false; // enable compliance scanners
+    std::vector<std::string> compliance_standards; // subset selection (empty=all registered)
 };
 
 Config& config();

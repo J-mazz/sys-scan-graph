@@ -9,6 +9,7 @@
 #include "core/Config.h"
 #include <fstream>
 #include "core/Privilege.h"
+#include "generated/BuildInfo.h"
 
 using namespace sys_scan;
 
@@ -67,11 +68,14 @@ static void print_help(){
               << "  --no-hostname-meta        Suppress hostname in meta section\n"
               << "  --sign-gpg KEYID          Detached ASCII-armored GPG sign output file (requires --output)\n"
               << "  --slsa-level N            Declare SLSA provenance level (propagated in metadata)\n"
+              << "  --compliance              Enable compliance scanners (technical control checks)\n"
+              << "  --compliance-standards list  Comma-separated standards subset (e.g. pci_dss_4_0,hipaa_security_rule)\n"
               << "  --drop-priv               Drop Linux capabilities early (retain none unless --keep-cap-dac)\n"
               << "  --keep-cap-dac            Retain CAP_DAC_READ_SEARCH when dropping capabilities\n"
               << "  --seccomp                 Apply restrictive seccomp-bpf profile post-initialization\n"
               << "  --seccomp-strict          Treat seccomp apply failure as fatal (exit non-zero)\n"
               << "  --write-env FILE          Write env-style provenance (.env) file with binary hash/version\n"
+              << "  --version                 Print version & provenance summary and exit\n"
               << "  --help                     Show this help\n";
 }
 
@@ -142,7 +146,14 @@ int main(int argc, char** argv) {
     else if(a=="--write-env") cfg.write_env_file = need_val("--write-env");
     else if(a=="--sign-gpg") { cfg.sign_gpg = true; cfg.sign_gpg_key = need_val("--sign-gpg"); }
     else if(a=="--slsa-level") { /* override provided at runtime if not baked */ setenv("SYS_SCAN_SLSA_LEVEL_RUNTIME", need_val("--slsa-level").c_str(), 1); }
-        else if(a=="--help") { print_help(); return 0; }
+    else if(a=="--compliance") cfg.compliance = true;
+    else if(a=="--compliance-standards") cfg.compliance_standards = split_csv(need_val("--compliance-standards"));
+    else if(a=="--version") { std::cout << "sys-scan " << sys_scan::buildinfo::APP_VERSION
+          << " (git=" << sys_scan::buildinfo::GIT_COMMIT
+          << ", compiler=" << sys_scan::buildinfo::COMPILER_ID << " " << sys_scan::buildinfo::COMPILER_VERSION
+          << ", cxx_std=" << sys_scan::buildinfo::CXX_STANDARD
+          << ")\n"; return 0; }
+    else if(a=="--help") { print_help(); return 0; }
         else { std::cerr << "Unknown arg: "<<a<<"\n"; print_help(); return 2; }
     }
     set_config(cfg);
@@ -186,7 +197,7 @@ int main(int argc, char** argv) {
             FILE* fp=fopen(exe.c_str(),"rb"); if(fp){ unsigned char md[32]; unsigned int mdlen=0; EVP_MD_CTX* ctx=EVP_MD_CTX_new(); if(ctx && EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr)==1){ unsigned char bufh[8192]; size_t got; while((got=fread(bufh,1,sizeof(bufh),fp))>0){ EVP_DigestUpdate(ctx, bufh, got);} if(EVP_DigestFinal_ex(ctx, md, &mdlen)==1 && mdlen==32){ static const char* hx="0123456789abcdef"; for(unsigned i=0;i<32;i++){ hexhash.push_back(hx[md[i]>>4]); hexhash.push_back(hx[md[i]&0xF]); } } } if(ctx) EVP_MD_CTX_free(ctx); fclose(fp);} }
 #endif
         std::ofstream envf(cfg.write_env_file);
-        envf << "SYS_SCAN_VERSION=0.1.0\n";
+    envf << "SYS_SCAN_VERSION="<<sys_scan::buildinfo::APP_VERSION<<"\n";
         envf << "SYS_SCAN_BINARY_SHA256="<<hexhash<<"\n";
     }
     if(cfg.seccomp){ if(!apply_seccomp_profile()){ std::cerr << "Failed to apply seccomp profile (continuing)\n"; } }
