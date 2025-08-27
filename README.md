@@ -2,38 +2,36 @@
 # sys-scan
 
 > Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine. The open‑core scanner delivers trustworthy, reproducible telemetry; an optional proprietary Intelligence Layer (this fork) transforms that raw signal into correlated insights, baselines, rarity analytics, compliance gap normalization, ATT&CK coverage summaries, and executive reporting.
+![CI](https://github.com/J-mazz/sys-scan/actions/workflows/ci.yml/badge.svg) ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-![Core License: MIT](https://img.shields.io/badge/Core%20License-MIT-green.svg) ![Intelligence Layer](https://img.shields.io/badge/Intelligence%20Layer-Proprietary-orange.svg)
+Key design pillars:
+* High‑signal, low‑noise findings (aggregation & baseline downgrades)
+* Deterministic, canonical JSON suitable for hashing, gating & attestations
+* Lightweight build (no heavy runtime deps) and fast execution
+* Extensibility via a rules layer and optional Python LangGraph enrichment
 
-## Editions & Scope
-| Component | License | Purpose |
-|-----------|---------|---------|
-| Core Scanner (C++20) | MIT (open‑core) | Deterministic, low‑overhead host telemetry & hygiene findings |
-| Intelligence Layer (`agent/`) | Proprietary (this fork) | Correlation, baseline & rarity analytics, process novelty, risk calibration, compliance gap normalization, ATT&CK coverage, executive & triage summarization, fleet analytics |
-
-The Intelligence Layer is strictly additive; it never mutates or requires changes to the Core schema and can be omitted entirely for pure OSS deployments.
+It targets Debian/Ubuntu (but aims to stay broadly portable) and is designed to slot cleanly into CI pipelines, fleet hygiene jobs, or local investigative use. Contributions that improve signal quality, determinism, or performance are welcome.
 
 ---
 ## Table of Contents
-1. Quick Start (Core)
-2. Quick Start (Intelligence Layer)
-3. High‑Level Architecture
-4. Core Scanner Capabilities
-5. Intelligence Layer Pipeline / DAG
-6. LangGraph Orchestration (tooling & cyclical reasoning)
-7. Risk & Probability Model
-8. Baseline, Rarity & Process Novelty
-9. Correlation & Rule Engine
-10. Compliance & Gap Normalization
-11. ATT&CK Coverage & Causal Hypotheses
-12. Follow‑Ups, Trust & Policy Enforcement
-13. Performance, Determinism & Manifest
-14. Data Governance & Redaction
-15. Fleet & Rarity Reporting
-16. CLI Highlights (Core & Agent)
-17. Extensibility Guides
-18. Versioning & Roadmap
-19. License
+1. Quick Start
+2. Feature Highlights
+3. Core Scanners
+4. Output & Formats
+5. Rules Engine
+6. Privacy & Noise Reduction
+7. Security Hardening Model
+8. Determinism, Reproducibility & Provenance
+9. Risk & Severity Model
+10. Schema & Versioning
+11. Build & Install
+12. Usage Scenarios & Recipes
+13. CI / Pipeline Integration
+14. Examples (JSON / NDJSON / SARIF snippets)
+15. Advanced Flags Reference
+16. LangGraph Enrichment Graph (Optional)
+17. Roadmap & Ideas
+18. License & Usage
 
 ---
 ## 1. Quick Start (Core)
@@ -57,6 +55,62 @@ NDJSON stream (grep only findings):
 
 ---
 ## 2. Quick Start (Intelligence Layer)
+* Optional multi-standard compliance assessment (PCI DSS 4.0, HIPAA Security Rule, NIST CSF 2.0) with summarized pass/fail/score metrics (Core emits structured compliance_summary).
+* Gap analysis mode producing focused `compliance_gaps` with remediation hints & normalized severities (Core + Intelligence Layer enrichment).
+* Optional LangGraph-based enrichment DAG (checkpointing, schema validation, time‑series indexing, baseline rarity & novelty scoring, correlations, LLM-governed summarization, HTML + diff artifacts).
+* Fast: avoids expensive full file reads (bounded hashing window, selective parsing).
+
+---
+## 3. Core Scanners
+| Scanner | Focus | Notable Signals |
+|---------|-------|-----------------|
+| Process | Userland processes | Deleted executables, temp exec, env LD anomalies, executable hashing (opt) |
+| Network | TCP/UDP sockets | Listening exposure, high fan‑out heuristics (planned) |
+| Kernel Params | sysctl / /proc | Insecure kernel tunables (planned extensions) |
+| Kernel Modules | Loaded & filesystem state | Unsigned, out‑of‑tree, missing file, hidden vs sysfs, compressed .ko scan |
+| World Writable | Directories & files | Writable risk surfaces & path hijack potential |
+| SUID/SGID | Privileged binaries | Unexpected SUID set, baseline expected set downgrade |
+| IOC | Execution context | ld.so.preload abuse, deleted binaries, env risk aggregation |
+| MAC | SELinux/AppArmor status | Missing MAC, downgrade logic if one present |
+| Compliance (opt) | PCI / HIPAA / NIST CSF controls | Pass/fail aggregation + gap analysis (when enabled) |
+| Integrity (opt) | Future pkg/IMA | Placeholders for package & IMA measurement stats |
+| Rules | Post-processing layer | MITRE tagging, severity escalation |
+
+---
+## 4. Output & Formats
+Base JSON always contains:
+* `meta` – environment + provenance.
+* `summary` – dual counts, severities, timings, slowest scanner.
+* `results[]` – per-scanner groups.
+* `collection_warnings[]` & `scanner_errors[]` – non-fatal diagnostics.
+* `summary_extension` – extended scoring (total & emitted risk).
+
+Optional:
+* `--canonical` enforces deterministic ordering & minimal whitespace (RFC8785 style stabilization).
+* `--ndjson` streams: meta, summary_extension, each finding (easy piping).
+* `--sarif` produces SARIF for code scanning ingestion.
+
+---
+## 5. Rules Engine
+Capabilities:
+* Declarative rule files (`.rule`) with `rule_version` guard.
+* AND/OR logic; equality, regex (`~=`), substring future extension.
+* MITRE technique aggregation (order‑preserving de‑dup).
+* Severity override & notes.
+* Structured warnings on invalid/legacy versions (non‑fatal unless gated).
+
+Example:
+```
+rule_version = 1
+
+rule "Escalate deleted suspicious binary" {
+	when {
+Runtime overrides via env (`SYS_SCAN_PROV_*`) or `--slsa-level`. Deterministic canonical mode + optional timestamp zeroing yields stable hashes for attestations or artifact promotion.
+
+SYS_SCAN_CANON_TIME_ZERO=1 ./b/sys-scan --canonical > r.json
+sha256sum r.json
+```
+Generate provenance env file:
 ```bash
 python -m venv agent/.venv
 source agent/.venv/bin/activate
@@ -115,6 +169,64 @@ Intelligence Layer adds: enrichment, multi-signal correlation, temporal & cross-
 | rules | Optional severity/tag post-processing (open-core rule format) |
 
 Output includes: `meta`, `summary`, `results[]`, `collection_warnings[]`, `scanner_errors[]`, `summary_extension` (risk sums). Canonical mode produces stable RFC8785-like ordering for hashing & attestation.
+
+Key capabilities powered or exposed via the LangGraph mode:
+* Explicit DAG stages: load → validate (schema) → augment → correlate → baseline rarity → reduce → summarize (LLM‑gated) → actions → output.
+* Per‑node checkpointing (`--checkpoint-dir`) writes JSON snapshots of evolving agent state for audit & troubleshooting.
+* Schema validation stage (optional `--schema schema/v2.json`) adds structured collection warning if validation fails.
+* Time‑series indexing (`--index-dir`) appends lightweight entries (scan_id, host_id, counts, correlation/action totals) enabling trend dashboards.
+* Baseline rarity & anomaly scoring (SQLite) with process novelty (embedding‑like feature vectors) adjusting risk subscores deterministically.
+* Temporal sequence correlation (e.g. new SUID then IP forwarding) and rule‑driven multi‑finding correlations with back‑references.
+* Compliance summary & gap ingestion from core JSON with remediation hint enrichment & severity normalization.
+* Performance instrumentation (durations, counters) + regression detection vs rolling baseline persisted to `artifacts/perf_baseline.json`.
+* Risk summarization gate: skips LLM summarization when aggregate medium+ risk sum below threshold and no new findings (cost control / determinism).
+* Data governance redaction layer scrubs sensitive metadata before any LLM provider call (provider pluggable via env `AGENT_LLM_PROVIDER`).
+* Token accounting & estimated cost snapshot recorded in enriched output (`token_accounting`).
+* ATT&CK technique coverage derivation from tag → technique mapping (`attack_mapping.yaml`).
+* Deterministic canonicalization of enriched output for reproducible hashing / diffs.
+* HTML dashboard + Markdown diff generation (if enabled in config).
+
+Quick start (after building core scanner):
+```bash
+python -m venv agent/.venv
+source agent/.venv/bin/activate
+pip install -r agent/requirements.txt
+./build/sys-scan --canonical --output report.json
+python -m agent.cli analyze --report report.json --out enriched_report.json --graph \
+	--checkpoint-dir checkpoints --index-dir enriched_index --schema schema/v2.json
+ls checkpoints  # per-stage snapshots
+jq '.summaries.metrics | {correlations, "perf.total_ms": ."perf.total_ms"}' enriched_report.json
+```
+
+Notable flags (agent `analyze` command):
+* `--graph` – use LangGraph DAG implementation.
+* `--checkpoint-dir DIR` – write per-node state snapshots.
+* `--schema PATH` – validate raw report against JSON Schema (adds warning on failure).
+* `--index-dir DIR` – append run metadata entries (time‑series index.json).
+* `--prev FILE` – generate diff markdown & notification heuristics.
+
+Environment knobs:
+* `AGENT_BASELINE_DB` – alternate SQLite path for baseline rarity.
+* `AGENT_LLM_PROVIDER` – select summarization backend (or omit for deterministic skip).
+* `AGENT_MAX_REPORT_MB` – ingestion size guard (default 5MB).
+* `AGENT_PERF_REGRESSION_PCT` – performance regression threshold (default 30%).
+* `AGENT_LOAD_HF_CORPUS=1` – opt‑in external corpus metrics enrichment (if deps available).
+
+All enrichment logic is additive; the Core scanner output format is not modified. If you only need raw deterministic scanning, ignore `agent/` entirely.
+
+---
+## 17. Roadmap & Ideas
+See also inline comments / issues. Near‑term concepts:
+* Extended risk scoring calibrations.
+* Package integrity (dpkg/rpm verify) & mismatch aggregation.
+* Landlock / chroot sandbox addition.
+* eBPF exec short‑lived process tracing (`--ioc-exec-trace`).
+* Enhanced network exposure heuristics & fan‑out thresholds.
+* Additional output signing backends (cosign, age).
+
+----
+## 18. License & Usage
+Licensed under the MIT License. See `LICENSE`.
 
 Parallel execution: pass `--parallel` (and optionally `--parallel-threads N`) to run scanners concurrently. Ordering & timing records remain deterministic: starts are emitted in registration order, findings appended under a mutex, and completions normalized so final JSON ordering matches the sequential baseline.
 
