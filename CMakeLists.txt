@@ -38,6 +38,7 @@ add_library(sys_scan_core
   src/core/JSONWriter.cpp
   src/core/Logging.cpp
   src/core/Config.cpp
+  src/core/Compliance.cpp
   src/scanners/ProcessScanner.cpp
   src/scanners/NetworkScanner.cpp
   src/scanners/KernelParamScanner.cpp

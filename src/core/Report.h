@@ -9,6 +9,8 @@ class Report {
 public:
     void start_scanner(const std::string& name);
     void add_finding(const std::string& scanner, Finding finding);
+    // Directly add a completed ScanResult (used by composite scanners)
+    void add_result(ScanResult result);
     void end_scanner(const std::string& name);
     // Warning / error side channels (non-security collection issues)
     void add_warning(const std::string& scanner, const std::string& message);

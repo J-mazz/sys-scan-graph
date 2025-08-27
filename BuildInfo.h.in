@@ -3,6 +3,8 @@
 
 namespace sys_scan {
 namespace buildinfo {
+// Application semantic/version string baked in from CMake project(VERSION ...)
+static constexpr const char* APP_VERSION = "@PROJECT_VERSION@";
 static constexpr const char* GIT_COMMIT = "@GIT_COMMIT@"; // short hash or "unknown"
 static constexpr const char* COMPILER_ID = "@CMAKE_CXX_COMPILER_ID@";
 static constexpr const char* COMPILER_VERSION = "@CMAKE_CXX_COMPILER_VERSION@";
