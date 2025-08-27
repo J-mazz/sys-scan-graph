@@ -3,7 +3,7 @@
 
 > Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine. The open‑core scanner delivers trustworthy, reproducible telemetry; an optional proprietary Intelligence Layer (this fork) transforms that raw signal into correlated insights, baselines, rarity analytics, compliance gap normalization, ATT&CK coverage summaries, and executive reporting.
 
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Core License: MIT](https://img.shields.io/badge/Core%20License-MIT-green.svg) ![Intelligence Layer](https://img.shields.io/badge/Intelligence%20Layer-Proprietary-orange.svg)
 
 ## Editions & Scope
 | Component | License | Purpose |
@@ -241,7 +241,18 @@ Roadmap (abridged):
 
 ---
 ## 19. License
-Core scanner: MIT (see `LICENSE`). Intelligence Layer code in this fork is proprietary; redistribution requires explicit permission. All open-core functionality remains usable without the proprietary layer.
+This repository is a hybrid distribution:
+
+* Core Scanner (C++20) — MIT licensed. See `LICENSE` Section A ("Core Software") for full text.
+* Intelligence Layer (`agent/` and enriched artifacts) — Proprietary Restricted License. See `LICENSE` Section B. Internal evaluation and operation permitted; redistribution / SaaS / commercialization requires a separate agreement.
+
+SPDX identifiers used in source files:
+* `SPDX-License-Identifier: MIT` for Core code.
+* `SPDX-License-Identifier: LicenseRef-Proprietary-Intelligence` for proprietary components.
+
+Running the proprietary layer alongside the Core does not alter the Core's MIT licensing.
+
+For commercial licensing or redistribution inquiries: Joseph@Mazzlabs.works
 
 ---
 ## Support / Questions
@@ -343,9 +354,6 @@ The JSON Schema (`schema/v2.json`) explicitly enumerates dual metrics: `finding_
 Taint flags, numeric risk scoring, allowlist file (`--ioc-allow-file`), package integrity & systemd hardening checks, advanced MAC profiling.
 
 ## License
-Licensed under the MIT License. See `LICENSE` for full text.
-
----
 ### Phase 10 Productization Demo
 A quick end-to-end demonstration (two scans, enrichment, HTML generation, diff, manifest, timing):
 ```bash
