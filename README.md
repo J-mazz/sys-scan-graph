@@ -240,6 +240,27 @@ Streaming to SARIF‑aware platforms:
 ```bash
 ./sys-scan --sarif > results.sarif
 ```
+
+### Release Validation Helper
+The script `scripts/release_validate.py` provides lightweight invariants before tagging or publishing a build:
+* Verifies fleet report schema exists & records its sha256.
+* Hashes every `*.rule` under `rules/` into a deterministic manifest.
+* Optionally enforces an expected semantic version (matches `project(... VERSION X.Y.Z)` in `CMakeLists.txt`).
+* Can assert reproducible build flag was enabled (`--repro-required`).
+
+Example:
+```bash
+python scripts/release_validate.py \
+	--expected-version 0.1.0 \
+	--schema schema/fleet_report.schema.json \
+	--rules-dir rules \
+	--output artifacts/release-manifest.json \
+	--repro-required
+```
+Exit code non‑zero if any invariant fails; manifest always written for inspection.
+
+An automated GitHub Actions workflow (`.github/workflows/release-validate.yml`) runs the validator on every push to `main` and on tags (`v*`). On tag pushes it also generates and uploads an SPDX SBOM plus the manifest to the GitHub Release.
+
 ---
 ## 14. Examples
 ### Canonical JSON (excerpt)
