@@ -116,6 +116,8 @@ Intelligence Layer adds: enrichment, multi-signal correlation, temporal & cross-
 
 Output includes: `meta`, `summary`, `results[]`, `collection_warnings[]`, `scanner_errors[]`, `summary_extension` (risk sums). Canonical mode produces stable RFC8785-like ordering for hashing & attestation.
 
+Parallel execution: pass `--parallel` (and optionally `--parallel-threads N`) to run scanners concurrently. Ordering & timing records remain deterministic: starts are emitted in registration order, findings appended under a mutex, and completions normalized so final JSON ordering matches the sequential baseline.
+
 ---
 ## 5. Intelligence Layer Pipeline / DAG
 Sequential `pipeline.py` and DAG `graph_pipeline.py` implement these deterministic stages:
