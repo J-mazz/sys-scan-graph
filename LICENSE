@@ -1,25 +1,20 @@
-Hybrid License Notice
-=====================
+Section A. Core Scanner ("Core Software") – MIT License
+-------------------------------------------------------
+MIT License
 
-This repository contains two logically separated components with different licenses:
-
-Section A. Open Source Core Scanner ("Core")
---------------------------------------------
-Directories: `src/`, `rules/`, `schema/`, `fuzz/`, `scripts/`, top‑level CMake / build files, and C++ headers/sources (except files explicitly marked otherwise).
-
-License: MIT License
+Copyright (c) 2025 J-mazz
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of the Core and associated documentation files (the "Core Software"), to deal
-in the Core Software without restriction, including without limitation the rights
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Core Software, and to permit persons to whom the Core Software is
+copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Core Software.
+copies or substantial portions of the Software.
 
-THE CORE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -29,74 +24,35 @@ THE CORE SOFTWARE.
 
 Section B. Proprietary Intelligence Layer ("Intelligence Layer")
 ----------------------------------------------------------------
-Directory: `agent/` and any subdirectories (Python enrichment / correlation / HTML reporting) and generated enriched artifacts unless otherwise noted.
+Directory: `agent/` (and its subdirectories) plus generated enriched artifacts (HTML, diff markdown) unless a file explicitly declares an SPDX MIT header.
 
 License: Restricted Proprietary License
 
 Copyright (c) 2025 J-mazz. All rights reserved.
 
-You are granted a limited, non-transferable, non-sublicensable right to use the
-Intelligence Layer internally for evaluation or operation on systems you own or
-administer in conjunction with the open source Core. Any modification,
-redistribution (source or binary), sublicensing, external hosting (SaaS), or
-commercial use of the Intelligence Layer requires a separate commercial
-agreement or written permission from the copyright holder.
+Grant: Limited, non-transferable, non-sublicensable right to internally run and evaluate the Intelligence Layer with the Core Software. Any external redistribution (source or binary), offering as a service (SaaS/managed), sublicensing, commercialization, or publication requires a separate written agreement.
 
-You may not:
-1. Publicly redistribute the Intelligence Layer source code or derived works.
-2. Offer the Intelligence Layer as a hosted or managed service to third parties.
-3. Remove or alter proprietary notices.
+Prohibited Without Commercial Agreement:
+1. Public redistribution of source or derivative works.
+2. Offering the Intelligence Layer (or substantial functionality) as a hosted or managed service to third parties.
+3. Removing or altering proprietary notices.
 
-Limited Derivative Works Clause:
-You may create internal derivatives (patches, custom integrations) of the
-Intelligence Layer for your own organizational use provided they are not
-distributed externally.
+Internal Derivatives: You may create internal patches/extensions for organizational use only; they must not be distributed externally.
 
-NO WARRANTY: The Intelligence Layer is provided "AS IS" without warranties of
-any kind (same warranty disclaimer as MIT above applies).
+NO WARRANTY: Provided "AS IS"; same warranty disclaimer as Section A applies.
 
-Combination & Aggregation:
-Linking or executing the open source Core together with the proprietary
-Intelligence Layer in combined workflows does not convert the license of either
-component; each part retains its respective license.
-<<<<<<< HEAD
+Combination: Running the Core Software together with the Intelligence Layer does not change the license of either component.
 
-Third-Party Components:
-Third-party libraries remain under their original licenses. Nothing herein
-grants rights to third-party marks or code outside their stated terms.
+Third-Party Components: Remain under their respective original licenses.
 
-Contributions:
-Pull requests affecting Core code are accepted under the MIT license (you agree
-your contribution is MIT licensed). Contributions to the Intelligence Layer are
-not accepted unless explicitly requested; unsolicited submissions become the
-property of the project maintainers without obligation.
+Contributions: Core contributions accepted under MIT. Intelligence Layer contributions are not accepted unless explicitly requested; unsolicited submissions become project property without obligation.
 
-Commercial Inquiries: <add contact>
+Commercial / Licensing Contact: Joseph@Mazzlabs.works
 
 SPDX Summary Tags:
-Core: MIT
-Intelligence Layer: LicenseRef-Proprietary-Intelligence
-
-Files may include an SPDX header specifying one of the above.
-For commercial licensing or redistribution inquiries, contact: Joseph@Mazzlabs.works
-=======
-
-Third-Party Components:
-Third-party libraries remain under their original licenses. Nothing herein
-grants rights to third-party marks or code outside their stated terms.
-
-Contributions:
-Pull requests affecting Core code are accepted under the MIT license (you agree
-your contribution is MIT licensed). Contributions to the Intelligence Layer are
-not accepted unless explicitly requested; unsolicited submissions become the
-property of the project maintainers without obligation.
-
-Commercial Inquiries: <add contact>
-
-SPDX Summary Tags:
-Core: MIT
-Intelligence Layer: LicenseRef-Proprietary-Intelligence
+	Core: MIT
+	Intelligence Layer: LicenseRef-Proprietary-Intelligence
 
 Files may include an SPDX header specifying one of the above.
 
->>>>>>> 7616f75 (docs: hybrid licensing, compliance integration tests, HTML compliance section, remediation enrichment)
+END OF LICENSE
