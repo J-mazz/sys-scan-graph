@@ -140,18 +140,20 @@ Sequential `pipeline.py` and DAG `graph_pipeline.py` implement these determinist
 All transformations are local & deterministic given identical inputs, weights, calibration and rule pack.
 
 ---
-## 6. LangGraph Orchestration (Tooling & Cyclical Reasoning)
-Current DAG is linear for predictability, but implemented atop LangGraph which supports:
-* Tool calling (follow-up executors are structured “tools”).
-* Potential future cyc loops (e.g. adaptive triage refine -> regenerate actions -> convergence). Loops will be bounded by deterministic guard rails (max iterations, unchanged state hash) to preserve reproducibility.
-* Per-node checkpointing (`--checkpoint-dir`) for audit / diff of state evolution.
-* Time-series indexing (`--index-dir`) for fleet dashboard ingestion.
-* Deterministic injection of policy & baseline data ensures that even when iterative reasoning is enabled, outcomes remain reproducible under fixed seeds / configs.
+## 6. LangGraph Orchestration (Active Cyclical Reasoning)
+The graph implementation provides an active bounded iteration today:
+* Active baseline enrichment loop: summarize -> (if any enriched finding lacks baseline_status) plan_baseline -> baseline_tools -> integrate_baseline -> summarize.
+* Iteration guard: `AGENT_MAX_SUMMARY_ITERS` (default 3) limits summarize passes; each pass increments `iteration_count`.
+* Single baseline cycle: `baseline_cycle_done` flag ensures the baseline tool loop executes at most once even if findings still lack context, preserving determinism.
+* Conditional routing: `choose_post_summarize` directs flow either back into baseline planning or to `suggest_rules` (gap mining) using severity heuristics.
+* Tool execution: baseline queries expressed as structured tool_calls executed via ToolNode; results merged deterministically into `baseline_results`.
+* Deterministic safeguards: no stochastic sampling; iteration cap + flag prevent unbounded loops; output reproducible under identical inputs and environment variables.
 
-Planned cyclical extension example (not yet enabled in code):
+Current loop pattern when baseline needed:
 ```
-reduce -> summarize -> (if summary.confidence < θ) -> refine_rules -> correlate -> reduce ... (≤ N loops)
+enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> summarize -> suggest_rules -> END
 ```
+Fast path (no baseline needed): `enrich -> summarize -> suggest_rules -> END`.
 
 ---
 ## 7. Risk & Probability Model

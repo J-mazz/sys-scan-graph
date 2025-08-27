@@ -105,18 +105,21 @@ Metrics collector wraps key stages, storing count/total/avg. Regression detectio
 If verification key (`AGENT_VERIFY_KEY_B64`) present, raw report signature verification performed; integrity block records digest, match flags, and errors without aborting enrichment (best-effort). Separate CLI commands for key generation, sign, and verify.
 
 ---
-## 3. LangGraph DAG & Future Cyclical Reasoning
-The `graph_pipeline.py` wraps sequential logic in a LangGraph DAG (current linear chain) enabling:
-* Per-node checkpoint JSON snapshots (for audit / regression triage).
-* Time-series run index (scan_id, host_id, finding & correlation counts) to power dashboards.
-* (Planned) Bounded cyclical reasoning loops: e.g. dynamic rule refinement or summarization refinement passes. Convergence control through max iterations + state hash equality to preserve determinism.
-* Tooling integration: follow-up executors are natural “tools” LangGraph can invoke; future loops can conditionally re-run correlation after tool output.
+## 3. LangGraph DAG & Cyclical Reasoning (Active)
+The `graph_pipeline.py` and `graph.py` implement an active LangGraph workflow with an iterative baseline enrichment cycle:
+* Entry chain: enrich -> summarize -> (router) baseline cycle or rule suggestion.
+* Baseline Cycle (active): plan_baseline -> baseline_tools -> integrate_baseline -> summarize (re-enters summarize with new context) guarded by `AGENT_MAX_SUMMARY_ITERS` (default 3) and `baseline_cycle_done` flag to prevent infinite looping.
+* Conditional Routing: `choose_post_summarize` decides whether additional baseline queries are needed (missing `baseline_status`) before proceeding to rule suggestion.
+* Rule Suggestion: mined via `suggest_rules` after summary iterations conclude or routing short-circuits.
+* Determinism Guards: iteration_count tracked; max iterations enforced; baseline cycle executed at most once; state transitions purely function-of-input under fixed environment.
+* Tool Integration: Baseline queries executed through ToolNode (structured `query_baseline` tool_calls) returning structured ToolMessages integrated deterministically.
 
-Potential future loop (proposal):
+Active loop pattern (current implementation):
 ```
-reduce -> summarize -> (if summary.metrics.low_confidence && iterations<2) -> refine_rules -> correlate -> reduce -> summarize
+enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> summarize -> (router) -> suggest_rules -> END
 ```
-All loops must remain deterministic under fixed inputs + seed to maintain reproducibility guarantees.
+If no baseline context needed: `enrich -> summarize -> suggest_rules -> END`.
+Environment variable `AGENT_MAX_SUMMARY_ITERS` caps summarize passes; exceeding limit appends a deterministic warning and halts further iterations.
 
 ---
 ## 4. Canonicalization & Reproducibility Guarantees
