@@ -1,0 +1,68 @@
+# Text files (normalize line endings, ensure consistent diffs)
+*.md        text eol=lf
+*.markdown  text eol=lf
+*.txt       text eol=lf
+*.json      text eol=lf
+*.ndjson    text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.py        text eol=lf diff=python
+*.pyi       text eol=lf diff=python
+*.cpp       text eol=lf diff=cpp
+*.c         text eol=lf diff=cpp
+*.cc        text eol=lf diff=cpp
+*.hpp       text eol=lf diff=cpp
+*.h         text eol=lf diff=cpp
+*.cmake     text eol=lf
+CMakeLists.txt text eol=lf
+
+# Scripts
+*.sh        text eol=lf
+
+# Configuration
+*.cfg       text eol=lf
+*.ini       text eol=lf
+*.conf      text eol=lf
+
+# Treat rule / schema files as text
+*.rule      text eol=lf
+
+# Binary / large artifact patterns (disable diff, mark binary)
+*.db        binary -diff
+*.sqlite    binary -diff
+*.sqlite3   binary -diff
+*.bin       binary -diff
+*.dat       binary -diff
+*.a         binary -diff
+*.so        binary -diff
+*.so.*      binary -diff
+*.o         binary -diff
+*.ko        binary -diff
+*.ko.*      binary -diff
+*.gz        binary -diff
+*.xz        binary -diff
+*.bz2       binary -diff
+*.zip       binary -diff
+*.tar       binary -diff
+*.tar.gz    binary -diff
+*.tgz       binary -diff
+*.img       binary -diff
+*.pdf       binary -diff
+
+# Images / diagrams
+*.png       binary -diff
+*.svg       text eol=lf
+
+# Ensure any accidentally committed virtualenv content is not counted toward language stats
+agent/.venv/** linguist-vendored
+.venv/**       linguist-vendored
+
+# Protect against accidental CRLF reintroduction on shell scripts
+*.sh text eol=lf
+
+# Optional: uncomment to recommend Git LFS for very large binary objects (>50MB) (user must have LFS installed)
+# *.db filter=lfs diff=lfs merge=lfs -text
+# *.sqlite* filter=lfs diff=lfs merge=lfs -text
+# *.tar.gz  filter=lfs diff=lfs merge=lfs -text
+
+# End of .gitattributes
