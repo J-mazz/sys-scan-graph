@@ -46,7 +46,7 @@ CLI -> Config -> ScannerRegistry (ordered vector)
 5. Keep optional heavy metadata behind flags.
 
 ---
-## 2. Intelligence Layer (Proprietary)
+## 2. Intelligence Layer 
 The Intelligence Layer consumes a raw Core report and produces an enriched artifact with correlations, rarity metrics, calibrated risk, actions, summaries, ATT&CK coverage and performance analytics. It is entirely additive and leaves the original report unchanged.
 
 ### Data Model Additions
@@ -63,7 +63,7 @@ The Intelligence Layer consumes a raw Core report and produces an enriched artif
 | `enrichment_results` | Auxiliary data: token accounting, perf snapshot, warnings |
 | `integrity` | SHA256 & optional signature verification status |
 
-### Pipeline Stages (Sequential Implementation)
+### Pipeline Stages 
 1. Load & Validate: size guard, UTF‑8 strict decode, JSON parse, schema (optional).  
 2. Augment: host_id & scan_id derivation, tagging, risk subscore seed, host role classification (role rationale added).  
 3. Knowledge Enrichment: ports, modules, SUID expectations, org attribution (YAML packs).  
