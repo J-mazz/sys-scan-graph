@@ -64,6 +64,6 @@ int main(){
     JSONWriter w; auto json = w.write(r);
     auto h = sha256(json);
     // Golden hash computed once (update if canonical structure changes intentionally)
-    const std::string expected_hash = "62c1f753d2a66fb702fae2165445dea454679ecfa026a528898d353d2733ab02"; // stabilized with provenance env overrides (including single-space cxx_flags)
+    const std::string expected_hash = "9e5a573c495c18108242a108f7aa85b390b48341bb92eb5a8ccc4fc3d5b8da36"; // updated for version 0.2.0 (tool_version change affects canonical output)
     if(h!=expected_hash){ std::cerr << "Canonical hash mismatch: got="<<h<<" expected="<<expected_hash<<"\n"; return 1; }
     std::cout << "Canonical golden test passed" << std::endl; return 0; }

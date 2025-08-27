@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(sys-scan VERSION 0.1.0 LANGUAGES CXX)
+project(sys-scan VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,7 @@ option(SYS_SCAN_REPRO_BUILD "Enable reproducible build settings (avoid embedding
 option(ENABLE_SECCOMP "Enable optional seccomp-bpf sandbox (requires libseccomp)" ON)
 option(ENABLE_CAPABILITIES "Enable Linux capabilities privilege dropping (libcap)" ON)
 option(BUILD_FUZZERS "Build libFuzzer harnesses (Clang only)" OFF)
+option(ENABLE_EBPF "Enable optional eBPF exec trace collection (libbpf)" ON)
 
 set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
 
@@ -38,6 +39,7 @@ add_library(sys_scan_core
   src/core/JSONWriter.cpp
   src/core/Logging.cpp
   src/core/Config.cpp
+  src/core/Compliance.cpp
   src/scanners/ProcessScanner.cpp
   src/scanners/NetworkScanner.cpp
   src/scanners/KernelParamScanner.cpp
@@ -54,6 +56,7 @@ add_library(sys_scan_core
   src/scanners/IntegrityScanner.cpp
   src/scanners/YaraScanner.cpp
   src/core/Privilege.cpp
+  src/ebpf/ExecTrace.cpp
 )
 
 #-------------------- Build provenance (git commit, compiler, flags) --------------------
@@ -67,6 +70,36 @@ else()
   set(GIT_COMMIT "unknown")
 endif()
 
+# libbpf (optional eBPF support for exec tracing)
+if(ENABLE_EBPF)
+  find_library(LIBBPF_LIB bpf)
+  find_path(LIBBPF_INCLUDE bpf/libbpf.h)
+  find_program(CLANG_EXECUTABLE clang)
+  if(LIBBPF_LIB AND LIBBPF_INCLUDE)
+    target_link_libraries(sys_scan_core PUBLIC ${LIBBPF_LIB})
+    target_include_directories(sys_scan_core PUBLIC ${LIBBPF_INCLUDE})
+    target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_EBPF=1)
+    if(CLANG_EXECUTABLE)
+      set(EBPF_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/ebpf/bpf/exec_trace.bpf.c)
+      if(EXISTS ${EBPF_SRC})
+        set(EBPF_OBJ ${CMAKE_BINARY_DIR}/exec_trace.bpf.o)
+        add_custom_command(OUTPUT ${EBPF_OBJ}
+          COMMAND ${CLANG_EXECUTABLE} -target bpf -O2 -g -D__TARGET_ARCH_x86 -I${LIBBPF_INCLUDE} -c ${EBPF_SRC} -o ${EBPF_OBJ}
+          DEPENDS ${EBPF_SRC}
+          COMMENT "Building eBPF object exec_trace.bpf.o")
+        add_custom_target(exec_trace_bpf ALL DEPENDS ${EBPF_OBJ})
+        add_dependencies(sys_scan_core exec_trace_bpf)
+        target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_EXEC_TRACE_BPF_PATH="${EBPF_OBJ}")
+      else()
+        message(STATUS "eBPF source not found: ${EBPF_SRC}")
+      endif()
+    else()
+      message(STATUS "clang not found; skipping eBPF program compilation")
+    endif()
+  else()
+    message(STATUS "libbpf not found; eBPF exec trace disabled")
+  endif()
+endif()
 # Merge relevant flags into a single string (escape quotes)
 set(ALL_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}" )
 string(REPLACE "\n" " " ALL_CXX_FLAGS "${ALL_CXX_FLAGS}")

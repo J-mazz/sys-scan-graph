@@ -4,6 +4,27 @@ All notable changes will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- (placeholder for future changes)
+
+## [0.2.0] - 2025-08-26
+### Added
+ - Optional eBPF exec trace collection (ENABLE_EBPF / --ioc-exec-trace integration) with libbpf ring buffer; gracefully degrades when unavailable.
+ - Fleet report generation (`fleet-report` CLI) and JSON schema (`schema/fleet_report.schema.json`).
+ - Attack coverage summary (MITRE ATT&CK technique mapping) with resilient path resolution for mapping file.
+ - Intelligence layer snapshot & reduction tests stabilized; golden canonical hash guard retained.
+ - Manifest bundle emission capturing rule pack SHA, weights, embedding model hash.
+### Changed
+ - Robust `_load_attack_mapping` path search (works when tests run from `agent/` directory).
+ - CI workflow expanded: compiler matrix, Python agent tests, libbpf/openssl dependencies.
+### Fixed
+ - Missing fleet report schema caused test failure when executing from agent directory (added duplicate copy under `agent/schema` for relative path test).
+ - Attack coverage test returning zero techniques due to incorrect relative path resolution.
+ - Minor determinism edge cases in canonical golden test environment (ensured provenance env overrides stable).
+### Security
+ - No new security fixes; eBPF feature isolated behind build option.
+### Removed
+ - (None)
+### Added
  - Dual metrics & risk scoring: `finding_count_total` vs `finding_count_emitted`, `severity_counts` vs `severity_counts_emitted`, and `emitted_risk_score` in `summary_extension`.
  - Provenance metadata block (`meta.provenance`) with compiler id/version, git commit, cxx standard, cxx flags, build type, SLSA level (baked & runtime override via `--slsa-level`).
  - Reproducibility & determinism flags: `SYS_SCAN_REPRO_BUILD`, `SYS_SCAN_CANON_TIME_ZERO=1`, provenance override env (`SYS_SCAN_PROV_*`), meta overrides (`SYS_SCAN_META_*`).

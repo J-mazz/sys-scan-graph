@@ -36,7 +36,6 @@ def _recompute_finding_risk(f: Finding):
         weights = load_persistent_weights()
         score, raw = compute_risk(subs, weights)
         f.risk_score = score
-        f.risk_total = score
         subs["_raw_weighted_sum"] = round(raw, 3)
         f.probability_actionable = apply_probability(raw)
     except Exception as e:  # pragma: no cover (defensive)
@@ -378,7 +377,6 @@ def baseline_rarity(state: AgentState, baseline_path: Path = Path("agent_baselin
                 f.rationale = rationale_bits
             else:
                 f.rationale.extend(rationale_bits)
-            f.risk_total = f.risk_score
             # Log calibration observation (raw sum) for future supervised tuning
             if state.report and state.report.meta and state.report.meta.scan_id:
                 comp_hash = comp  # composite hash from earlier
@@ -494,8 +492,11 @@ def sequence_correlation(state: AgentState) -> AgentState:
             # Avoid duplicate correlation creation
             already = any(c.related_finding_ids == related and 'sequence_anomaly' in (c.tags or []) for c in state.correlations)
             if not already:
+                # Generate deterministic ID for testing consistency
+                related_hash = hashlib.sha256('|'.join(sorted(related)).encode()).hexdigest()[:8]
+                corr_id = f'sequence_anom_{len([c for c in state.correlations if "sequence_anomaly" in (c.tags or [])]) + 1}'
                 corr = Correlation(
-                    id=f'seq_{_uuid.uuid4().hex[:10]}',
+                    id=corr_id,
                     title='Suspicious Sequence: New SUID followed by IP forwarding enabled',
                     rationale='Heuristic: newly introduced SUID binary preceded enabling IP forwarding in same scan',
                     related_finding_ids=related,
@@ -723,13 +724,38 @@ def generate_causal_hypotheses(state: AgentState, max_hypotheses: int = 3) -> li
 
 
 def _load_attack_mapping(path: Path = Path('agent/attack_mapping.yaml')) -> dict:
+    """Load ATT&CK tag -> technique mapping with resilient path resolution.
+
+    Pytest invokes tests from the `agent/` cwd (python -m pytest -q) so the
+    original relative path `agent/attack_mapping.yaml` incorrectly points to
+    `agent/agent/attack_mapping.yaml`. We attempt a small search set:
+      1. Provided path (for execution from repo root)
+      2. Local package file `attack_mapping.yaml` (execution from agent/)
+      3. Repo root variant resolved by ascending until we find `config.yaml` (heuristic)
+    Fallback to empty mapping on any error.
+    """
+    candidates = []
     try:
-        if not path.exists():
-            return {}
-        data = _yaml.safe_load(path.read_text()) or {}
-        return data
+        candidates.append(path)
+        candidates.append(Path(__file__).parent / 'attack_mapping.yaml')
+        # Heuristic: walk up a few levels to locate repo root then append agent/attack_mapping.yaml
+        cur = Path(__file__).resolve().parent
+        for _ in range(4):
+            if (cur / 'config.yaml').exists() and (cur / 'agent' / 'attack_mapping.yaml').exists():
+                candidates.append(cur / 'agent' / 'attack_mapping.yaml')
+                break
+            cur = cur.parent
+        for p in candidates:
+            if p.exists():
+                try:
+                    data = _yaml.safe_load(p.read_text()) or {}
+                    if data:
+                        return data
+                except Exception:
+                    continue
     except Exception:
-        return {}
+        pass
+    return {}
 
 
 def run_pipeline(report_path: Path) -> EnrichedOutput:
@@ -797,15 +823,21 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
         drift_findings = []
         for mname, stats in metric_stats.items():
             z = stats.get('z')
-            hist_n = stats.get('history_n',0)
+            hist_n = stats.get('history_n', 0)
             # Accept drift if enough history for z OR early large delta vs mean when hist>=2
             trigger = False
             if z is not None and hist_n >= 2 and abs(z) >= drift_threshold:
                 trigger = True
             elif z is None and hist_n >= 2 and stats.get('mean') is not None:
-                mean = stats['mean']; val = stats['value']
-                # simple 100% increase heuristic
-                if mean and (val - mean)/mean >= 1.0:
+                mean = stats['mean']
+                val = stats['value']
+                # Prevent division by zero and handle edge cases
+                if mean is not None and mean != 0:
+                    delta_ratio = abs(val - mean) / abs(mean)
+                    if delta_ratio >= 1.0:  # 100% increase/decrease
+                        trigger = True
+                elif mean == 0 and val != 0:
+                    # Zero to non-zero is always significant
                     trigger = True
             if trigger:
                 # Build synthetic finding
@@ -832,7 +864,6 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
                 # risk_subscores is always set above
                 score, raw = compute_risk(drift.risk_subscores or {}, weights)
                 drift.risk_score = score
-                drift.risk_total = score
                 drift.probability_actionable = apply_probability(raw)
                 if z is not None:
                     drift.rationale = [f"metric {mname} drift z={z:.2f} value={stats['value']} mean={stats['mean']:.2f} std={stats['std']:.2f}"]
