@@ -105,16 +105,16 @@ Metrics collector wraps key stages, storing count/total/avg. Regression detectio
 If verification key (`AGENT_VERIFY_KEY_B64`) present, raw report signature verification performed; integrity block records digest, match flags, and errors without aborting enrichment (best-effort). Separate CLI commands for key generation, sign, and verify.
 
 ---
-## 3. LangGraph DAG & Cyclical Reasoning (Active)
-The `graph_pipeline.py` and `graph.py` implement an active LangGraph workflow with an iterative baseline enrichment cycle:
+## 3. LangGraph DAG & Cyclical Reasoning
+`graph_pipeline.py` and `graph.py` implement a LangGraph workflow with a bounded baseline enrichment cycle:
 * Entry chain: enrich -> summarize -> (router) baseline cycle or rule suggestion.
-* Baseline Cycle (active): plan_baseline -> baseline_tools -> integrate_baseline -> summarize (re-enters summarize with new context) guarded by `AGENT_MAX_SUMMARY_ITERS` (default 3) and `baseline_cycle_done` flag to prevent infinite looping.
+* Baseline cycle: plan_baseline -> baseline_tools -> integrate_baseline -> summarize (re-enters summarize with added context) guarded by `AGENT_MAX_SUMMARY_ITERS` (default 3) and `baseline_cycle_done` flag.
 * Conditional Routing: `choose_post_summarize` decides whether additional baseline queries are needed (missing `baseline_status`) before proceeding to rule suggestion.
 * Rule Suggestion: mined via `suggest_rules` after summary iterations conclude or routing short-circuits.
 * Determinism Guards: iteration_count tracked; max iterations enforced; baseline cycle executed at most once; state transitions purely function-of-input under fixed environment.
 * Tool Integration: Baseline queries executed through ToolNode (structured `query_baseline` tool_calls) returning structured ToolMessages integrated deterministically.
 
-Active loop pattern (current implementation):
+Loop pattern (current implementation):
 ```
 enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> summarize -> (router) -> suggest_rules -> END
 ```

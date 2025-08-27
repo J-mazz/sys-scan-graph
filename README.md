@@ -140,8 +140,8 @@ Sequential `pipeline.py` and DAG `graph_pipeline.py` implement these determinist
 All transformations are local & deterministic given identical inputs, weights, calibration and rule pack.
 
 ---
-## 6. LangGraph Orchestration (Active Cyclical Reasoning)
-The graph implementation provides an active bounded iteration today:
+## 6. LangGraph Orchestration & Cyclical Reasoning
+The LangGraph workflow implements a bounded baseline enrichment iteration followed by optional rule suggestion:
 * Active baseline enrichment loop: summarize -> (if any enriched finding lacks baseline_status) plan_baseline -> baseline_tools -> integrate_baseline -> summarize.
 * Iteration guard: `AGENT_MAX_SUMMARY_ITERS` (default 3) limits summarize passes; each pass increments `iteration_count`.
 * Single baseline cycle: `baseline_cycle_done` flag ensures the baseline tool loop executes at most once even if findings still lack context, preserving determinism.
@@ -149,7 +149,7 @@ The graph implementation provides an active bounded iteration today:
 * Tool execution: baseline queries expressed as structured tool_calls executed via ToolNode; results merged deterministically into `baseline_results`.
 * Deterministic safeguards: no stochastic sampling; iteration cap + flag prevent unbounded loops; output reproducible under identical inputs and environment variables.
 
-Current loop pattern when baseline needed:
+Loop pattern when baseline context is required:
 ```
 enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> summarize -> suggest_rules -> END
 ```
