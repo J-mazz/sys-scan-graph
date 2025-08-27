@@ -15,7 +15,7 @@ This document splits the platform into the open‑core C++ Scanner and the propr
 |-----------|---------|
 | `Scanner` (interface) | Pure function style `scan(Report&)` producing findings for its domain |
 | `ScannerRegistry` | Ordered registration enforcing deterministic emission ordering |
-| `Report` | Thread-safe (mutex) append container for future parallelization |
+| `Report` | Thread-safe (mutex) append container enabling deterministic parallel execution |
 | `Finding` | Lightweight struct with id/title/severity/description + sorted metadata map |
 | `JSONWriter` | Canonical builder (stable key ordering, whitespace minimization) + optional pretty printer |
 | `Config` | Parsed once (singleton accessor) controlling scanner toggles & thresholds |
@@ -149,7 +149,6 @@ No external network calls by default. Optional corpus enrichment (`AGENT_LOAD_HF
 
 ---
 ## 7. Roadmap (Architectural)
-* Parallel core scanner execution (multi-thread) guarded by deterministic merge ordering.
 * Native module decompression (remove shelling to `xz`,`gzip`).
 * Structured warning channel in core (separate from findings).
 * Bounded LangGraph iterative refinement (rule & action optimization).
