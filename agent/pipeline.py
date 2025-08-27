@@ -1,13 +1,17 @@
 from __future__ import annotations
 import json, hashlib, os, uuid
+import json as _json
 from pathlib import Path
 from typing import List
-from .models import AgentState, Report, Finding, EnrichedOutput, ActionItem, ScannerResult, MultiHostCorrelation, Correlation
+from .models import AgentState, Report, Finding, EnrichedOutput, ActionItem, ScannerResult, MultiHostCorrelation, Correlation, AgentWarning
 from .knowledge import apply_external_knowledge
 from .rules import Correlator, DEFAULT_RULES
 from .reduction import reduce_all
-from .llm import LLMClient
+from .llm_provider import get_llm_provider
+from .data_governance import get_data_governor
 from .baseline import BaselineStore
+from .metrics import get_metrics_collector
+from .canonicalize import canonicalize_enriched_output_dict
 from .risk import compute_risk, load_persistent_weights
 from .calibration import apply_probability
 from .graph_analysis import annotate_and_summarize
@@ -39,13 +43,23 @@ def _recompute_finding_risk(f: Finding):
         f.risk_total = score
         subs["_raw_weighted_sum"] = round(raw, 3)
         f.probability_actionable = apply_probability(raw)
-    except Exception as e:  # pragma: no cover (defensive)
+    except (ValueError, TypeError) as e:  # expected computation issues
         try:
             log_stage('risk_recompute_error', error=str(e), type=type(e).__name__)
         except Exception:
             pass
+    except Exception as e:  # unexpected
+        try:
+            log_stage('risk_recompute_error_unexpected', error=str(e), type=type(e).__name__)
+        except Exception:
+            pass
 
-def _log_error(stage: str, e: Exception):
+def _log_error(stage: str, e: Exception, state: AgentState | None = None, module: str = 'pipeline', severity: str = 'warning', hint: str | None = None):
+    if state is not None:
+        try:
+            state.agent_warnings.append(AgentWarning(module=module, stage=stage, error_type=type(e).__name__, message=str(e), severity=severity, hint=hint).model_dump())
+        except Exception:
+            pass
     try:
         log_stage(f'{stage}_error', error=str(e), type=type(e).__name__)
     except Exception:
@@ -66,7 +80,9 @@ def load_report(state: AgentState, path: Path) -> AgentState:
         max_mb = int(max_mb_env) if max_mb_env else 5
     except ValueError:
         max_mb = 5
-    raw_bytes = Path(path).read_bytes()
+    mc = get_metrics_collector()
+    with mc.time_stage('load_report.read_bytes'):
+        raw_bytes = Path(path).read_bytes()
     size_mb = len(raw_bytes) / (1024 * 1024)
     if size_mb > max_mb:
         raise ValueError(f"Report size {size_mb:.2f} MB exceeds maximum size {max_mb} MB")
@@ -77,9 +93,17 @@ def load_report(state: AgentState, path: Path) -> AgentState:
     # Canonicalize newlines (CRLF, CR -> LF)
     if '\r' in text:
         text = text.replace('\r\n', '\n').replace('\r', '\n')
-    data = json.loads(text)
+    try:
+        with mc.time_stage('load_report.json_parse'):
+            data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Report JSON parse error: {e}") from e
     state.raw_report = data
-    state.report = Report.model_validate(data)
+    try:
+        with mc.time_stage('load_report.validate'):
+            state.report = Report.model_validate(data)
+    except Exception as e:
+        raise ValueError(f"Report schema validation failed: {e}") from e
     return state
 
 
@@ -133,11 +157,13 @@ def augment(state: AgentState) -> AgentState:
         return state
     # Apply external knowledge dictionaries after base tagging
     # First pass host role classification prerequisites (we need basic tags/listeners etc) so classification after loop
-    for sr in state.report.results:
-        inferred_cat = cat_map.get(sr.scanner.lower(), sr.scanner.lower())
-        for f in sr.findings:
-            if not f.category:
-                f.category = inferred_cat
+    mc = get_metrics_collector()
+    with mc.time_stage('augment.iter_findings'):
+        for sr in state.report.results:
+            inferred_cat = cat_map.get(sr.scanner.lower(), sr.scanner.lower())
+            for f in sr.findings:
+                if not f.category:
+                    f.category = inferred_cat
             # Base tags
             base_tags = {f"scanner:{sr.scanner}", f"severity:{f.severity}"}
             # Heuristic tags
@@ -206,16 +232,19 @@ def augment(state: AgentState) -> AgentState:
                         _recompute_finding_risk(f)
     # Initial risk computation for findings lacking risk_score
     if state.report:
-        for sr in state.report.results:
-            for f in sr.findings:
-                if f.risk_subscores and f.risk_score is None:
-                    _recompute_finding_risk(f)
+        with mc.time_stage('augment.risk_recompute_initial'):
+            for sr in state.report.results:
+                for f in sr.findings:
+                    if f.risk_subscores and f.risk_score is None:
+                        _recompute_finding_risk(f)
     return state
 
 
 def correlate(state: AgentState) -> AgentState:
     # Add external knowledge enrichment pass before correlation (ensures knowledge tags in correlations)
-    state = apply_external_knowledge(state)
+    mc = get_metrics_collector()
+    with mc.time_stage('knowledge.enrichment'):
+        state = apply_external_knowledge(state)
     all_findings: List[Finding] = []
     if not state.report:
         return state
@@ -237,7 +266,10 @@ def correlate(state: AgentState) -> AgentState:
         if rid and rid in seen: continue
         merged.append(rule); seen.add(rid)
     correlator = Correlator(merged)
-    state.correlations = correlator.apply(all_findings)
+    with mc.time_stage('correlate.apply_rules'):
+        state.correlations = correlator.apply(all_findings)
+    mc.incr('correlate.rules_loaded', len(merged))
+    mc.incr('correlate.correlations', len(state.correlations))
     # back-reference correlation ids (simple example: attach first correlation id)
     corr_map = {}
     for c in state.correlations:
@@ -516,12 +548,15 @@ def reduce(state: AgentState) -> AgentState:
     if not state.report:
         return state
     all_findings: List[Finding] = [f for r in state.report.results for f in r.findings]
-    state.reductions = reduce_all(all_findings)
+    mc = get_metrics_collector()
+    with mc.time_stage('reduce.reduce_all'):
+        state.reductions = reduce_all(all_findings)
     return state
 
 
 def summarize(state: AgentState) -> AgentState:
-    client = LLMClient()
+    client = get_llm_provider()
+    governor = get_data_governor()
     cfg = load_config()
     threshold = cfg.thresholds.summarization_risk_sum
     high_med_sum = 0
@@ -535,7 +570,38 @@ def summarize(state: AgentState) -> AgentState:
             new_found = True
     skip = (high_med_sum < threshold) and (not new_found)
     prev = getattr(state, 'summaries', None)
-    state.summaries = client.summarize(state.reductions, state.correlations, state.actions, skip=skip, previous=prev, skip_reason="low_risk_no_change" if skip else None)
+    # Redact inputs before passing to provider (governance enforcement)
+    red_reductions = governor.redact_for_llm(state.reductions)
+    red_correlations = [governor.redact_for_llm(c) for c in state.correlations]
+    red_actions = [governor.redact_for_llm(a) for a in state.actions]
+    mc = get_metrics_collector()
+    with mc.time_stage('summarize.llm'):
+        state.summaries = client.summarize(red_reductions, red_correlations, red_actions, skip=skip, previous=prev, skip_reason="low_risk_no_change" if skip else None, baseline_context=None)
+    # Attach token accounting snapshot for future cost modeling
+    try:
+        from .models import TokenAccounting
+        m = state.summaries.metrics or {}
+        ta = TokenAccounting(
+            provider=os.environ.get('AGENT_LLM_PROVIDER','null'),
+            prompt_tokens=m.get('tokens_prompt',0),
+            completion_tokens=m.get('tokens_completion',0),
+            cached=bool(m.get('skipped')),
+            unit_cost_prompt=float(os.environ.get('AGENT_COST_PROMPT_PER_1K', '0') or 0)/1000.0,
+            unit_cost_completion=float(os.environ.get('AGENT_COST_COMPLETION_PER_1K','0') or 0)/1000.0,
+        )
+        est = ta.prompt_tokens * ta.unit_cost_prompt + ta.completion_tokens * ta.unit_cost_completion
+        ta.estimated_cost = round(est,6)
+        if state.enrichment_results is not None:
+            state.enrichment_results['token_accounting'] = ta.model_dump()
+        else:
+            state.enrichment_results = {'token_accounting': ta.model_dump()}
+        # Also stash into summaries.metrics for single-location retrieval
+        if state.summaries.metrics is not None:
+            state.summaries.metrics['estimated_cost'] = ta.estimated_cost
+    except Exception:
+        pass
+    # Scrub narrative fields prior to persistence/output
+    state.summaries = governor.redact_output_narratives(state.summaries)
     # ATT&CK coverage computation
     try:
         mapping = _load_attack_mapping()
@@ -567,25 +633,28 @@ def summarize(state: AgentState) -> AgentState:
                 'tag_hits': tag_hits
             }
     except Exception as e:
-        _log_error('attack_coverage', e)
+        _log_error('attack_coverage', e, state)
     # Experimental causal hypotheses
     try:
         if state.summaries:
             state.summaries.causal_hypotheses = generate_causal_hypotheses(state)
     except Exception as e:
-        _log_error('causal_hypotheses', e)
+        _log_error('causal_hypotheses', e, state)
     return state
 
 
 def actions(state: AgentState) -> AgentState:
     items: List[ActionItem] = []
     # Simple deterministic mapping examples
-    for c in state.correlations:
-        if "routing" in c.tags:
-            items.append(ActionItem(priority=len(items)+1, action="Confirm intent for routing/NAT configuration; disable if not required.", correlation_refs=[c.id]))
+    mc = get_metrics_collector()
+    with mc.time_stage('actions.build'):
+        for c in state.correlations:
+            if "routing" in c.tags:
+                items.append(ActionItem(priority=len(items)+1, action="Confirm intent for routing/NAT configuration; disable if not required.", correlation_refs=[c.id]))
     # Baseline noise example: if many SUID unexpected
     if state.reductions.suid_summary and state.reductions.suid_summary.get("unexpected_suid"):
         items.append(ActionItem(priority=len(items)+1, action="Review unexpected SUID binaries; remove SUID bit if unnecessary.", correlation_refs=[]))
+    mc.incr('actions.count', len(items))
     state.actions = items
     return state
 
@@ -603,15 +672,17 @@ def build_output(state: AgentState, raw_path: Path) -> EnrichedOutput:
                 # minimal status with sha only
                 integrity_status = {'sha256_actual': sha}
     except Exception as e:
-        _log_error('integrity_verify', e)
+        _log_error('integrity_verify', e, state, severity='error', hint='Check signature key / file permissions')
         integrity_status = {'sha256_actual': sha, 'error': 'integrity_check_failed'}
     flat_findings = []
     if state.report:
         for r in state.report.results:
             flat_findings.extend(r.findings)
     # Correlation graph metrics
-    graph_meta = annotate_and_summarize(state)
-    return EnrichedOutput(
+    mc = get_metrics_collector()
+    with mc.time_stage('graph.annotate'):
+        graph_meta = annotate_and_summarize(state)
+    out = EnrichedOutput(
         correlations=state.correlations,
         reductions=state.reductions,
         summaries=state.summaries,
@@ -624,6 +695,71 @@ def build_output(state: AgentState, raw_path: Path) -> EnrichedOutput:
     multi_host_correlation=state.multi_host_correlation or None,
     integrity=integrity_status
     )
+    if out.enrichment_results is None:
+        out.enrichment_results = {}
+    if state.agent_warnings:
+        out.enrichment_results['agent_warnings'] = state.agent_warnings
+    # Performance metrics and baseline regression detection
+    perf_snap = mc.snapshot()
+    baseline_path = os.environ.get('AGENT_PERF_BASELINE_PATH', 'artifacts/perf_baseline.json')
+    threshold_env = os.environ.get('AGENT_PERF_REGRESSION_PCT', '30')
+    try:
+        threshold = max(0.0, float(threshold_env))/100.0
+    except ValueError:
+        threshold = 0.30
+    from .metrics import MetricsCollector
+    base = MetricsCollector.load_baseline(baseline_path)
+    regressions = MetricsCollector.compare_to_baseline(perf_snap, base or {}, threshold) if base else []
+    perf_snap['baseline_regressions'] = regressions
+    perf_snap['baseline_threshold_pct'] = threshold*100
+    out.enrichment_results['perf'] = perf_snap
+    # Save current snapshot as new baseline (rolling)
+    MetricsCollector.save_baseline(baseline_path, perf_snap)
+    # Surface summary perf metrics
+    if out.summaries:
+        totals = perf_snap.get('durations', {})
+        total_time = sum(v.get('total',0) for v in totals.values())
+        slowest = None
+        slowest_time = -1
+        for stage, stats in totals.items():
+            if stats.get('total',0) > slowest_time:
+                slowest = stage
+                slowest_time = stats.get('total',0)
+        metrics_map = out.summaries.metrics or {}
+        metrics_map.update({
+            'perf.total_ms': total_time,
+            'perf.slowest_stage': slowest,
+            'perf.slowest_ms': slowest_time,
+            'perf.regression_count': len(regressions)
+        })
+        out.summaries.metrics = metrics_map
+    # Populate meta.analytics (INT-OBS-001) with concise summary (avoid large arrays)
+    try:
+        if state.report and state.report.meta:
+            if not state.report.meta.analytics:
+                state.report.meta.analytics = {}
+            # Summarize durations
+            dur_summary = {k: { 'avg_ms': round(v.get('avg',0),2), 'total_ms': v.get('total',0), 'count': v.get('count',0)} for k,v in perf_snap.get('durations', {}).items()}
+            state.report.meta.analytics.update({
+                'performance': {
+                    'durations': dur_summary,
+                    'counters': perf_snap.get('counters', {}),
+                    'regressions': perf_snap.get('baseline_regressions', []),
+                    'regression_threshold_pct': perf_snap.get('baseline_threshold_pct')
+                }
+            })
+    except Exception:
+        pass
+    # Apply deterministic canonical ordering to entire output
+    try:
+        out_dict = out.model_dump()
+        canon = canonicalize_enriched_output_dict(out_dict)
+        from .models import EnrichedOutput as _EO
+        out = _EO(**canon)
+    except Exception:
+        # On failure, fall back to original out
+        pass
+    return out
 
 
 # -----------------
