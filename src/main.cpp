@@ -9,7 +9,7 @@
 #include "core/Config.h"
 #include <fstream>
 #include "core/Privilege.h"
-#include "generated/BuildInfo.h"
+#include "BuildInfo.h" // configured header (CMake adds generated dir to include path)
 
 using namespace sys_scan;
 
