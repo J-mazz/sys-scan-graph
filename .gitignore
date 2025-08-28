@@ -1,14 +1,42 @@
+# Python virtual environments
 .venv/
 agent/.venv/
+venv/
+env/
+ENV/
+
+# Python cache and bytecode
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Python package distribution
+*.egg-info/
+dist/
+.eggs/
+
+# Python testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Python profiling
+*.cprof
+.prof
+
+# Build directories
 build/
 cmake-build-debug/
+./build/
+./build-*/
+
+# Database files
 *.sqlite*
 agent_baseline.db
-# Build directories
-/build/
-/build-*/
 
 # CMake generator files
 CMakeCache.txt
@@ -40,25 +68,41 @@ Testing/
 *.profraw
 *.profdata
 
-# Editor / OS noise
+# Editor / IDE / OS noise
 *.swp
+*.swo
+*~
 *.DS_Store
 .cache/
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 
 # Generated reports / JSON outputs
-/report.json
+./report.json
 /*_report.json
-/module_summary*.json
+./module_summary*.json
 
 # Logs
 *.log
 
-# Temporary
+# Temporary files
 *.tmp
 *.bak
+*.orig
+*.rej
 
 # Environment / secrets
 .env
 .env.*
+
+# Node.js (if used for tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
