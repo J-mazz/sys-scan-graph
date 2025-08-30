@@ -128,11 +128,11 @@ def enrich_findings(state: "GraphState") -> "GraphState":
 
         enriched: List[Dict[str, Any]] = []
         if astate.report and astate.report.results:
-            for r in astate.report.results:
-                for f in r.findings:
+            for result in astate.report.results:
+                for finding in result.findings:
                     try:
-                        enriched.append(f.model_dump())
-                    except Exception:  # pragma: no cover - defensive
+                        enriched.append(finding.model_dump())
+                    except Exception:  # pragma: no cover
                         continue
         state["enriched_findings"] = enriched
     except Exception as e:  # pragma: no cover
@@ -165,9 +165,9 @@ def summarize_host_state(state: "GraphState") -> "GraphState":
         # Prefer correlated findings; fallback to enriched
         findings_src = state.get('correlated_findings') or state.get('enriched_findings') or []
         findings_models: List[Finding] = []
-        for f in findings_src:
+        for finding_dict in findings_src:
             try:
-                findings_models.append(Finding(**{k: v for k, v in f.items() if k in Finding.model_fields}))
+                findings_models.append(Finding(**{k: v for k, v in finding_dict.items() if k in Finding.model_fields}))
             except Exception:  # pragma: no cover
                 continue
         reductions = reduce_all(findings_models)
@@ -219,9 +219,9 @@ def correlate_findings(state: "GraphState") -> "GraphState":
     try:
         from .rules import Correlator, DEFAULT_RULES  # local import to avoid circulars on module load
         findings_models: List[Finding] = []
-        for f in state.get('enriched_findings', []) or []:
+        for finding in state.get('enriched_findings', []) or []:
             try:
-                findings_models.append(Finding(**{k: v for k, v in f.items() if k in Finding.model_fields}))
+                findings_models.append(Finding(**{k: v for k, v in finding.items() if k in Finding.model_fields}))
             except Exception:  # pragma: no cover
                 continue
         sr = ScannerResult(
@@ -243,13 +243,13 @@ def correlate_findings(state: "GraphState") -> "GraphState":
         astate = AgentState(report=report)
         correlator = Correlator(DEFAULT_RULES)
         correlations = correlator.apply(findings_models)
-        # Attach correlation refs to findings
+                # Attach correlation refs to findings
         corr_map = {c.id: c for c in correlations}
         for c in correlations:
-            for f in findings_models:
-                if f.id in c.related_finding_ids and c.id not in f.correlation_refs:
-                    f.correlation_refs.append(c.id)
-        state['correlated_findings'] = [f.model_dump() for f in findings_models]
+            for finding in findings_models:
+                if finding.id in c.related_finding_ids and c.id not in finding.correlation_refs:
+                    finding.correlation_refs.append(c.id)
+        state['correlated_findings'] = [finding.model_dump() for finding in findings_models]
         state['correlations'] = [c.model_dump() for c in correlations]
     except Exception as e:  # pragma: no cover
         logger.exception("correlate_findings failed: %s", e)
@@ -336,10 +336,10 @@ async def enhanced_enrich_findings(state: "GraphState") -> "GraphState":
         astate = apply_external_knowledge(astate)
         enriched: List[Dict[str, Any]] = []
         if astate.report and astate.report.results:
-            for r in astate.report.results:
-                for f in r.findings:
+            for result in astate.report.results:
+                for finding in result.findings:
                     try:
-                        enriched.append(f.model_dump())
+                        enriched.append(finding.model_dump())
                     except Exception:  # pragma: no cover
                         continue
         state["enriched_findings"] = enriched
@@ -415,9 +415,9 @@ async def enhanced_summarize_host_state(state: "GraphState") -> "GraphState":
         provider = get_enhanced_llm_provider()
         findings_src = state.get('correlated_findings') or state.get('enriched_findings') or []
         findings_models: List[Finding] = []
-        for f in findings_src:
+        for finding_dict in findings_src:
             try:
-                findings_models.append(Finding(**{k: v for k, v in f.items() if k in Finding.model_fields}))
+                findings_models.append(Finding(**{k: v for k, v in finding_dict.items() if k in Finding.model_fields}))
             except Exception:  # pragma: no cover
                 continue
         reductions = reduce_all(findings_models)
@@ -512,17 +512,17 @@ def advanced_router(state: "GraphState") -> str:
         # Choose findings source preference
         findings = state.get('correlated_findings') or state.get('enriched_findings') or state.get('raw_findings') or []
         # 2. Compliance detection (by tag or category or metadata marker)
-        for f in findings:
-            tags = [t.lower() for t in (f.get('tags') or [])]
-            cat = str(f.get('category','')).lower()
-            if 'compliance' in tags or cat == 'compliance' or f.get('metadata',{}).get('compliance_standard'):
+        for finding in findings:
+            tags = [t.lower() for t in (finding.get('tags') or [])]
+            cat = str(finding.get('category','')).lower()
+            if 'compliance' in tags or cat == 'compliance' or finding.get('metadata',{}).get('compliance_standard'):
                 return 'compliance'
         # 3. High severity missing baseline
         high_ids = []
-        for f in findings:
-            sev = str(f.get('severity','')).lower()
+        for finding in findings:
+            sev = str(finding.get('severity','')).lower()
             if sev in {'high','critical'}:
-                high_ids.append(f.get('id'))
+                high_ids.append(finding.get('id'))
         if high_ids:
             baseline = state.get('baseline_results') or {}
             # If any high-sev id absent -> baseline
@@ -530,9 +530,9 @@ def advanced_router(state: "GraphState") -> str:
                 if hid and hid not in baseline:
                     return 'baseline'
         # 4. External data requirement (heuristic: tag 'external' or metadata flag)
-        for f in findings:
-            tags = [t.lower() for t in (f.get('tags') or [])]
-            meta = f.get('metadata',{}) or {}
+        for finding in findings:
+            tags = [t.lower() for t in (finding.get('tags') or [])]
+            meta = finding.get('metadata',{}) or {}
             if 'external_required' in tags or meta.get('requires_external') or meta.get('threat_feed_lookup'):
                 return 'risk_analysis'
         # 5. Default path
@@ -549,8 +549,8 @@ def should_suggest_rules(state: "GraphState") -> str:
     """
     try:
         enriched = state.get('enriched_findings') or []
-        for f in enriched:
-            sev = str(f.get('severity','')).lower()
+        for finding in enriched:
+            sev = str(finding.get('severity','')).lower()
             if sev == 'high':
                 return 'suggest_rules'
         try:  # pragma: no cover - library optional
@@ -571,8 +571,8 @@ def choose_post_summarize(state: "GraphState") -> str:
     try:
         if not state.get('baseline_cycle_done'):
             enriched = state.get('enriched_findings') or []
-            for f in enriched:
-                if 'baseline_status' not in f:
+            for finding in enriched:
+                if 'baseline_status' not in finding:
                     return 'plan_baseline'
         return should_suggest_rules(state)
     except Exception:  # pragma: no cover
@@ -605,17 +605,17 @@ async def tool_coordinator(state: "GraphState") -> "GraphState":
         findings = state.get('correlated_findings') or state.get('enriched_findings') or []
         pending: List[Dict[str, Any]] = []
         host_id = __import__('os').environ.get('AGENT_GRAPH_HOST_ID', 'graph_host')
-        for f in findings:
-            if 'baseline_status' not in f:  # baseline context absent
-                fid = f.get('id') or 'unknown'
+        for finding in findings:
+            if 'baseline_status' not in finding:  # baseline context absent
+                fid = finding.get('id') or 'unknown'
                 pending.append({
                     'id': f'call_{fid}',
                     'name': 'query_baseline',
                     'args': {
                         'finding_id': fid,
-                        'title': f.get('title') or '',
-                        'severity': f.get('severity') or '',
-                        'scanner': f.get('scanner') or 'mixed',
+                        'title': finding.get('title') or '',
+                        'severity': finding.get('severity') or '',
+                        'scanner': finding.get('scanner') or 'mixed',
                         'host_id': host_id,
                     }
                 })
@@ -647,16 +647,16 @@ def plan_baseline_queries(state: "GraphState") -> "GraphState":
             enriched = state.get('enriched_findings') or []
             host_id = __import__('os').environ.get('AGENT_GRAPH_HOST_ID', 'graph_host')
             derived: List[Dict[str, Any]] = []
-            for f in enriched:
-                if 'baseline_status' not in f:
+            for finding in enriched:
+                if 'baseline_status' not in finding:
                     derived.append({
-                        'id': f"call_{f.get('id') or 'unknown'}",
+                        'id': f"call_{finding.get('id') or 'unknown'}",
                         'name': 'query_baseline',
                         'args': {
-                            'finding_id': f.get('id') or 'unknown',
-                            'title': f.get('title') or '',
-                            'severity': f.get('severity') or '',
-                            'scanner': f.get('scanner') or 'mixed',
+                            'finding_id': finding.get('id') or 'unknown',
+                            'title': finding.get('title') or '',
+                            'severity': finding.get('severity') or '',
+                            'scanner': finding.get('scanner') or 'mixed',
                             'host_id': host_id,
                         }
                     })
@@ -735,11 +735,11 @@ async def risk_analyzer(state: "GraphState") -> "GraphState":
         sev_counters: Dict[str, int] = {k: 0 for k in ['critical','high','medium','low','info','unknown']}
         total_risk = 0
         risk_values: List[int] = []
-        for f in findings:
-            sev = str(f.get('severity','unknown')).lower()
+        for finding in findings:
+            sev = str(finding.get('severity','unknown')).lower()
             sev_counters[sev] = sev_counters.get(sev, 0) + 1
             try:
-                rv = int(f.get('risk_score', f.get('risk_total', 0)) or 0)
+                rv = int(finding.get('risk_score', finding.get('risk_total', 0)) or 0)
             except Exception:
                 rv = 0
             total_risk += rv
@@ -755,11 +755,11 @@ async def risk_analyzer(state: "GraphState") -> "GraphState":
         # Top 3 findings by risk score
         top = sorted([
             {
-                'id': f.get('id'),
-                'title': f.get('title'),
-                'risk_score': int(f.get('risk_score', f.get('risk_total', 0)) or 0),
-                'severity': f.get('severity'),
-            } for f in findings
+                'id': finding.get('id'),
+                'title': finding.get('title'),
+                'risk_score': int(finding.get('risk_score', finding.get('risk_total', 0)) or 0),
+                'severity': finding.get('severity'),
+            } for finding in findings
         ], key=lambda x: x['risk_score'], reverse=True)[:3]
         assessment = {
             'counts': sev_counters,
@@ -816,9 +816,9 @@ async def compliance_checker(state: "GraphState") -> "GraphState":
                 return None
             key = raw.lower().replace(' ','')
             return known_aliases.get(key)
-        for f in findings:
-            meta = f.get('metadata', {}) or {}
-            tags = [t.lower() for t in (f.get('tags') or [])]
+        for finding in findings:
+            meta = finding.get('metadata', {}) or {}
+            tags = [t.lower() for t in (finding.get('tags') or [])]
             candidates: List[str] = []
             # Explicit metadata standard
             ms = meta.get('compliance_standard')
@@ -838,7 +838,7 @@ async def compliance_checker(state: "GraphState") -> "GraphState":
                     seen.add(c); unique.append(c)
             for std in unique:
                 bucket = std_map.setdefault(std, {'finding_ids': []})
-                fid = f.get('id')
+                fid = finding.get('id')
                 if fid and fid not in bucket['finding_ids']:
                     bucket['finding_ids'].append(fid)
         # finalize counts

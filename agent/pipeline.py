@@ -161,46 +161,46 @@ def augment(state: AgentState) -> AgentState:
     with mc.time_stage('augment.iter_findings'):
         for sr in state.report.results:
             inferred_cat = cat_map.get(sr.scanner.lower(), sr.scanner.lower())
-            for f in sr.findings:
-                if not f.category:
-                    f.category = inferred_cat
-            # Base tags
-            base_tags = {f"scanner:{sr.scanner}", f"severity:{f.severity}"}
-            # Heuristic tags
-            md = f.metadata
-            if md.get("port"): base_tags.add("network_port")
-            if md.get("state") == "LISTEN": base_tags.add("listening")
-            if md.get("suid") == "true": base_tags.add("suid")
-            if md.get("module"): base_tags.add("module")
-            if md.get("sysctl_key"): base_tags.add("kernel_param")
-            if not f.tags:
-                f.tags = list(sorted(base_tags))
-            else:
-                # merge preserving existing list order
-                existing = set(f.tags)
-                for t in sorted(base_tags):
-                    if t not in existing:
-                        f.tags.append(t)
-            # Structured risk subscores initialization
-            if not f.risk_subscores:
-                exposure = 0.0
-                if any(t in f.tags for t in ["listening","suid","routing","nat"]):
-                    # exposure scoring additive, clamp later
-                    if "listening" in f.tags: exposure += 1.0
-                    if "suid" in f.tags: exposure += 1.0
-                    if any(t.startswith("network_port") for t in f.tags): exposure += 0.5
-                    if "routing" in f.tags: exposure += 0.5
-                    if "nat" in f.tags: exposure += 0.5
-                cat_key = f.category or inferred_cat or "unknown"
-                impact = float(severity_base.get(f.severity,1)) * policy_multiplier.get(cat_key,1.0)
-                anomaly = 0.0  # baseline stage will add weights
-                confidence = 1.0  # default; heuristic rules may lower
-                f.risk_subscores = {
-                    "impact": round(impact,2),
-                    "exposure": round(min(exposure,3.0),2),
-                    "anomaly": anomaly,
-                    "confidence": confidence
-                }
+            for finding in sr.findings:
+                if not finding.category:
+                    finding.category = inferred_cat
+                # Base tags
+                base_tags = {f"scanner:{sr.scanner}", f"severity:{finding.severity}"}
+                # Heuristic tags
+                md = finding.metadata
+                if md.get("port"): base_tags.add("network_port")
+                if md.get("state") == "LISTEN": base_tags.add("listening")
+                if md.get("suid") == "true": base_tags.add("suid")
+                if md.get("module"): base_tags.add("module")
+                if md.get("sysctl_key"): base_tags.add("kernel_param")
+                if not finding.tags:
+                    finding.tags = list(sorted(base_tags))
+                else:
+                    # merge preserving existing list order
+                    existing = set(finding.tags)
+                    for t in sorted(base_tags):
+                        if t not in existing:
+                            finding.tags.append(t)
+                # Structured risk subscores initialization
+                if not finding.risk_subscores:
+                    exposure = 0.0
+                    if any(t in finding.tags for t in ["listening","suid","routing","nat"]):
+                        # exposure scoring additive, clamp later
+                        if "listening" in finding.tags: exposure += 1.0
+                        if "suid" in finding.tags: exposure += 1.0
+                        if any(t.startswith("network_port") for t in finding.tags): exposure += 0.5
+                        if "routing" in finding.tags: exposure += 0.5
+                        if "nat" in finding.tags: exposure += 0.5
+                    cat_key = finding.category or inferred_cat or "unknown"
+                    impact = float(severity_base.get(finding.severity,1)) * policy_multiplier.get(cat_key,1.0)
+                    anomaly = 0.0  # baseline stage will add weights
+                    confidence = 1.0  # default; heuristic rules may lower
+                    finding.risk_subscores = {
+                        "impact": round(impact,2),
+                        "exposure": round(min(exposure,3.0),2),
+                        "anomaly": anomaly,
+                        "confidence": confidence
+                    }
     # Host role classification (second pass after initial tagging so we can count listeners etc.)
     if state.report:
         role, role_signals = classify_host_role(state.report)
@@ -234,9 +234,9 @@ def augment(state: AgentState) -> AgentState:
     if state.report:
         with mc.time_stage('augment.risk_recompute_initial'):
             for sr in state.report.results:
-                for f in sr.findings:
-                    if f.risk_subscores and f.risk_score is None:
-                        _recompute_finding_risk(f)
+                for finding in sr.findings:
+                    if finding.risk_subscores and finding.risk_score is None:
+                        _recompute_finding_risk(finding)
     return state
 
 
@@ -249,8 +249,8 @@ def correlate(state: AgentState) -> AgentState:
     if not state.report:
         return state
     for r in state.report.results:
-        for f in r.findings:
-            all_findings.append(f)
+        for finding in r.findings:
+            all_findings.append(finding)
     cfg = load_config()
     # Merge default + rule dirs (dedupe by id keeping first)
     from .rules import load_rules_dir, DEFAULT_RULES
@@ -275,8 +275,8 @@ def correlate(state: AgentState) -> AgentState:
     for c in state.correlations:
         for fid in c.related_finding_ids:
             corr_map.setdefault(fid, []).append(c.id)
-    for f in all_findings:
-        f.correlation_refs = corr_map.get(f.id, [])
+    for finding in all_findings:
+        finding.correlation_refs = corr_map.get(finding.id, [])
     return state
 
 def integrate_compliance(state: AgentState) -> AgentState:
@@ -359,58 +359,58 @@ def baseline_rarity(state: AgentState, baseline_path: Path = Path("agent_baselin
     deltas = store.update_and_diff(host_id, all_pairs)
     # Map back anomaly score
     for sr in state.report.results:
-        for f in sr.findings:
+        for finding in sr.findings:
             from .baseline import hashlib_sha
-            h = f.identity_hash()
+            h = finding.identity_hash()
             comp = hashlib_sha(sr.scanner, h)
             d = deltas.get(comp)
-            if not f.risk_subscores:
+            if not finding.risk_subscores:
                 continue
             # Anomaly weighting: new +2, existing changed +1 else decay
             rationale_bits = []
             if d:
                 if d["status"] == "new":
-                    f.risk_subscores["anomaly"] = 2.0
-                    if "baseline:new" not in f.tags:
-                        f.tags.append("baseline:new")
-                    f.baseline_status = "new"
+                    finding.risk_subscores["anomaly"] = 2.0
+                    if "baseline:new" not in finding.tags:
+                        finding.tags.append("baseline:new")
+                    finding.baseline_status = "new"
                     rationale_bits.append("new finding (anomaly +2)")
                 else:
                     prev = d.get("prev_seen_count", 1)
                     # Changed vs stable heuristic: if prev_seen_count just incremented from 1->2 treat as +1 else decay
                     if prev <= 2:
-                        f.risk_subscores["anomaly"] = 1.0
-                        f.baseline_status = "recent"
+                        finding.risk_subscores["anomaly"] = 1.0
+                        finding.baseline_status = "recent"
                         rationale_bits.append("recent finding (anomaly +1)")
                     else:
-                        f.risk_subscores["anomaly"] = round(max(0.1, 1.0 / (prev)), 2)
-                        f.baseline_status = "existing"
-                        rationale_bits.append(f"established finding (anomaly {f.risk_subscores['anomaly']})")
+                        finding.risk_subscores["anomaly"] = round(max(0.1, 1.0 / (prev)), 2)
+                        finding.baseline_status = "existing"
+                        rationale_bits.append(f"established finding (anomaly {finding.risk_subscores['anomaly']})")
                         if prev >= 5:
                             # Very common => tag and downweight anomaly further contextually
-                            if 'baseline:common' not in f.tags:
-                                f.tags.append('baseline:common')
+                            if 'baseline:common' not in finding.tags:
+                                finding.tags.append('baseline:common')
                             rationale_bits.append('very common baseline occurrence')
             # Confidence adjustment (placeholder): if only pattern-based IOC (tag contains 'ioc-pattern') lower confidence
-            if any(t.startswith("ioc-pattern") for t in f.tags):
-                f.risk_subscores["confidence"] = min(f.risk_subscores.get("confidence",1.0), 0.7)
+            if any(t.startswith("ioc-pattern") for t in finding.tags):
+                finding.risk_subscores["confidence"] = min(finding.risk_subscores.get("confidence",1.0), 0.7)
                 rationale_bits.append("heuristic IOC pattern (confidence down)")
             # Calibrated risk using weights
             weights = load_persistent_weights()
-            score, raw = compute_risk(f.risk_subscores, weights)
-            f.risk_score = score
-            f.risk_subscores["_raw_weighted_sum"] = round(raw,3)
-            f.probability_actionable = apply_probability(raw)
+            score, raw = compute_risk(finding.risk_subscores, weights)
+            finding.risk_score = score
+            finding.risk_subscores["_raw_weighted_sum"] = round(raw,3)
+            finding.probability_actionable = apply_probability(raw)
             # Impact & exposure rationale
-            impact = f.risk_subscores.get("impact")
-            exposure = f.risk_subscores.get("exposure")
+            impact = finding.risk_subscores.get("impact")
+            exposure = finding.risk_subscores.get("exposure")
             rationale_bits.insert(0, f"impact={impact}")
             rationale_bits.insert(1, f"exposure={exposure}")
-            if not f.rationale:
-                f.rationale = rationale_bits
+            if not finding.rationale:
+                finding.rationale = rationale_bits
             else:
-                f.rationale.extend(rationale_bits)
-            f.risk_total = f.risk_score
+                finding.rationale.extend(rationale_bits)
+            finding.risk_total = finding.risk_score
             # Log calibration observation (raw sum) for future supervised tuning
             if state.report and state.report.meta and state.report.meta.scan_id:
                 comp_hash = comp  # composite hash from earlier

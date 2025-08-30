@@ -64,8 +64,8 @@ def annotate_and_summarize(state: AgentState) -> Dict:
     # Build lookup for findings objects
     fid_to_obj: Dict[str, Finding] = {}
     for sr in state.report.results:
-        for f in sr.findings:
-            fid_to_obj[f.id] = f
+        for finding in sr.findings:
+            fid_to_obj[finding.id] = finding
     # Degree centrality & hub marking
     for fid, corr_ids in f2c.items():
         if fid in fid_to_obj:
