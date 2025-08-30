@@ -28,6 +28,7 @@ jobs:
           languages: ${{ matrix.language }}
       - name: Build
         run: |
+          sudo apt-get update && sudo apt-get install -y libbpf-dev linux-tools-common
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
           cmake --build build -j$(nproc)
       - name: Perform CodeQL Analysis
