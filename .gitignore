@@ -58,6 +58,7 @@ Testing/
 # Temporary
 *.tmp
 *.bak
+*.backup
 
 # Environment / secrets
 .env

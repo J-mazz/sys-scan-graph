@@ -81,14 +81,29 @@ void ModuleScanner::scan(Report& report) {
         if(n.size()==1) return true; if(n[0]=='.' && n.size()>1 && std::isdigit((unsigned char)n[1]) && std::isdigit((unsigned char)n.back())) return true; return false; };
     auto read_file_prefix = [](const std::string& p, size_t max_bytes){ std::ifstream f(p, std::ios::binary); if(!f) return std::string(); std::string data; data.resize(max_bytes); f.read(&data[0], max_bytes); data.resize(f.gcount()); return data; };
     auto read_file_all = [](const std::string& p){ std::ifstream f(p, std::ios::binary); if(!f) return std::string(); std::ostringstream oss; oss<<f.rdbuf(); return oss.str(); };
+    // Bounded streaming decompression helpers (defense-in-depth against oversized / malicious inputs)
+    const size_t MAX_COMPRESSED_SIZE = 4 * 1024 * 1024;      // 4MB compressed input hard cap
+    const size_t MAX_DECOMPRESSED_SIZE = 2 * 1024 * 1024;    // 2MB decompressed output cap (heuristic sufficient for signature scan)
+
     auto decompress_xz = [&](const std::string& full)->std::string{
 #ifdef SYS_SCAN_HAVE_LZMA
-    std::ifstream f(full, std::ios::binary); if(!f) return {}; std::string raw((std::istreambuf_iterator<char>(f)), {});
-    if(raw.empty()) return {};
+    std::ifstream f(full, std::ios::binary); if(!f) return {};
+    // Peek size (if possible) to early abort huge files
+    f.seekg(0, std::ios::end); std::streamoff sz = f.tellg(); if(sz > 0 && (size_t)sz > MAX_COMPRESSED_SIZE) { return {}; }
+    f.seekg(0, std::ios::beg);
     lzma_stream strm = LZMA_STREAM_INIT; if(lzma_stream_decoder(&strm, UINT64_MAX, 0)!=LZMA_OK) return {};
     std::string out; out.reserve(65536);
-    strm.next_in = reinterpret_cast<const uint8_t*>(raw.data()); strm.avail_in = raw.size(); uint8_t buf[8192];
-    while(true){ strm.next_out = buf; strm.avail_out = sizeof(buf); auto rc = lzma_code(&strm, LZMA_FINISH); size_t produced = sizeof(buf)-strm.avail_out; out.append(reinterpret_cast<char*>(buf), produced); if(rc==LZMA_STREAM_END) break; if(rc!=LZMA_OK){ out.clear(); break; } if(out.size()>2*1024*1024) break; }
+    uint8_t inbuf[8192]; uint8_t outbuf[8192];
+    lzma_action action = LZMA_RUN;
+    while(true){
+        if(strm.avail_in == 0){ f.read(reinterpret_cast<char*>(inbuf), sizeof(inbuf)); std::streamsize got = f.gcount(); if(got <= 0){ action = LZMA_FINISH; } else { strm.next_in = inbuf; strm.avail_in = (size_t)got; } }
+        strm.next_out = outbuf; strm.avail_out = sizeof(outbuf);
+        auto rc = lzma_code(&strm, action);
+        size_t produced = sizeof(outbuf) - strm.avail_out; if(produced) out.append(reinterpret_cast<char*>(outbuf), produced);
+        if(out.size() > MAX_DECOMPRESSED_SIZE){ break; }
+        if(rc == LZMA_STREAM_END) break; if(rc != LZMA_OK && rc != LZMA_STREAM_END){ out.clear(); break; }
+        if(action == LZMA_FINISH && rc != LZMA_OK && rc != LZMA_STREAM_END){ out.clear(); break; }
+    }
     lzma_end(&strm); return out;
 #else
     (void)full; return std::string();
@@ -96,7 +111,7 @@ void ModuleScanner::scan(Report& report) {
     };
     auto decompress_gz = [&](const std::string& full)->std::string{
 #ifdef SYS_SCAN_HAVE_ZLIB
-    gzFile g = gzopen(full.c_str(), "rb"); if(!g) return {}; std::string out; out.reserve(65536); char buf[8192]; int n; while((n=gzread(g, buf, sizeof(buf)))>0){ out.append(buf, n); if(out.size()>2*1024*1024) break; } gzclose(g); return out;
+    gzFile g = gzopen(full.c_str(), "rb"); if(!g) return {}; std::string out; out.reserve(65536); char buf[8192]; int n; size_t total_in=0; while((n=gzread(g, buf, sizeof(buf)))>0){ out.append(buf, n); total_in += (size_t)n; if(out.size()>MAX_DECOMPRESSED_SIZE) break; if(total_in > MAX_COMPRESSED_SIZE) { out.clear(); break; } } gzclose(g); return out;
 #else
     (void)full; return std::string();
 #endif
@@ -122,7 +137,7 @@ void ModuleScanner::scan(Report& report) {
                 std::string contents;
                 if(path.rfind(".ko.xz") == path.size()-6) contents = decompress_xz(full); else contents = decompress_gz(full);
                 if(contents.empty()){
-                    report.add_warning(this->name(), std::string("decompress_fail:")+path);
+                    report.add_warning(this->name(), WarnCode::DecompressFail, path);
                 } else {
                     ++compressed_scanned; if(contents.find("Module signature appended")==std::string::npos){ unsigned_mod=true; ++compressed_unsigned; if(compressed_unsigned_sample.size()<unsigned_sample_limit) compressed_unsigned_sample.push_back(name); }
                 }

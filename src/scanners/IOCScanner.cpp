@@ -117,7 +117,7 @@ void IOCScanner::scan(Report& report) {
     std::vector<std::string> temp_roots = {"/tmp", "/dev/shm"};
     for(auto& root : temp_roots){
         std::error_code ec;
-        for(auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec){ report.add_warning(this->name(), std::string("walk_error:")+root+":"+ec.message()); break; } const auto& p = it->path(); if(!it->is_regular_file(ec)) continue; if(is_executable(p)){ Finding f; f.id = p.string(); f.title = "Executable in temp"; f.severity=Severity::High; f.description="Executable file located in temporary directory"; f.metadata["rule"] = "executable_in_temp"; report.add_finding(this->name(), std::move(f)); } }
+    for(auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec){ report.add_warning(this->name(), WarnCode::WalkError, root+":"+ec.message()); break; } const auto& p = it->path(); if(!it->is_regular_file(ec)) continue; if(is_executable(p)){ Finding f; f.id = p.string(); f.title = "Executable in temp"; f.severity=Severity::High; f.description="Executable file located in temporary directory"; f.metadata["rule"] = "executable_in_temp"; report.add_finding(this->name(), std::move(f)); } }
     }
     // Heuristic 3: Unexpected SUID in home directories
     for(const auto& entry : fs::directory_iterator("/home", fs::directory_options::skip_permission_denied)){

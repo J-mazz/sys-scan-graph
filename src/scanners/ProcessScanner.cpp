@@ -36,10 +36,7 @@ void ProcessScanner::scan(Report& report) {
         if(!std::all_of(name.begin(), name.end(), ::isdigit)) continue;
         std::string status_path = entry.path().string() + "/status";
         std::ifstream ifs(status_path);
-        if(!ifs){
-            report.add_warning(this->name(), std::string("proc_unreadable_status:")+status_path);
-            continue;
-        }
+    if(!ifs){ report.add_warning(this->name(), WarnCode::ProcUnreadableStatus, status_path); continue; }
         std::string line;
         std::string uid;
         std::string gid;
@@ -52,7 +49,7 @@ void ProcessScanner::scan(Report& report) {
     std::string cmdline_path = entry.path().string() + "/cmdline";
     std::ifstream cfs(cmdline_path, std::ios::binary);
     std::string cmd;
-    if(cfs){ std::string raw; std::getline(cfs, raw, '\0'); cmd = raw; } else { report.add_warning(this->name(), std::string("proc_unreadable_cmdline:")+cmdline_path); }
+    if(cfs){ std::string raw; std::getline(cfs, raw, '\0'); cmd = raw; } else { report.add_warning(this->name(), WarnCode::ProcUnreadableCmdline, cmdline_path); }
     extern int severity_rank(const std::string&); // silence unused in this file
     if(cmd.empty() && !config().all_processes) continue; // skip kernel threads unless flag set
     // Additional noise reduction: skip bracketed names when no cmd or special states.
@@ -90,7 +87,7 @@ void ProcessScanner::scan(Report& report) {
                 f.metadata["sha256"] = "(disabled - OpenSSL not found)";
 #endif
             } else {
-                report.add_warning(this->name(), std::string("proc_exe_symlink_unreadable:")+exe_link.string());
+                report.add_warning(this->name(), WarnCode::ProcExeSymlinkUnreadable, exe_link.string());
             }
             }
             report.add_finding(this->name(), std::move(f));

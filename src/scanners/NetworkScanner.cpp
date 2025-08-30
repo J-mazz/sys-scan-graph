@@ -78,7 +78,7 @@ static bool state_allowed(const std::string& st){
 struct FanoutAgg { size_t total=0; std::unordered_set<std::string> remote_ips; unsigned privileged_listen=0; unsigned wildcard_listen=0; };
 
 static void parse_tcp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>>& inode_map, size_t& emitted, std::unordered_map<std::string, FanoutAgg>* fanout){
-    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, std::string("net_file_unreadable:")+path); return; } std::string header; std::getline(ifs, header);
+    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, WarnCode::NetFileUnreadable, path); return; } std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; // quick filter
         // tokenize by whitespace (variable spacing)
@@ -137,7 +137,7 @@ static std::string classify_udp_severity(unsigned port, const std::string& exe){
 }
 
 static void parse_udp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>>& inode_map, size_t& emitted){
-    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, std::string("net_file_unreadable:")+path); return; } std::string header; std::getline(ifs, header);
+    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, WarnCode::NetFileUnreadable, path); return; } std::string header; std::getline(ifs, header);
     std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
         ++line_no; if(line.find(':')==std::string::npos) continue; std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
     if(tok.size() < 10){ if(config().network_debug){ Finding dbg; dbg.id=proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw udp line"; dbg.severity=Severity::Info; dbg.description="Unparsed UDP line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }

@@ -33,7 +33,15 @@
             },"additionalProperties": true}}
         },"additionalProperties": true}
     },
-    "collection_warnings": {"type":"array","items":{"type":"object","required":["scanner","message"],"properties":{"scanner":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false}},
+    "collection_warnings": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {"type":"object","required":["scanner","code"],"properties":{"scanner":{"type":"string"},"code":{"type":"string"},"detail":{"type":"string"}},"additionalProperties":false},
+          {"type":"object","required":["scanner","message"],"properties":{"scanner":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false}
+        ]
+      }
+    },
     "scanner_errors": {"type":"array","items":{"type":"object","required":["scanner","message"],"properties":{"scanner":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false}},
     "summary_extension": {"type":"object","required":["total_risk_score"],"properties":{"total_risk_score":{"type":"integer"}},"additionalProperties":true}
   },

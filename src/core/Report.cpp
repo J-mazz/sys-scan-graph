@@ -18,8 +18,11 @@ void Report::add_finding(const std::string& scanner, Finding finding) {
     auto it = std::find_if(results_.begin(), results_.end(), [&](auto& r){ return r.scanner_name == scanner; });
     if(it != results_.end()) {
     if(config().rules_enable){ rule_engine().apply(scanner, finding); }
+    // Early severity filter
+    int minRank = severity_rank(config().min_severity);
+    if(severity_rank_enum(finding.severity) < minRank){ return; }
     finding.risk_score = severity_risk_score(finding.severity);
-        it->findings.push_back(std::move(finding));
+    it->findings.push_back(std::move(finding));
     }
 }
 
@@ -36,9 +39,26 @@ void Report::end_scanner(const std::string& name) {
     }
 }
 
-void Report::add_warning(const std::string& scanner, const std::string& message){
+static std::string warn_code_string(WarnCode c){
+    switch(c){
+        case WarnCode::DecompressFail: return "decompress_fail";
+        case WarnCode::ParamUnreadable: return "param_unreadable";
+        case WarnCode::ProcUnreadableStatus: return "proc_unreadable_status";
+        case WarnCode::ProcUnreadableCmdline: return "proc_unreadable_cmdline";
+        case WarnCode::ProcExeSymlinkUnreadable: return "proc_exe_symlink_unreadable";
+        case WarnCode::NetFileUnreadable: return "net_file_unreadable";
+        case WarnCode::WalkError: return "walk_error";
+        case WarnCode::MountsUnreadable: return "mounts_unreadable";
+        case WarnCode::Generic: default: return "generic";
+    }
+}
+
+void Report::add_warning(const std::string& scanner, WarnCode code, const std::string& detail){
     std::lock_guard<std::mutex> lock(mutex_);
-    warnings_.emplace_back(scanner, message);
+    // encode as simple json-ish key=value pairs for downstream writer (avoid pulling full JSON lib here)
+    std::string payload = warn_code_string(code);
+    if(!detail.empty()) payload += ":" + detail; // detail may contain path; caller responsible for sanitization
+    warnings_.emplace_back(scanner, payload);
 }
 
 void Report::add_error(const std::string& scanner, const std::string& message){
