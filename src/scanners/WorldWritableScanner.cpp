@@ -23,7 +23,7 @@ void WorldWritableScanner::scan(Report& report) {
     auto should_exclude = [&](const std::string& p){ for(const auto& pat : config().world_writable_exclude) if(p.find(pat)!=std::string::npos) return true; return false; };
     size_t ww_count=0; int ww_limit = config().fs_world_writable_limit;
     for(const auto& d: dirs){ std::error_code ec; for(auto it = fs::recursive_directory_iterator(d, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it) {
-            if(ec){ report.add_warning(this->name(), std::string("walk_error:")+ d +":"+ ec.message()); break; }
+            if(ec){ report.add_warning(this->name(), WarnCode::WalkError, d+":"+ec.message()); break; }
             const auto& p = it->path(); if(!it->is_regular_file(ec)) continue; std::string ps = p.string(); if(should_exclude(ps)) continue; if(utils::is_world_writable(ps)) {
                 if(ww_limit>0 && static_cast<int>(ww_count) >= ww_limit) { continue; }
                 Finding f; f.id = ps; f.title = "World-writable file"; f.severity=Severity::Medium; f.description="File is world writable"; if(ps.find("/tmp/")!=std::string::npos) f.severity=Severity::Low; if(ps.find(".so")!=std::string::npos || ps.find("/bin/")!=std::string::npos) f.severity=Severity::High; report.add_finding(this->name(), std::move(f)); ++ww_count; }

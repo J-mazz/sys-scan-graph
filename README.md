@@ -170,6 +170,12 @@ Intelligence Layer adds: enrichment, multi-signal correlation, temporal & cross-
 
 Output includes: `meta`, `summary`, `results[]`, `collection_warnings[]`, `scanner_errors[]`, `summary_extension` (risk sums). Canonical mode produces stable RFC8785-like ordering for hashing & attestation.
 
+`collection_warnings` structure (v2 schema compatible):
+* New format (preferred): `{ "scanner": "modules", "code": "decompress_fail", "detail": "/lib/modules/..." }`
+* Legacy format (still accepted): `{ "scanner": "modules", "message": "decompress_fail:/lib/modules/..." }`
+
+The schema (`schema/v2.json`) was updated with a `oneOf` to allow both so downstream tooling can migrate gradually. When both `code` and `message` forms are absent or mixed, the entry is invalid. Future enriched / agent layers should normalize to the new form.
+
 Key capabilities powered or exposed via the LangGraph mode:
 * Explicit DAG stages: load → validate (schema) → augment → correlate → baseline rarity → reduce → summarize (LLM‑gated) → actions → output.
 * Per‑node checkpointing (`--checkpoint-dir`) writes JSON snapshots of evolving agent state for audit & troubleshooting.
@@ -211,6 +217,29 @@ Environment knobs:
 * `AGENT_MAX_REPORT_MB` – ingestion size guard (default 5MB).
 * `AGENT_PERF_REGRESSION_PCT` – performance regression threshold (default 30%).
 * `AGENT_LOAD_HF_CORPUS=1` – opt‑in external corpus metrics enrichment (if deps available).
+
+### LLM Provider Architecture (Async-Safe Fallback Chain)
+The enhanced LLM layer (`agent/llm_provider.py`) implements a multi-provider fallback chain (LangChain/OpenAI/Anthropic/null) with:
+* Synchronous public API (pipeline remains sync) while safely executing async provider methods.
+* Event‑loop detection: if no loop is running we `asyncio.run` the coroutine; if a loop is already active (e.g. inside LangGraph) we spin up a lightweight helper thread with its own loop to await the coroutine (avoids nested `asyncio.run` errors).
+* Fallback + retry logic: each operation (summarize / refine_rules / triage) reselects the highest priority available provider; failures prune that provider and continue until success or exhaustion (then null provider is used).
+* Transparent caching keyed on serialized arguments to short‑circuit duplicate summarize calls.
+* Metrics: counts of calls, fallbacks, cache hits, token usage (if provider emits token metrics) exposed via `get_metrics()`.
+* Deterministic behavior when no external provider is configured (null provider returns a structured summary with zero tokens & latency).
+
+Implementation Notes:
+* The previous design used nested `asyncio.run`, which can deadlock or raise when invoked under an existing loop. The refactor introduced `_run_coro_blocking` and `_execute_with_fallback_sync` eliminating that risk.
+* Providers may expose either sync or async methods; the wrapper normalizes them so the pipeline does not need `await`.
+* You can extend providers by adding a new initializer in `_initialize_providers` and updating operation priority lists in `_select_provider`.
+
+### Performance Baseline & Regression Detection
+`MetricsCollector` adds lightweight perf tracking:
+* `snapshot()` – capture current counters and durations.
+* `save_baseline(path, snapshot)` / `load_baseline(path)` – persist / retrieve JSON (directory auto-created).
+* `compare_to_baseline(current, baseline, threshold)` – compute per-stage regressions (list values averaged) where `current > baseline * (1 + threshold)`.
+* Output assembly records regression count + slowest stage summary (`perf.regression_count`, `perf.slowest_ms`).
+
+Use this to fail CI on unexpected slowdowns without altering functional output determinism.
 
 All enrichment logic is additive; the Core scanner output format is not modified. If you only need raw deterministic scanning, ignore `agent/` entirely.
 

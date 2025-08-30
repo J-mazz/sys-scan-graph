@@ -77,11 +77,50 @@ static CanonVal build_canonical(const Report& report, long long total_risk_all, 
     put_str(prov,"slsa_level", slsa);
     put_str(prov,"build_type", env_or("SYS_SCAN_PROV_BUILD_TYPE", buildinfo::BUILD_TYPE));
     meta.obj["provenance"] = std::move(prov);
+    // Append effective_config (selected sanitized fields) for transparency
+    {
+        const auto& cfg = config();
+        CanonVal ec{CanonVal::T_OBJ};
+        auto put_bool=[&](const std::string& k,bool v){ ec.obj[k].type=CanonVal::T_STR; ec.obj[k].str = v?"true":"false"; };
+        auto put_numec=[&](const std::string& k,long long v){ ec.obj[k].type=CanonVal::T_NUM; ec.obj[k].str=std::to_string(v); };
+        auto put_strec=[&](const std::string& k,const std::string& v){ if(!v.empty()){ ec.obj[k].type=CanonVal::T_STR; ec.obj[k].str=v; } };
+        put_strec("min_severity", cfg.min_severity);
+        put_strec("fail_on_severity", cfg.fail_on_severity);
+        put_bool("canonical", cfg.canonical);
+        put_bool("ndjson", cfg.ndjson);
+        put_bool("sarif", cfg.sarif);
+        put_bool("pretty", cfg.pretty);
+        put_bool("compact", cfg.compact);
+        put_bool("rules_enable", cfg.rules_enable);
+        put_bool("integrity", cfg.integrity);
+        put_bool("integrity_pkg_verify", cfg.integrity_pkg_verify);
+        put_bool("integrity_pkg_rehash", cfg.integrity_pkg_rehash);
+        put_numec("integrity_pkg_rehash_limit", cfg.integrity_pkg_rehash_limit);
+        put_bool("modules_hash", cfg.modules_hash);
+        put_bool("modules_summary_only", cfg.modules_summary_only);
+        put_bool("modules_anomalies_only", cfg.modules_anomalies_only);
+        put_bool("fs_hygiene", cfg.fs_hygiene);
+        put_numec("fs_world_writable_limit", cfg.fs_world_writable_limit);
+        put_bool("process_inventory", cfg.process_inventory);
+        put_bool("ioc_exec_trace", cfg.ioc_exec_trace);
+        put_numec("ioc_exec_trace_seconds", cfg.ioc_exec_trace_seconds);
+        put_bool("ioc_env_trust", cfg.ioc_env_trust);
+        put_bool("parallel", cfg.parallel);
+        put_numec("parallel_max_threads", cfg.parallel_max_threads);
+        put_bool("containers", cfg.containers);
+        put_bool("hardening", cfg.hardening);
+        put_bool("seccomp", cfg.seccomp);
+        put_bool("seccomp_strict", cfg.seccomp_strict);
+        put_bool("compliance", cfg.compliance);
+        meta.obj["effective_config"] = std::move(ec);
+    }
     root.obj["meta"]=std::move(meta); CanonVal summary{CanonVal::T_OBJ}; put_num(summary,"duration_ms",duration_ms); size_t emitted_total=0; double fps=(duration_ms>0)?(0*1000.0/duration_ms):0.0; // placeholder, recomputed later
  { std::ostringstream tmp; tmp.setf(std::ios::fixed); tmp<<std::setprecision(2)<<fps; std::string s=tmp.str(); if(s.size()>1){ while(s.size()>1 && s.back()=='0') s.pop_back(); if(!s.empty()&&s.back()=='.') s.push_back('0'); } summary.obj["findings_per_second"].type=CanonVal::T_NUM; summary.obj["findings_per_second"].str=s; }
  put_num(summary,"finding_count_total", finding_total_all); put_num(summary,"finding_count_emitted", 0); put_str(summary,"finished_at", time_to_iso(latest)); put_str(summary,"scanner_count", std::to_string(report.results().size())); put_num(summary,"scanners_with_findings", scanners_with_findings); CanonVal sev_all{CanonVal::T_OBJ}; for(const auto& kv: severity_counts_all){ put_num(sev_all, kv.first, kv.second);} summary.obj["severity_counts"]=std::move(sev_all); CanonVal sev_emit{CanonVal::T_OBJ}; for(const auto& kv: severity_counts_emitted){ put_num(sev_emit, kv.first, kv.second);} summary.obj["severity_counts_emitted"]=std::move(sev_emit); CanonVal slow{CanonVal::T_OBJ}; put_str(slow,"elapsed_ms", std::to_string(slowest_ms)); put_str(slow,"name", slowest_name); summary.obj["slowest_scanner"]=std::move(slow); put_str(summary,"started_at", time_to_iso(earliest)); root.obj["summary"]=std::move(summary); CanonVal res_arr{CanonVal::T_ARR}; for(const auto& r: report.results()){ CanonVal rs{CanonVal::T_OBJ}; put_str(rs,"scanner", r.scanner_name); put_str(rs,"start_time", zero_time?"":time_to_iso(r.start_time)); put_str(rs,"end_time", zero_time?"":time_to_iso(r.end_time)); long long elapsed_ms=0; if(!zero_time && r.start_time.time_since_epoch().count() && r.end_time.time_since_epoch().count() && r.end_time>=r.start_time) elapsed_ms=std::chrono::duration_cast<std::chrono::milliseconds>(r.end_time-r.start_time).count(); put_num(rs,"elapsed_ms", elapsed_ms); std::vector<const Finding*> filtered; for(const auto& f: r.findings){ if(severity_rank(config().min_severity)<=severity_rank_enum(f.severity)) filtered.push_back(&f);} put_num(rs,"finding_count", filtered.size()); emitted_total += filtered.size(); CanonVal findings_arr{CanonVal::T_ARR}; for(const auto* fp: filtered){ const auto& f=*fp; CanonVal fv{CanonVal::T_OBJ}; put_str(fv,"description", f.description); put_str(fv,"id", f.id); put_str(fv,"risk_score", std::to_string(f.risk_score)); put_str(fv,"severity", severity_to_string(f.severity)); put_str(fv,"title", f.title); CanonVal meta_md{CanonVal::T_OBJ}; std::vector<std::pair<std::string,std::string>> meta_sorted(f.metadata.begin(), f.metadata.end()); std::sort(meta_sorted.begin(), meta_sorted.end(),[](auto&a,auto&b){ return a.first<b.first;}); for(const auto& kv: meta_sorted){ put_str(meta_md, kv.first, kv.second);} fv.obj["metadata"]=std::move(meta_md); findings_arr.arr.push_back(std::move(fv)); } rs.obj["findings"]=std::move(findings_arr); res_arr.arr.push_back(std::move(rs)); } root.obj["results"]=std::move(res_arr); // patch in emitted totals
  put_num(root.obj["summary"],"finding_count_emitted", emitted_total); if(duration_ms>0){ double fps2 = emitted_total*1000.0/duration_ms; std::ostringstream tmp; tmp.setf(std::ios::fixed); tmp<<std::setprecision(2)<<fps2; std::string s=tmp.str(); while(s.size()>1 && s.back()=='0') s.pop_back(); if(!s.empty()&&s.back()=='.') s.push_back('0'); root.obj["summary"].obj["findings_per_second"].str=s; }
- CanonVal warns{CanonVal::T_ARR}; for(const auto& w: report.warnings()){ CanonVal wv{CanonVal::T_OBJ}; put_str(wv,"message", w.second); put_str(wv,"scanner", w.first); warns.arr.push_back(std::move(wv)); } root.obj["collection_warnings"]=std::move(warns); CanonVal errs{CanonVal::T_ARR}; for(const auto& e: report.errors()){ CanonVal ev{CanonVal::T_OBJ}; put_str(ev,"message", e.second); put_str(ev,"scanner", e.first); errs.arr.push_back(std::move(ev)); } root.obj["scanner_errors"]=std::move(errs); CanonVal se{CanonVal::T_OBJ}; put_num(se,"total_risk_score", total_risk_all); put_num(se,"emitted_risk_score", emitted_risk); root.obj["summary_extension"]=std::move(se);
+ CanonVal warns{CanonVal::T_ARR}; for(const auto& w: report.warnings()){ CanonVal wv{CanonVal::T_OBJ}; // w.second format: code[:detail]
+     auto pos = w.second.find(':'); std::string code = (pos==std::string::npos)? w.second : w.second.substr(0,pos); std::string detail = (pos==std::string::npos)? "" : w.second.substr(pos+1);
+     put_str(wv,"code", code); if(!detail.empty()) put_str(wv,"detail", detail); put_str(wv,"scanner", w.first); warns.arr.push_back(std::move(wv)); } root.obj["collection_warnings"]=std::move(warns); CanonVal pwarns{CanonVal::T_ARR}; for(const auto& w: report.partial_warnings()){ CanonVal wv{CanonVal::T_OBJ}; put_str(wv,"message", w.second); put_str(wv,"scanner", w.first); pwarns.arr.push_back(std::move(wv)); } if(!pwarns.arr.empty()) root.obj["partial_warnings"]=std::move(pwarns); CanonVal errs{CanonVal::T_ARR}; for(const auto& e: report.errors()){ CanonVal ev{CanonVal::T_OBJ}; put_str(ev,"message", e.second); put_str(ev,"scanner", e.first); errs.arr.push_back(std::move(ev)); } root.obj["scanner_errors"]=std::move(errs); CanonVal se{CanonVal::T_OBJ}; put_num(se,"total_risk_score", total_risk_all); put_num(se,"emitted_risk_score", emitted_risk); root.obj["summary_extension"]=std::move(se);
  // compliance_summary
  if(!report.compliance_summary().empty()) {
      CanonVal comp{CanonVal::T_OBJ};

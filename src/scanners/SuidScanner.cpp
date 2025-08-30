@@ -24,7 +24,7 @@ void SuidScanner::scan(Report& report) {
         for(auto it = fs::recursive_directory_iterator(r, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it) {
             if(ec){
                 // Record traversal issue then stop descending this root to avoid spam
-                report.add_warning(this->name(), std::string("walk_error:")+ r +":"+ ec.message());
+                report.add_warning(this->name(), WarnCode::WalkError, r+":"+ec.message());
                 break;
             }
             if(!it->is_regular_file(ec)) continue; const auto& path = it->path();

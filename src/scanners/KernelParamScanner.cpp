@@ -16,8 +16,7 @@ void KernelParamScanner::scan(Report& report) {
     for(auto& it: items){
         std::ifstream ifs(it.path);
         if(!ifs){
-            // Emit a collection warning for missing/inaccessible kernel param (could indicate hardened kernel or permission issue)
-            report.add_warning(this->name(), std::string("param_unreadable:") + it.path);
+            report.add_warning(this->name(), WarnCode::ParamUnreadable, it.path);
             continue;
         }
         std::string val; std::getline(ifs, val);

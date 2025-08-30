@@ -3,6 +3,9 @@
 All notable changes will be documented in this file.
 
 ## [Unreleased]
+
+### Added
+- Structured collection_warnings entries now emit `code` and optional `detail` fields (replacing prior `message`). Schema v2 updated to accept either legacy `{scanner,message}` objects or new `{scanner,code,detail?}` objects for backward compatibility. Downstream consumers should prefer `code` when present.
 ### Added
  - Dual metrics & risk scoring: `finding_count_total` vs `finding_count_emitted`, `severity_counts` vs `severity_counts_emitted`, and `emitted_risk_score` in `summary_extension`.
  - Provenance metadata block (`meta.provenance`) with compiler id/version, git commit, cxx standard, cxx flags, build type, SLSA level (baked & runtime override via `--slsa-level`).

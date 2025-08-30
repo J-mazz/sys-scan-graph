@@ -27,7 +27,7 @@ void MountScanner::scan(Report& report){
     if(!cfg.hardening) return; // opt-in
 
     std::ifstream f("/proc/mounts");
-    if(!f.is_open()) { report.add_warning(name(), "Cannot open /proc/mounts"); return; }
+    if(!f.is_open()) { report.add_warning(name(), WarnCode::MountsUnreadable, "/proc/mounts"); return; }
     std::string line;
 
     std::unordered_set<std::string> sensitive = {"/", "/home", "/tmp", "/var", "/var/tmp", "/boot", "/efi"};
