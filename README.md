@@ -70,10 +70,10 @@ NDJSON stream (grep only findings):
 | Kernel Modules | Loaded & filesystem state | Unsigned, out‑of‑tree, missing file, hidden vs sysfs, compressed .ko scan |
 | World Writable | Directories & files | Writable risk surfaces & path hijack potential |
 | SUID/SGID | Privileged binaries | Unexpected SUID set, baseline expected set downgrade |
-| IOC | Execution context | ld.so.preload abuse, deleted binaries, env risk aggregation |
+| IOC | Execution context | ld.so.preload abuse, deleted binaries, env risk aggregation, eBPF exec trace |
 | MAC | SELinux/AppArmor status | Missing MAC, downgrade logic if one present |
 | Compliance (opt) | PCI / HIPAA / NIST CSF controls | Pass/fail aggregation + gap analysis (when enabled) |
-| Integrity (opt) | Future pkg/IMA | Placeholders for package & IMA measurement stats |
+| Integrity (opt) | Future pkg/IMA | Placeholders for package/package integrity future hook |
 | Rules | Post-processing layer | MITRE tagging, severity escalation |
 
 ---
@@ -249,7 +249,6 @@ See also inline comments / issues. Near‑term concepts:
 * Extended risk scoring calibrations.
 * Package integrity (dpkg/rpm verify) & mismatch aggregation.
 * Landlock / chroot sandbox addition.
-* eBPF exec short‑lived process tracing (`--ioc-exec-trace`).
 * Enhanced network exposure heuristics & fan‑out thresholds.
 * Additional output signing backends (cosign, age).
 

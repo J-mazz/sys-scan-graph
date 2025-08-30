@@ -23,6 +23,9 @@
 #include "../scanners/IntegrityScanner.h"
 #include "../scanners/YaraScanner.h"
 #include "Compliance.h"
+#ifdef SYS_SCAN_HAVE_EBPF
+#include "../scanners/EbpfScanner.h"
+#endif
 
 namespace sys_scan {
 
@@ -50,6 +53,9 @@ void ScannerRegistry::register_all_default() {
     if(config().rules_enable){
         register_scanner(std::make_unique<YaraScanner>());
     }
+#ifdef SYS_SCAN_HAVE_EBPF
+    register_scanner(std::make_unique<EbpfScanner>());
+#endif
     // Compliance scanners (initial: PCI). Conditional on cfg.compliance
     if(config().compliance) {
         bool include_pci = true;

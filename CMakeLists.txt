@@ -11,8 +11,25 @@ option(SYS_SCAN_REPRO_BUILD "Enable reproducible build settings (avoid embedding
 option(ENABLE_SECCOMP "Enable optional seccomp-bpf sandbox (requires libseccomp)" ON)
 option(ENABLE_CAPABILITIES "Enable Linux capabilities privilege dropping (libcap)" ON)
 option(BUILD_FUZZERS "Build libFuzzer harnesses (Clang only)" OFF)
+option(WITH_EBPF "Enable eBPF-based scanners (requires bpftool and BTF)" ON)
+option(WITH_EBPF_STRICT "Require eBPF skeleton generation (fail if bpftool not found or incompatible)" ON)
 
 set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
+
+# eBPF support
+if(WITH_EBPF)
+  find_program(BPFTOOL bpftool REQUIRED)
+  if(NOT BPFTOOL)
+    if(WITH_EBPF_STRICT)
+      message(FATAL_ERROR "bpftool not found, required for WITH_EBPF_STRICT")
+    else()
+      message(WARNING "bpftool not found, eBPF will use stub skeletons")
+      set(WITH_EBPF OFF)
+    endif()
+  endif()
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBBPF REQUIRED libbpf)
+endif()
 
 if(SYS_SCAN_REPRO_BUILD)
   # Common reproducible build suggestions (user can still override externally)
@@ -55,7 +72,13 @@ add_library(sys_scan_core
   src/scanners/IntegrityScanner.cpp
   src/scanners/YaraScanner.cpp
   src/core/Privilege.cpp
+  $<$<BOOL:${WITH_EBPF}>:src/scanners/EbpfScanner.cpp>
+  $<$<BOOL:${WITH_EBPF}>:src/ebpf/ProcessExecBPF.cpp>
 )
+
+if(WITH_EBPF)
+  add_dependencies(sys_scan_core ebpf_skeleton)
+endif()
 
 #-------------------- Build provenance (git commit, compiler, flags) --------------------
 find_package(Git QUIET)
@@ -76,7 +99,29 @@ string(REPLACE "\"" "'" ALL_CXX_FLAGS "${ALL_CXX_FLAGS}")
 configure_file(${CMAKE_SOURCE_DIR}/BuildInfo.h.in ${CMAKE_BINARY_DIR}/generated/BuildInfo.h @ONLY)
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_BINARY_DIR}/generated)
 
-target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+# eBPF object and skeleton generation
+if(WITH_EBPF)
+  set(BPF_SRC ${CMAKE_SOURCE_DIR}/src/ebpf/process_exec.bpf.c)
+  set(BPF_OBJ ${CMAKE_BINARY_DIR}/generated/process_exec.bpf.o)
+  set(BPF_SKEL ${CMAKE_BINARY_DIR}/generated/process_exec.skel.h)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
+  add_custom_command(
+    OUTPUT ${BPF_OBJ}
+    COMMAND clang -O2 -g -Wall -Werror -target bpf -c ${BPF_SRC} -o ${BPF_OBJ}
+    DEPENDS ${BPF_SRC}
+    COMMENT "Compiling eBPF object"
+  )
+  add_custom_command(
+    OUTPUT ${BPF_SKEL}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
+    COMMAND ${BPFTOOL} gen skeleton ${BPF_OBJ} > ${BPF_SKEL}
+    DEPENDS ${BPF_OBJ}
+    COMMENT "Generating eBPF skeleton"
+  )
+  add_custom_target(ebpf_skeleton DEPENDS ${BPF_SKEL})
+endif()
+
+target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party ${CMAKE_BINARY_DIR}/generated)
 
 find_package(Threads REQUIRED)
 
@@ -85,6 +130,12 @@ target_link_libraries(sys_scan_core PUBLIC Threads::Threads)
 if(OpenSSL_FOUND)
   target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_OPENSSL=1)
   target_link_libraries(sys_scan_core PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+if(WITH_EBPF)
+  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_EBPF=1)
+  target_link_libraries(sys_scan_core PUBLIC ${LIBBPF_LIBRARIES})
+  target_include_directories(sys_scan_core PUBLIC ${LIBBPF_INCLUDE_DIRS})
 endif()
 
 # libseccomp (sandbox)

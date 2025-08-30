@@ -18,6 +18,9 @@
 #ifdef SYS_SCAN_HAVE_LZMA
 #include <lzma.h>
 #endif
+#ifdef SYS_SCAN_HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
 
 namespace sys_scan {
 

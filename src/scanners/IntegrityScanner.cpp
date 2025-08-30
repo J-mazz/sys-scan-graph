@@ -12,6 +12,9 @@
 #include <optional>
 #include <cstring>
 #include <sys/stat.h>
+#ifdef SYS_SCAN_HAVE_OPENSSL
+#include <openssl/sha.h>
+#endif
 
 namespace fs = std::filesystem;
 namespace sys_scan {
@@ -67,7 +70,6 @@ void IntegrityScanner::scan(Report& report){
     if(cfg.integrity_pkg_rehash && !rehash_files.empty()){
         for(const auto& fpath : rehash_files){
             std::error_code ec; if(!fs::is_regular_file(fpath, ec)) continue; std::ifstream ifs(fpath, std::ios::binary); if(!ifs) continue; unsigned char buf[8192];
-            #include <openssl/sha.h>
             SHA256_CTX c; SHA256_Init(&c); while(ifs){ ifs.read((char*)buf, sizeof(buf)); std::streamsize got = ifs.gcount(); if(got>0) SHA256_Update(&c, buf, (size_t)got); }
             unsigned char md[32]; SHA256_Final(md, &c); static const char* hex="0123456789abcdef"; std::string hexsum; hexsum.reserve(64); for(int i=0;i<32;i++){ hexsum.push_back(hex[md[i]>>4]); hexsum.push_back(hex[md[i]&0xF]); }
             Finding hf; hf.id = std::string("pkg_rehash:")+fpath; hf.title="Package mismatch file hash"; hf.severity=Severity::Info; hf.description="Recomputed SHA256 for mismatched file"; hf.metadata["path"] = fpath; hf.metadata["sha256"] = hexsum; report.add_finding(this->name(), std::move(hf));
