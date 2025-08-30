@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake clang-tidy cppcheck libseccomp-dev libcap-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake clang-tidy cppcheck libseccomp-dev libcap-dev libbpf-dev linux-tools-common
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON
       - name: Static analysis (clang-tidy)
@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libseccomp-dev libcap-dev
+        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libseccomp-dev libcap-dev libbpf-dev linux-tools-common
       - name: Configure (ASan/UBSan)
         run: |
           cmake -B build -S . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON \
@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install clang
-        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential
+        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libbpf-dev linux-tools-common
       - name: Configure fuzz harness
         run: |
           cmake -B build -S . -DBUILD_FUZZERS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
