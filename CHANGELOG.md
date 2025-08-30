@@ -5,6 +5,11 @@ All notable changes will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Enhanced LangGraph workflow (Python agent) with async enrichment, summarization, and rule suggestion nodes (`enhanced_*` functions) plus pre-summary `risk_analyzer` & `compliance_checker`.
+- Operational tail nodes: `error_handler`, `human_feedback_node`, `cache_manager`, `metrics_collector` producing deterministic `final_metrics` and cache hit rate.
+- Environment toggle `AGENT_GRAPH_MODE=enhanced|baseline` and dynamic recovery in `build_workflow()` to ensure enhanced nodes load even after early imports.
+- Knowledge signature requirement (`AGENT_KB_REQUIRE_SIGNATURES=1` + `AGENT_KB_PUBKEY`) emitting `SignatureMissing` warnings when `.sig` files absent.
+- End-of-workflow routing ensures early END decisions still traverse `metrics_collector` for consistent final metrics.
 - Structured collection_warnings entries now emit `code` and optional `detail` fields (replacing prior `message`). Schema v2 updated to accept either legacy `{scanner,message}` objects or new `{scanner,code,detail?}` objects for backward compatibility. Downstream consumers should prefer `code` when present.
 ### Added
  - Dual metrics & risk scoring: `finding_count_total` vs `finding_count_emitted`, `severity_counts` vs `severity_counts_emitted`, and `emitted_risk_score` in `summary_extension`.
@@ -20,6 +25,7 @@ All notable changes will be documented in this file.
  - Existing feature set: process hashing (`--process-hash`), process inventory (`--process-inventory`), modules anomalies-only mode, IOC allowlist file (`--ioc-allow-file`), SUID expected baseline (`--suid-expected*`), fail-on-count.
 
 ### Changed
+- Graph state initialization hardened: container fields normalized when LangGraph pre-populates keys with `None` (prevents TypeErrors in async nodes).
  - Canonical JSON now includes provenance & emitted metrics; golden hash updated and stabilized via env overrides.
  - Version string centralized (`APP_VERSION` in `BuildInfo.h`) removing hardcoded literals.
  - Seccomp applied earlier (pre-scan) for improved containment; strict failure mode optional.
@@ -31,6 +37,8 @@ All notable changes will be documented in this file.
  - Embedded provenance improves supply-chain auditability & attestation readiness.
 
 ### Fixed
+- Missing `_HASHES` in `knowledge` module (restored placeholder) and signature warning expectations in tests.
+- Circular import / premature graph assembly resolved by defining `GraphState` prior to node imports; added late import recovery.
  - Canonical hash instability resolved (deterministic environment overrides & timestamp zeroing).
  - CI build failures from malformed YAML indentation & multiline quoting.
  - Minor include / ordering issues (e.g. unordered_set) and robustness of module anomalies-only mode.

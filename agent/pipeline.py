@@ -526,8 +526,11 @@ def sequence_correlation(state: AgentState) -> AgentState:
             # Avoid duplicate correlation creation
             already = any(c.related_finding_ids == related and 'sequence_anomaly' in (c.tags or []) for c in state.correlations)
             if not already:
+                # Deterministic ID: sequence_anom_<n>
+                existing = [c for c in state.correlations if 'sequence_anomaly' in (c.tags or []) and c.id.startswith('sequence_anom_')]
+                corr_id = f'sequence_anom_{len(existing)+1}'
                 corr = Correlation(
-                    id=f'seq_{_uuid.uuid4().hex[:10]}',
+                    id=corr_id,
                     title='Suspicious Sequence: New SUID followed by IP forwarding enabled',
                     rationale='Heuristic: newly introduced SUID binary preceded enabling IP forwarding in same scan',
                     related_finding_ids=related,

@@ -3,10 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 import yaml
 from typing import Dict, Any
+import os
 import ipaddress
 
 KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
 _CACHE: Dict[str, Any] = {}
+# Legacy hash tracking placeholder (tests expect attribute)
+_HASHES: Dict[str, str] = {}
 
 def _load_yaml(name: str) -> dict:
     if name in _CACHE:
@@ -93,11 +96,40 @@ def enrich_finding(finding, scanner: str, distro: str):
                     if finding.metadata.get("remote_org"):
                         break
 
+def _verify_signature(fname: str, state):
+    """Emit SignatureMissing warning into AgentState if signatures are required and file lacks .sig."""
+    try:
+        if not getattr(state, 'agent_warnings', None):
+            # Ensure list exists
+            try:
+                state.agent_warnings = []  # type: ignore[attr-defined]
+            except Exception:
+                return
+        if os.getenv('AGENT_KB_REQUIRE_SIGNATURES','0') != '1':
+            return
+        if not os.getenv('AGENT_KB_PUBKEY'):
+            return
+        path = KNOWLEDGE_DIR / fname
+        if not path.exists():
+            return
+        sig_path = path.with_suffix(path.suffix + '.sig')
+        if not sig_path.exists():
+            state.agent_warnings.append({  # type: ignore[attr-defined]
+                'file': fname,
+                'error_type': 'SignatureMissing'
+            })
+    except Exception:
+        pass
+
+
 def apply_external_knowledge(state):
     if not state.report:
         return state
     # Attempt distro detection (placeholder: from meta or host_id pattern)
     distro = getattr(state.report.meta, 'distro', None) or 'generic'
+    # Signature verification for known knowledge files (extendable)
+    for candidate in ['ports.yaml','modules.yaml','suid_programs.yaml','orgs.yaml']:
+        _verify_signature(candidate, state)
     for sr in state.report.results:
         for f in sr.findings:
             enrich_finding(f, sr.scanner, distro)
