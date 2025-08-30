@@ -37,15 +37,15 @@ def _append_warning(state: GraphState, module: str, stage: str, error: str, hint
 
 def _findings_from_graph(state: GraphState) -> List[Finding]:
     out: List[Finding] = []
-    for f in state.get('raw_findings', []) or []:
+    for finding_dict in state.get('raw_findings', []) or []:
         try:
             # Provide minimal required fields; defaults for missing
             out.append(Finding(
-                id=f.get('id','unknown'),
-                title=f.get('title','(no title)'),
-                severity=f.get('severity','info'),
-                risk_score=int(f.get('risk_score', f.get('risk_total', 0)) or 0),
-                metadata=f.get('metadata', {})
+                id=finding_dict.get('id','unknown'),
+                title=finding_dict.get('title','(no title)'),
+                severity=finding_dict.get('severity','info'),
+                risk_score=int(finding_dict.get('risk_score', finding_dict.get('risk_total', 0)) or 0),
+                metadata=finding_dict.get('metadata', {})
             ))
         except Exception:  # pragma: no cover - defensive
             continue
@@ -68,9 +68,9 @@ def enrich_findings(state: GraphState) -> GraphState:
         # Export back to dict form
         enriched = []
         if astate.report and astate.report.results:
-            for r in astate.report.results:
-                for f in r.findings:
-                    enriched.append(f.model_dump())
+            for result in astate.report.results:
+                for finding in result.findings:
+                    enriched.append(finding.model_dump())
         state['enriched_findings'] = enriched
     except Exception as e:  # pragma: no cover
         _append_warning(state, 'graph', 'enrich', str(e))
@@ -81,9 +81,9 @@ def enrich_findings(state: GraphState) -> GraphState:
 def correlate_findings(state: GraphState) -> GraphState:
     try:
         findings: List[Finding] = []
-        for f in state.get('enriched_findings', []) or []:
+        for finding_dict in state.get('enriched_findings', []) or []:
             try:
-                findings.append(Finding(**{k: v for k, v in f.items() if k in Finding.model_fields}))
+                findings.append(Finding(**{k: v for k, v in finding_dict.items() if k in Finding.model_fields}))
             except Exception:
                 continue
         sr = ScannerResult(scanner='mixed', finding_count=len(findings), findings=findings)
@@ -93,10 +93,10 @@ def correlate_findings(state: GraphState) -> GraphState:
         correlator = Correlator(DEFAULT_RULES)
         astate.correlations = correlator.apply(findings)
         for c in astate.correlations:
-            for f in findings:
-                if f.id in c.related_finding_ids and c.id not in f.correlation_refs:
-                    f.correlation_refs.append(c.id)
-        state['correlated_findings'] = [f.model_dump() for f in findings]
+            for finding in findings:
+                if finding.id in c.related_finding_ids and c.id not in finding.correlation_refs:
+                    finding.correlation_refs.append(c.id)
+        state['correlated_findings'] = [finding.model_dump() for finding in findings]
         state['correlations'] = [c.model_dump() for c in astate.correlations]
     except Exception as e:  # pragma: no cover
         _append_warning(state, 'graph', 'correlate', str(e))
@@ -116,9 +116,9 @@ def summarize_host_state(state: GraphState) -> GraphState:
         provider = get_llm_provider()
         findings_dicts = state.get('correlated_findings') or state.get('enriched_findings') or []
         findings: List[Finding] = []
-        for f in findings_dicts:
+        for finding_dict in findings_dicts:
             try:
-                findings.append(Finding(**{k: v for k, v in f.items() if k in Finding.model_fields}))
+                findings.append(Finding(**{k: v for k, v in finding_dict.items() if k in Finding.model_fields}))
             except Exception:
                 continue
         reductions = reduce_all(findings)
@@ -172,8 +172,8 @@ def should_suggest_rules(state: GraphState) -> str:  # Router for conditional ed
     try:
         enriched = state.get('enriched_findings') or []
         high_severity_count = 0
-        for f in enriched:
-            sev = str(f.get('severity', '')).lower()
+        for finding in enriched:
+            sev = str(finding.get('severity', '')).lower()
             if sev == 'high':
                 high_severity_count += 1
                 if high_severity_count:
@@ -203,8 +203,8 @@ def choose_post_summarize(state: GraphState) -> str:  # Router after summarize
     """
     if not state.get('baseline_cycle_done'):
         enriched = state.get('enriched_findings') or []
-        for f in enriched:
-            if 'baseline_status' not in f:  # simple heuristic trigger
+        for finding in enriched:
+            if 'baseline_status' not in finding:  # simple heuristic trigger
                 return 'plan_baseline'
     # Delegate to existing router
     return should_suggest_rules(state)
@@ -219,16 +219,16 @@ def plan_baseline_queries(state: GraphState) -> GraphState:
     if AIMessage is None:  # Dependency missing; skip planning
         return state
     enriched = state.get('enriched_findings') or []
-    pending = [f for f in enriched if 'baseline_status' not in f]
+    pending = [finding for finding in enriched if 'baseline_status' not in finding]
     if not pending:
         return state
     tool_calls = []
     host_id = __import__('os').environ.get('AGENT_GRAPH_HOST_ID','graph_host')
-    for f in pending:
-        fid = f.get('id') or 'unknown'
-        title = f.get('title') or ''
-        severity = f.get('severity') or ''
-        scanner = f.get('scanner') or 'mixed'
+    for finding in pending:
+        fid = finding.get('id') or 'unknown'
+        title = finding.get('title') or ''
+        severity = finding.get('severity') or ''
+        scanner = finding.get('scanner') or 'mixed'
         tool_calls.append({
             'name': 'query_baseline',
             'args': {

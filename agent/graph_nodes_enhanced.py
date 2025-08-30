@@ -59,14 +59,14 @@ def _append_warning(state: GraphState, module: str, stage: str, error: str, hint
 def _findings_from_graph(state: GraphState) -> List[Finding]:
     """Convert graph state findings to Pydantic models."""
     out: List[Finding] = []
-    for f in state.get('raw_findings', []) or []:
+    for finding in state.get('raw_findings', []) or []:
         try:
             out.append(Finding(
-                id=f.get('id','unknown'),
-                title=f.get('title','(no title)'),
-                severity=f.get('severity','info'),
-                risk_score=int(f.get('risk_score', f.get('risk_total', 0)) or 0),
-                metadata=f.get('metadata', {})
+                id=finding.get('id','unknown'),
+                title=finding.get('title','(no title)'),
+                severity=finding.get('severity','info'),
+                risk_score=int(finding.get('risk_score', finding.get('risk_total', 0)) or 0),
+                metadata=finding.get('metadata', {})
             ))
         except Exception:
             continue
@@ -105,8 +105,8 @@ async def enhanced_enrich_findings(state: GraphState) -> GraphState:
         enriched = []
         if astate.report and astate.report.results:
             for r in astate.report.results:
-                for f in r.findings:
-                    enriched.append(f.model_dump())
+                for finding in r.findings:
+                    enriched.append(finding.model_dump())
 
         state['enriched_findings'] = enriched
         state['cache_hits'] = state.get('cache_hits', []) + [cache_key]
@@ -138,9 +138,9 @@ async def enhanced_summarize_host_state(state: GraphState) -> GraphState:
         findings_dicts = state.get('correlated_findings') or state.get('enriched_findings') or []
         findings: List[Finding] = []
 
-        for f in findings_dicts:
+        for finding in findings_dicts:
             try:
-                findings.append(Finding(**{k: v for k, v in f.items() if k in Finding.model_fields}))
+                findings.append(Finding(**{k: v for k, v in finding.items() if k in Finding.model_fields}))
             except Exception:
                 continue
 
@@ -233,16 +233,16 @@ def advanced_router(state: GraphState) -> str:
         enriched = state.get('enriched_findings') or []
 
         # Check for high-severity findings
-        high_severity_count = sum(1 for f in enriched if str(f.get('severity', '')).lower() == 'high')
+        high_severity_count = sum(1 for finding in enriched if str(finding.get('severity', '')).lower() == 'high')
 
         # Check baseline status
-        missing_baseline = any('baseline_status' not in f for f in enriched)
+        missing_baseline = any('baseline_status' not in finding for finding in enriched)
 
         # Check for compliance requirements
-        needs_compliance = any(f.get('category') in ['compliance', 'regulation'] for f in enriched)
+        needs_compliance = any(finding.get('category') in ['compliance', 'regulation'] for finding in enriched)
 
         # Check for external data needs
-        needs_external = any('external_ref' in f.get('metadata', {}) for f in enriched)
+        needs_external = any('external_ref' in finding.get('metadata', {}) for finding in enriched)
 
         # Priority-based routing
         if state.get('human_feedback_pending'):
@@ -341,7 +341,7 @@ async def tool_coordinator(state: GraphState) -> GraphState:
         tool_calls = []
 
         # Baseline queries for missing data
-        missing_baseline = [f for f in enriched if 'baseline_status' not in f]
+        missing_baseline = [finding for finding in enriched if 'baseline_status' not in finding]
         if missing_baseline:
             tool_calls.append({
                 'name': 'query_baseline_enhanced',
@@ -349,11 +349,11 @@ async def tool_coordinator(state: GraphState) -> GraphState:
             })
 
         # External data searches
-        needs_external = [f for f in enriched if 'external_ref' in f.get('metadata', {})]
+        needs_external = [finding for finding in enriched if 'external_ref' in finding.get('metadata', {})]
         if needs_external:
             tool_calls.append({
                 'name': 'search_external_data',
-                'args': {'queries': [f.get('metadata', {}).get('external_ref') for f in needs_external]}
+                'args': {'queries': [finding.get('metadata', {}).get('external_ref') for finding in needs_external]}
             })
 
         # Store tool calls in state for execution
@@ -378,7 +378,7 @@ async def risk_analyzer(state: GraphState) -> GraphState:
         }
 
         # Analyze patterns
-        high_risk_count = sum(1 for f in findings if f.get('risk_score', 0) > 70)
+        high_risk_count = sum(1 for finding in findings if finding.get('risk_score', 0) > 70)
         if high_risk_count > 3:
             risk_assessment['overall_risk_level'] = 'high'
             risk_assessment['risk_factors'].append('multiple_high_risk_findings')
