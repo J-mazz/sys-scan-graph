@@ -16,6 +16,9 @@
 #include <cstdlib>
 #include <sys/stat.h>
 #include <limits.h>
+#ifdef SYS_SCAN_HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
 
 using namespace sys_scan;
 
