@@ -113,6 +113,14 @@ class ActionItem(BaseModel):
     action: str
     correlation_refs: List[str] = Field(default_factory=list)
 
+class AgentWarning(BaseModel):
+    module: str
+    stage: str
+    error_type: str
+    message: str
+    severity: str = "warning"  # warning|error|info
+    hint: Optional[str] = None
+
 class FollowupResult(BaseModel):
     finding_id: str
     plan: List[str] = Field(default_factory=list)
@@ -144,4 +152,5 @@ class AgentState(BaseModel):
     followups: List[FollowupResult] = Field(default_factory=list)
     enrichment_results: dict = Field(default_factory=dict)
     multi_host_correlation: List[MultiHostCorrelation] = Field(default_factory=list)
+    agent_warnings: List[dict] = Field(default_factory=list)
 

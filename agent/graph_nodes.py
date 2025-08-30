@@ -129,10 +129,10 @@ def summarize_host_state(state: GraphState) -> GraphState:
                 corr_objs.append(_C(**c))
             except Exception:
                 continue
-    baseline_context = state.get('baseline_results') or {}
-    summaries = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
-    state['summary'] = summaries.model_dump()
-    state['iteration_count'] = iters + 1
+        baseline_context = state.get('baseline_results') or {}
+        summaries = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
+        state['summary'] = summaries.model_dump()
+        state['iteration_count'] = iters + 1
     except Exception as e:  # pragma: no cover
         _append_warning(state, 'graph', 'summarize', str(e))
     return state

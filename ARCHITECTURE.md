@@ -193,6 +193,42 @@ enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> 
 If no baseline context needed: `enrich -> summarize -> suggest_rules -> END`.
 Environment variable `AGENT_MAX_SUMMARY_ITERS` caps summarize passes; exceeding limit appends a deterministic warning and halts further iterations.
 
+### 3.1 Enhanced Scaffold Workflow (2025 Integration)
+An enhanced, asynchronously capable workflow is now available (default when `AGENT_GRAPH_MODE=enhanced`) that wires in additional analytical and operational nodes exported from `graph_nodes_scaffold.py`.
+
+Enhanced sequence (simplified):
+```
+enrich(enhanced) -> correlate -> risk_analyzer -> compliance_checker -> summarize(enhanced)
+  -> (router choose_post_summarize: plan_baseline | suggest_rules | metrics_collector)
+  -> (optional baseline cycle) -> suggest_rules(enhanced)
+  -> error_handler -> human_feedback_node -> cache_manager -> metrics_collector -> END
+```
+
+Key additions:
+* `enhanced_enrich_findings` / `enhanced_summarize_host_state` / `enhanced_suggest_rules`: async variants with caching, metrics, streaming flag, and optional rule refinement.
+* `risk_analyzer` & `compliance_checker`: pre‑summary analytics producing `risk_assessment` and `compliance_check` blocks used downstream and surfaced in final metrics.
+* Operational tail: `error_handler`, `human_feedback_node`, `cache_manager`, `metrics_collector` ensure graceful degradation, feedback integration, cache consolidation and a deterministic `final_metrics` snapshot even on early termination paths (router END is redirected through `metrics_collector`).
+* Deterministic caching: enrichment cache keyed by SHA256 of canonical JSON of `raw_findings`; summary iterations tracked; cache hit metrics recorded.
+* Dynamic recovery: `build_workflow()` performs a late import recovery to tolerate early import ordering issues during test discovery, ensuring enhanced nodes remain available even if the module was first imported before scaffold initialization.
+
+Environment toggles:
+* `AGENT_GRAPH_MODE=enhanced|baseline` selects enhanced vs legacy core nodes.
+* `AGENT_MAX_SUMMARY_ITERS` caps summarize iterations (applies to both modes).
+* `AGENT_KB_REQUIRE_SIGNATURES=1` with `AGENT_KB_PUBKEY` enforces knowledge file signature presence (adds `SignatureMissing` warnings gathered by the knowledge layer).
+
+Metrics & Finalization:
+* Each enhanced node records `*_duration` plus call counters.
+* `metrics_collector` aggregates counts (suggestions, enriched, correlated), cache size, compliance standard count, risk level, provider mode, degraded flag, and total duration (if `start_time` present) into `final_metrics`.
+* Early END decisions (e.g. no high‑severity findings) are routed through `metrics_collector` to guarantee consistent terminal accounting.
+
+Fallback / Disabled Components:
+* `advanced_router` and `tool_coordinator` are present in scaffold exports but intentionally not yet wired into the enhanced DAG pending a pure router refactor (current implementation returns string values which require dedicated conditional edge wiring distinct from state mutating nodes).
+* The system automatically falls back to baseline sync nodes if enhanced async counterparts are unavailable.
+
+Error & Resilience:
+* All nodes defensively coerce placeholder `None` containers (introduced by graph initialization) into concrete lists/dicts before mutation to avoid `TypeError` on enhanced asynchronous paths.
+* `error_handler` centralizes detection of timeout / degraded mode signals and increments structured metrics (`timeout_error_count`, etc.).
+
 ---
 ## 4. Canonicalization & Reproducibility Guarantees
 Enriched output re-serialized into a canonical dict ordering (keys sorted; arrays left in stable constructed order) before final Pydantic model rehydration. This ensures:
