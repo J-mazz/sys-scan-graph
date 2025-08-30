@@ -16,7 +16,7 @@ int main(){
     namespace fs = std::filesystem; const char* td = getenv("TMPDIR"); std::string tmp = std::string(td?td:"/tmp") + "/sys_scan_ndjson_rules";
     std::error_code ec; fs::create_directories(tmp, ec);
     std::ofstream r(tmp+"/t.rule");
-    r << "id=t_rule\nfield=title\ncontains=World Writable\nmitre=T9999\n"; r.close();
+    r << "id=t_rule\nfield=title\ncontains=World-writable\nmitre=T9999\n"; r.close();
 
     Config cfg; cfg.enable_scanners = {"world_writable"}; cfg.rules_enable = true; cfg.rules_dir = tmp; cfg.ndjson = true; set_config(cfg);
     // Load rules manually (mirrors main)

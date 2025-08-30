@@ -15,7 +15,8 @@ struct Finding {
     Severity severity = Severity::Info;
     std::string description;
     std::map<std::string, std::string> metadata; // flexible key/value pairs
-    int risk_score = 0; // derived from severity mapping at emit time
+    int base_severity_score = 0; // static mapping from severity; final holistic risk computed downstream
+    bool operational_error = false; // true if this represents scanner operational failure, not a security issue
 };
 
 struct ScanResult {

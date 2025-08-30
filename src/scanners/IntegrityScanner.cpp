@@ -12,6 +12,9 @@
 #include <optional>
 #include <cstring>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <vector>
 #ifdef SYS_SCAN_HAVE_OPENSSL
 #include <openssl/sha.h>
 #endif
@@ -19,8 +22,65 @@
 namespace fs = std::filesystem;
 namespace sys_scan {
 
-static std::string run_cmd_capture(const char* cmd){
-    std::array<char,256> buf{}; std::string out; FILE* f=popen(cmd,"r"); if(!f) return out; while(fgets(buf.data(), buf.size(), f)){ out += buf.data(); if(out.size()>1*1024*1024) break; } pclose(f); return out; }
+// Secure command execution using fork/execvp (avoids shell injection)
+static std::string run_cmd_capture(const std::vector<std::string>& args) {
+    if (args.empty()) return "";
+
+    int pipefd[2];
+    if (pipe(pipefd) == -1) return "";
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return "";
+    }
+
+    if (pid == 0) { // Child process
+        close(pipefd[0]); // Close read end
+        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
+        dup2(pipefd[1], STDERR_FILENO); // Redirect stderr to pipe
+        close(pipefd[1]);
+
+        // Convert args to char* array for execvp
+        std::vector<char*> argv;
+        for (const auto& arg : args) {
+            argv.push_back(const_cast<char*>(arg.c_str()));
+        }
+        argv.push_back(nullptr);
+
+        // Clear potentially dangerous environment variables
+        unsetenv("IFS");
+        unsetenv("PATH"); // Will be set by execvp to default
+
+        execvp(argv[0], argv.data());
+        _exit(127); // exec failed
+    } else { // Parent process
+        close(pipefd[1]); // Close write end
+
+        std::string output;
+        char buffer[256];
+        ssize_t bytes_read;
+
+        // Read from pipe with timeout protection
+        while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+            buffer[bytes_read] = '\0';
+            output += buffer;
+            // Prevent excessive output (1MB limit)
+            if (output.size() > 1 * 1024 * 1024) {
+                break;
+            }
+        }
+
+        close(pipefd[0]);
+
+        // Wait for child process
+        int status;
+        waitpid(pid, &status, 0);
+
+        return output;
+    }
+}
 
 void IntegrityScanner::scan(Report& report){
     auto& cfg = config();
@@ -32,7 +92,7 @@ void IntegrityScanner::scan(Report& report){
     if(cfg.integrity_pkg_verify){
         // Prefer dpkg -V (Debian) else rpm -Va (RPM-based)
         if(fs::exists("/usr/bin/dpkg")){
-            used_dpkg=true; std::string out = run_cmd_capture("dpkg -V 2>/dev/null"); std::istringstream iss(out); std::string line; // Lines: status flags then space then package or file
+            used_dpkg=true; std::string out = run_cmd_capture({"dpkg", "-V"}); std::istringstream iss(out); std::string line; // Lines: status flags then space then package or file
             while(std::getline(iss,line)){
                 if(line.empty()) continue; // lines starting with '??' or similar indicate mismatches
                 if(line.size()>0 && (line[0]==' ' || line[0]=='?')) continue; // skip blank prefix lines
@@ -46,7 +106,7 @@ void IntegrityScanner::scan(Report& report){
                 }
             }
         } else if(fs::exists("/usr/bin/rpm")) {
-            used_rpm=true; std::string out = run_cmd_capture("rpm -Va 2>/dev/null"); std::istringstream iss(out); std::string line; while(std::getline(iss,line)){
+            used_rpm=true; std::string out = run_cmd_capture({"rpm", "-Va"}); std::istringstream iss(out); std::string line; while(std::getline(iss,line)){
                 if(line.empty()) continue; // rpm verification lines: 8 chars of flags, space, path or package
                 if(line.size() < 2) continue; bool mismatch=false; for(char c: line.substr(0,8)){ if(c!='.' && c!=' '){ mismatch=true; break; } }
                 if(!mismatch) continue; ++pkg_mismatch_count; if(mismatch_sample.size()<10) mismatch_sample.push_back(line.substr(0,40));

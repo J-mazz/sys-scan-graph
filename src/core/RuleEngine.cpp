@@ -83,6 +83,8 @@ static bool match_condition(const RuleCondition& rc, const Finding& f){
 	else {
 		auto it = f.metadata.find(rc.field); if(it!=f.metadata.end()) target=&it->second; else return false;
 	}
+	// Guardrail: a condition with only a field selector and no constraints should not auto-match everything.
+	if(rc.contains.empty() && rc.equals.empty() && !rc.compiled && rc.regex.empty()) return false;
 	if(!rc.contains.empty() && target->find(rc.contains)==std::string::npos) return false;
 	if(!rc.equals.empty() && *target != rc.equals) return false;
 	if(rc.compiled) { if(!std::regex_search(*target, *rc.compiled)) return false; }

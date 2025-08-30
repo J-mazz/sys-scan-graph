@@ -11,9 +11,17 @@ class Finding(BaseModel):
     id: str
     title: str
     severity: str
+    # Legacy field name expected throughout enrichment pipeline. The C++ layer now emits
+    # base_severity_score instead; ingestion normalizes by copying that value into risk_score
+    # (and risk_total) if risk_score is absent. We retain risk_score as required so downstream
+    # code need not handle Optional[int].
     risk_score: int
+    # Transitional visibility: surface base_severity_score if present in raw report (or if
+    # synthesized during normalization) for transparency / future migration to holistic risk.
+    base_severity_score: Optional[int] = None
     description: Optional[str] = ""
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    operational_error: bool = False  # if true, represents scanner operational issue, not security signal
     # Extensions
     category: Optional[str] = None
     tags: List[str] = Field(default_factory=list)

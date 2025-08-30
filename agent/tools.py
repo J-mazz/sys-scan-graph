@@ -47,9 +47,11 @@ def query_baseline(finding_id: str, title: str = "", severity: str = "", scanner
         'db_path': db_path
     }
     try:
-        if not Path(db_path).exists():
+        db_exists = Path(db_path).exists()
+        if not db_exists:
             out['status'] = 'new'
             out['note'] = 'baseline db missing'
+            out['baseline_db_missing'] = True
             return out
         conn = sqlite3.connect(db_path)
         try:
@@ -59,13 +61,17 @@ def query_baseline(finding_id: str, title: str = "", severity: str = "", scanner
                 out['status'] = 'existing'
                 out['first_seen_ts'] = first_seen
                 out['prev_seen_count'] = count
+                out['baseline_db_missing'] = False
             else:
                 out['status'] = 'new'
+                out['baseline_db_missing'] = False
         finally:
             conn.close()
     except Exception as e:  # pragma: no cover
         out['status'] = 'error'
         out['error'] = str(e)
+        # If error occurs after existence check, we can still state whether DB existed
+        out['baseline_db_missing'] = out.get('baseline_db_missing', not Path(db_path).exists())
     return out
 
 __all__ = ["query_baseline"]

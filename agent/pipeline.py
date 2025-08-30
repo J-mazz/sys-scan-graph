@@ -99,6 +99,36 @@ def load_report(state: AgentState, path: Path) -> AgentState:
     except json.JSONDecodeError as e:
         raise ValueError(f"Report JSON parse error: {e}") from e
     state.raw_report = data
+    # Normalize risk naming migration (base_severity_score -> risk_score) BEFORE schema validation.
+    # The C++ core now emits base_severity_score only. Downstream Python pipeline still expects
+    # risk_score. We inject risk_score where missing for backward compatibility and retain the
+    # original field (mapped into Finding.base_severity_score by pydantic if present).
+    try:
+        results = data.get('results') if isinstance(data, dict) else None
+        if isinstance(results, list):
+            for sr in results:
+                findings = sr.get('findings') if isinstance(sr, dict) else None
+                if not isinstance(findings, list):
+                    continue
+                for f in findings:
+                    if not isinstance(f, dict):
+                        continue
+                    # If legacy risk_score missing but new base_severity_score present, copy.
+                    if 'risk_score' not in f and 'base_severity_score' in f:
+                        try:
+                            f['risk_score'] = int(f.get('base_severity_score') or 0)
+                        except (TypeError, ValueError):
+                            f['risk_score'] = 0
+                    # If both present but divergent (shouldn't happen), prefer explicit risk_score and log later.
+                    # risk_total duplication if absent
+                    if 'risk_total' not in f and 'risk_score' in f:
+                        f['risk_total'] = f['risk_score']
+    except Exception as norm_e:
+        # Non-fatal; proceed to validation which may still fail with clearer message.
+        try:
+            log_stage('load_report.normalization_warning', error=str(norm_e), type=type(norm_e).__name__)
+        except Exception:
+            pass
     try:
         with mc.time_stage('load_report.validate'):
             state.report = Report.model_validate(data)
@@ -429,7 +459,9 @@ def process_novelty(state: AgentState, baseline_path: Path = Path("agent_baselin
         return state
     cfg = load_config()
     if distance_threshold is None:
-        distance_threshold = cfg.thresholds.process_novelty_distance
+        # Fallback to configured threshold; if missing or None, choose conservative default 1.0
+        dt_cfg = getattr(cfg.thresholds, 'process_novelty_distance', None)
+        distance_threshold = float(dt_cfg) if dt_cfg is not None else 1.0
     env_path = os.environ.get('AGENT_BASELINE_DB')
     if env_path:
         baseline_path = Path(env_path)
@@ -460,10 +492,9 @@ def process_novelty(state: AgentState, baseline_path: Path = Path("agent_baselin
     for f in candidates:
         vec = vecs.get(f.id)
         if vec is None:
-            # Fallback empty vector -> skip novelty
-            continue
-        cid, dist, is_new = store.assign_process_vector(host_id, vec, distance_threshold=distance_threshold)
-        if is_new or dist > distance_threshold:
+            continue  # no vector computed
+        cid, dist, is_new = store.assign_process_vector(host_id, vec, distance_threshold=float(distance_threshold))
+        if is_new or dist > float(distance_threshold):
             if 'process_novel' not in f.tags:
                 f.tags.append('process_novel')
             if f.risk_subscores:
@@ -480,7 +511,7 @@ def process_novelty(state: AgentState, baseline_path: Path = Path("agent_baselin
             else:
                 f.rationale = [rationale_note]
         else:
-            if dist > distance_threshold * 0.8:
+            if dist > float(distance_threshold) * 0.8:
                 note = f"near-novel process (cid={cid} dist={dist:.2f})"
                 if f.rationale:
                     f.rationale.append(note)
@@ -568,7 +599,9 @@ def summarize(state: AgentState) -> AgentState:
     for f in all_findings:
         sev = f.severity.lower()
         if sev in {"medium","high","critical"}:
-            high_med_sum += (f.risk_total or f.risk_score or 0)
+            # Exclude operational_error pseudo-findings from security risk aggregation
+            if not getattr(f, 'operational_error', False):
+                high_med_sum += (f.risk_total or f.risk_score or 0)
         if any(t == 'baseline:new' for t in (f.tags or [])):
             new_found = True
     skip = (high_med_sum < threshold) and (not new_found)
@@ -582,25 +615,20 @@ def summarize(state: AgentState) -> AgentState:
         state.summaries = client.summarize(red_reductions, red_correlations, red_actions, skip=skip, previous=prev, skip_reason="low_risk_no_change" if skip else None, baseline_context=None)
     # Attach token accounting snapshot for future cost modeling
     try:
-        from .models import TokenAccounting
+        # Token accounting model removed / deprecated; inline dict if needed in future.
         m = state.summaries.metrics or {}
-        ta = TokenAccounting(
-            provider=os.environ.get('AGENT_LLM_PROVIDER','null'),
-            prompt_tokens=m.get('tokens_prompt',0),
-            completion_tokens=m.get('tokens_completion',0),
-            cached=bool(m.get('skipped')),
-            unit_cost_prompt=float(os.environ.get('AGENT_COST_PROMPT_PER_1K', '0') or 0)/1000.0,
-            unit_cost_completion=float(os.environ.get('AGENT_COST_COMPLETION_PER_1K','0') or 0)/1000.0,
+        state.summaries.metrics = state.summaries.metrics or {}
+        state.summaries.metrics['token_accounting'] = {
+            'prompt_tokens': m.get('tokens_prompt',0),
+            'completion_tokens': m.get('tokens_completion',0),
+            'cached': bool(m.get('skipped')),
+            'unit_cost_prompt': float(os.environ.get('AGENT_COST_PROMPT_PER_1K', '0') or 0)/1000.0,
+            'unit_cost_completion': float(os.environ.get('AGENT_COST_COMPLETION_PER_1K','0') or 0)/1000.0,
+        }
+        state.summaries.metrics['estimated_cost'] = round(
+            state.summaries.metrics['token_accounting']['prompt_tokens'] * state.summaries.metrics['token_accounting']['unit_cost_prompt'] +
+            state.summaries.metrics['token_accounting']['completion_tokens'] * state.summaries.metrics['token_accounting']['unit_cost_completion'], 6
         )
-        est = ta.prompt_tokens * ta.unit_cost_prompt + ta.completion_tokens * ta.unit_cost_completion
-        ta.estimated_cost = round(est,6)
-        if state.enrichment_results is not None:
-            state.enrichment_results['token_accounting'] = ta.model_dump()
-        else:
-            state.enrichment_results = {'token_accounting': ta.model_dump()}
-        # Also stash into summaries.metrics for single-location retrieval
-        if state.summaries.metrics is not None:
-            state.summaries.metrics['estimated_cost'] = ta.estimated_cost
     except Exception:
         pass
     # Scrub narrative fields prior to persistence/output
@@ -923,7 +951,7 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
         all_findings = [f for r in state.report.results for f in r.findings]
         total_findings = len(all_findings)
         high_count = sum(1 for f in all_findings if f.severity.lower() in {"high","critical"})
-        med_hi_risk_sum = sum((f.risk_total or f.risk_score or 0) for f in all_findings if f.severity.lower() in {"medium","high","critical"})
+        med_hi_risk_sum = sum((f.risk_total or f.risk_score or 0) for f in all_findings if f.severity.lower() in {"medium","high","critical"} and not getattr(f, 'operational_error', False))
         metrics = {
             'finding.count.total': float(total_findings),
             'finding.count.high': float(high_count),
