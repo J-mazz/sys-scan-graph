@@ -18,10 +18,11 @@ void Report::add_finding(const std::string& scanner, Finding finding) {
     auto it = std::find_if(results_.begin(), results_.end(), [&](auto& r){ return r.scanner_name == scanner; });
     if(it != results_.end()) {
     if(config().rules_enable){ rule_engine().apply(scanner, finding); }
-    // Early severity filter
+    // Early severity filter (operational errors are treated separately but still stored for transparency)
     int minRank = severity_rank(config().min_severity);
-    if(severity_rank_enum(finding.severity) < minRank){ return; }
-    finding.risk_score = severity_risk_score(finding.severity);
+    if(!finding.operational_error && severity_rank_enum(finding.severity) < minRank){ return; }
+    // Derive risk unless operational error (kept out of security risk totals)
+    finding.base_severity_score = finding.operational_error ? 0 : severity_risk_score(finding.severity);
     it->findings.push_back(std::move(finding));
     }
 }
@@ -64,6 +65,13 @@ void Report::add_warning(const std::string& scanner, WarnCode code, const std::s
 void Report::add_error(const std::string& scanner, const std::string& message){
     std::lock_guard<std::mutex> lock(mutex_);
     errors_.emplace_back(scanner, message);
+}
+
+size_t Report::total_findings() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    size_t total = 0;
+    for(const auto& r : results_) total += r.findings.size();
+    return total;
 }
 
 }

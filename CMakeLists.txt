@@ -18,10 +18,11 @@ set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenan
 
 # eBPF support
 if(WITH_EBPF)
-  find_program(BPFTOOL bpftool REQUIRED)
-  if(NOT BPFTOOL)
+  # Use the working bpftool from generic tools
+  set(BPFTOOL "/usr/lib/linux-tools-6.8.0-79/bpftool")
+  if(NOT EXISTS ${BPFTOOL})
     if(WITH_EBPF_STRICT)
-      message(FATAL_ERROR "bpftool not found, required for WITH_EBPF_STRICT")
+      message(FATAL_ERROR "bpftool not found at ${BPFTOOL}, required for WITH_EBPF_STRICT")
     else()
       message(WARNING "bpftool not found, eBPF will use stub skeletons")
       set(WITH_EBPF OFF)
@@ -56,10 +57,17 @@ add_library(sys_scan_core
   src/core/Logging.cpp
   src/core/Config.cpp
   src/core/Compliance.cpp
+  src/core/ArgumentParser.cpp
+  src/core/ConfigValidator.cpp
+  src/core/OutputWriter.cpp
+  src/core/GPGSigner.cpp
+  src/core/RuleEngineInitializer.cpp
+  src/core/ExitCodeHandler.cpp
   src/scanners/ProcessScanner.cpp
   src/scanners/NetworkScanner.cpp
   src/scanners/KernelParamScanner.cpp
   src/scanners/ModuleScanner.cpp
+  src/scanners/ModuleUtils.cpp
   src/scanners/WorldWritableScanner.cpp
   src/scanners/SuidScanner.cpp
   src/scanners/IOCScanner.cpp
@@ -127,6 +135,21 @@ find_package(Threads REQUIRED)
 
 target_link_libraries(sys_scan_core PUBLIC Threads::Threads)
 
+# nlohmann/json for JSON handling
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+  # Download nlohmann/json header
+  file(DOWNLOAD
+    https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp
+    ${CMAKE_BINARY_DIR}/third_party/nlohmann/json.hpp
+    SHOW_PROGRESS
+  )
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/third_party/nlohmann)
+  target_include_directories(sys_scan_core PUBLIC ${CMAKE_BINARY_DIR}/third_party)
+else()
+  target_link_libraries(sys_scan_core PUBLIC nlohmann_json::nlohmann_json)
+endif()
+
 if(OpenSSL_FOUND)
   target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_OPENSSL=1)
   target_link_libraries(sys_scan_core PUBLIC OpenSSL::SSL OpenSSL::Crypto)
@@ -183,6 +206,21 @@ target_link_libraries(sys-scan PRIVATE sys_scan_core)
 # Tests
 if(BUILD_TESTS)
   enable_testing()
+  
+  # Find Google Test
+  find_package(GTest QUIET)
+  if(NOT GTest_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    # Prevent overriding the parent project's compiler/linker on Windows
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+  endif()
+
   add_executable(test_basic tests/test_basic.cpp)
   target_link_libraries(test_basic PRIVATE sys_scan_core)
   add_test(NAME basic COMMAND test_basic)
@@ -219,6 +257,43 @@ if(BUILD_TESTS)
   add_executable(test_meta_suppression tests/test_meta_suppression.cpp)
   target_link_libraries(test_meta_suppression PRIVATE sys_scan_core)
   add_test(NAME meta_suppression COMMAND test_meta_suppression)
+  add_executable(test_report_concurrency tests/test_report_concurrency.cpp)
+  target_link_libraries(test_report_concurrency PRIVATE sys_scan_core)
+  add_test(NAME report_concurrency COMMAND test_report_concurrency)
+  add_executable(test_operational_error_risk tests/test_operational_error_risk.cpp)
+  target_link_libraries(test_operational_error_risk PRIVATE sys_scan_core)
+  add_test(NAME operational_error_risk COMMAND test_operational_error_risk)
+  
+  # Unit tests for new modular components
+  add_executable(test_argument_parser tests/test_argument_parser.cpp)
+  target_link_libraries(test_argument_parser PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME argument_parser COMMAND test_argument_parser)
+  
+  add_executable(test_config_validator tests/test_config_validator.cpp)
+  target_link_libraries(test_config_validator PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME config_validator COMMAND test_config_validator)
+  
+  add_executable(test_output_writer tests/test_output_writer.cpp)
+  target_link_libraries(test_output_writer PRIVATE sys_scan_core GTest::gtest_main)
+  target_include_directories(test_output_writer PRIVATE ${CMAKE_BINARY_DIR}/third_party)
+  add_test(NAME output_writer COMMAND test_output_writer)
+  
+  add_executable(test_gpg_signer tests/test_gpg_signer.cpp)
+  target_link_libraries(test_gpg_signer PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME gpg_signer COMMAND test_gpg_signer)
+  
+  add_executable(test_rule_engine_initializer tests/test_rule_engine_initializer.cpp)
+  target_link_libraries(test_rule_engine_initializer PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME rule_engine_initializer COMMAND test_rule_engine_initializer)
+  
+  add_executable(test_exit_code_handler tests/test_exit_code_handler.cpp)
+  target_link_libraries(test_exit_code_handler PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME exit_code_handler COMMAND test_exit_code_handler)
+  
+  # Integration test for complete workflow
+  add_executable(test_integration tests/test_integration.cpp)
+  target_link_libraries(test_integration PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME integration COMMAND test_integration)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically

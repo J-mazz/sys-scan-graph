@@ -27,8 +27,8 @@ int main(){
     write_rule(tmp, "and.rule",
         "id=and_all\n"
         "scope=*\n"
-        "condition0.field=title\n"
-        "condition0.contains=World Writable" // typical title prefix
+    "condition0.field=title\n"
+    "condition0.contains=World-writable" // match scanner title prefix (hyphenated)
         "\ncondition1.field=description\ncondition1.regex=dir\\s+/tmp\n"
         "severity=high\nmitre=T1000\n"
     );
@@ -36,19 +36,19 @@ int main(){
     // 2. Any/OR logic rule - match either title contains or description regex.
     write_rule(tmp, "or.rule",
         "id=or_any\nlogic=any\n"
-        "condition0.field=title\ncondition0.contains=World Writable\n"
+    "condition0.field=title\ncondition0.contains=World-writable\n"
         "condition1.field=description\ncondition1.regex=.*tmp.*\n"
         "severity=medium\nmitre=T2000\n"
     );
 
     // 3. Scoped rule (world_writable only) with severity override low and additional MITRE
     write_rule(tmp, "scoped.rule",
-        "id=scoped\nscope=world_writable\ncondition0.field=title\ncondition0.contains=World Writable\nseverity=low\nmitre=T3000\n"
+    "id=scoped\nscope=world_writable\ncondition0.field=title\ncondition0.contains=World-writable\nseverity=low\nmitre=T3000\n"
     );
 
     // 4. Legacy single-condition rule (field/contains) adds another MITRE tag
     write_rule(tmp, "legacy.rule",
-        "id=legacy_one\nfield=title\ncontains=World Writable\nmitre=T4000\n"
+    "id=legacy_one\nfield=title\ncontains=World-writable\nmitre=T4000\n"
     );
 
     cfg.rules_dir = tmp.string(); set_config(cfg);

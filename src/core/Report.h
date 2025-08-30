@@ -32,13 +32,15 @@ public:
     const std::vector<ScanResult>& results() const { return results_; }
     const std::vector<std::pair<std::string,std::string>>& warnings() const { return warnings_; }
     const std::vector<std::pair<std::string,std::string>>& errors() const { return errors_; }
+    // Thread-safe aggregate counts
+    size_t total_findings() const;
 private:
     std::vector<ScanResult> results_;
     std::vector<std::pair<std::string,std::string>> warnings_; // (scanner, jsonified structured warning)
     std::vector<std::pair<std::string,std::string>> errors_;
     std::vector<std::pair<std::string,std::string>> partial_warnings_; // structured partial failure warnings
     std::map<std::string, std::map<std::string,std::string>> compliance_summary_; // standard -> metrics (stringified)
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 public:
     const std::map<std::string,std::map<std::string,std::string>>& compliance_summary() const { return compliance_summary_; }
     void set_compliance_metric(const std::string& standard, const std::string& key, const std::string& value){ std::lock_guard<std::mutex> lock(mutex_); compliance_summary_[standard][key]=value; }

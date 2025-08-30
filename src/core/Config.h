@@ -77,6 +77,8 @@ struct Config {
     // Compliance
     bool compliance = false; // enable compliance scanners
     std::vector<std::string> compliance_standards; // subset selection (empty=all registered)
+        bool fast_scan = false;        // skip heavy scanners (modules, integrity, ebpf) for quick triage
+        bool timings = false;          // include per-scanner timing metrics in output meta
 };
 
 Config& config();
