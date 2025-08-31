@@ -282,7 +282,7 @@ No external network calls by default. Optional corpus enrichment (`AGENT_LOAD_HF
 ## 8. Diagrams
 
 <div align="center">
-  <img src="sys-scan-graph_diagram.png" alt="System Architecture Diagram" width="600"/>
+  <img src="assets/sys-scan-graph_diagram.png" alt="System Architecture Diagram" width="600"/>
 </div>
 
 ### Core → Intelligence Layer Data Flow

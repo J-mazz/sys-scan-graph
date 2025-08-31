@@ -10,7 +10,7 @@ This module provides sophisticated LLM integration with:
 - Structured output parsing
 """
 
-from typing import Protocol, List, Optional, Dict, Any, Union
+from typing import Protocol, List, Optional, Dict, Any, Union, Tuple
 import asyncio
 import time
 import logging
@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 from .models import Reductions, Correlation, Summaries, ActionItem
-from .llm_provider import ILLMProvider, NullLLMProvider
+from .llm_provider import ILLMProvider, NullLLMProvider, ProviderMetadata
 
 # Try to import data governance, fallback if not available
 try:
@@ -98,7 +98,7 @@ class EnhancedLLMProvider(ILLMProvider):
 
         return 'null'
 
-    async def _execute_with_fallback(self, operation: str, *args, **kwargs):
+    async def _execute_with_fallback(self, operation: str, *args, **kwargs) -> Tuple[Any, ProviderMetadata]:
         """Execute operation with automatic fallback."""
         errors = []
 
@@ -108,10 +108,28 @@ class EnhancedLLMProvider(ILLMProvider):
 
             try:
                 # Add timeout
-                result = await asyncio.wait_for(
+                start_time = time.time()
+                result_tuple = await asyncio.wait_for(
                     self._call_provider_method(provider, operation, *args, **kwargs),
                     timeout=self.timeout
                 )
+                
+                # Unpack the result and metadata
+                if isinstance(result_tuple, tuple) and len(result_tuple) == 2:
+                    result, provider_metadata = result_tuple
+                else:
+                    # Handle legacy providers that don't return metadata
+                    result = result_tuple
+                    provider_metadata = ProviderMetadata(
+                        model_name=provider_name,
+                        provider_name="enhanced",
+                        latency_ms=int((time.time() - start_time) * 1000),
+                        tokens_prompt=0,
+                        tokens_completion=0,
+                        cached=False,
+                        fallback=False,
+                        timestamp=datetime.now().isoformat()
+                    )
 
                 if provider_name != self.current_provider:
                     self.metrics['fallbacks'] += 1
@@ -119,7 +137,20 @@ class EnhancedLLMProvider(ILLMProvider):
 
                 self.current_provider = provider_name
                 self.metrics['calls_made'] += 1
-                return result
+                
+                # Update metadata with enhanced provider info
+                enhanced_metadata = ProviderMetadata(
+                    model_name=provider_metadata.model_name,
+                    provider_name="enhanced",
+                    latency_ms=provider_metadata.latency_ms,
+                    tokens_prompt=provider_metadata.tokens_prompt,
+                    tokens_completion=provider_metadata.tokens_completion,
+                    cached=provider_metadata.cached,
+                    fallback=provider_metadata.fallback or (self.metrics['fallbacks'] > 0),
+                    timestamp=provider_metadata.timestamp
+                )
+                
+                return result, enhanced_metadata
 
             except Exception as e:
                 error_msg = f"Provider {provider_name} failed: {e}"
@@ -133,7 +164,36 @@ class EnhancedLLMProvider(ILLMProvider):
         # All providers failed, use null provider
         logger.error(f"All providers failed, using null provider. Errors: {errors}")
         null_provider = NullLLMProvider()
-        return await self._call_provider_method(null_provider, operation, *args, **kwargs)
+        start_time = time.time()
+        result_tuple = await self._call_provider_method(null_provider, operation, *args, **kwargs)
+        
+        if isinstance(result_tuple, tuple) and len(result_tuple) == 2:
+            result, provider_metadata = result_tuple
+        else:
+            result = result_tuple
+            provider_metadata = ProviderMetadata(
+                model_name="null-fallback",
+                provider_name="enhanced",
+                latency_ms=int((time.time() - start_time) * 1000),
+                tokens_prompt=0,
+                tokens_completion=0,
+                cached=False,
+                fallback=True,
+                timestamp=datetime.now().isoformat()
+            )
+        
+        enhanced_metadata = ProviderMetadata(
+            model_name=provider_metadata.model_name,
+            provider_name="enhanced",
+            latency_ms=provider_metadata.latency_ms,
+            tokens_prompt=provider_metadata.tokens_prompt,
+            tokens_completion=provider_metadata.tokens_completion,
+            cached=provider_metadata.cached,
+            fallback=True,
+            timestamp=provider_metadata.timestamp
+        )
+        
+        return result, enhanced_metadata
 
     async def _call_provider_method(self, provider: ILLMProvider, operation: str, *args, **kwargs):
         """Call the appropriate method on the provider."""
@@ -148,13 +208,27 @@ class EnhancedLLMProvider(ILLMProvider):
     def summarize(self, reductions: Reductions, correlations: List[Correlation],
                   actions: List[ActionItem], *, skip: bool = False,
                   previous: Optional[Summaries] = None, skip_reason: Optional[str] = None,
-                  baseline_context: Optional[Dict[str, Any]] = None) -> Summaries:
+                  baseline_context: Optional[Dict[str, Any]] = None) -> Tuple[Summaries, ProviderMetadata]:
 
+        start_time = time.time()
+        
         # Check cache first
         cache_key = self._generate_cache_key('summarize', reductions, correlations)
         if cache_key in self.cache:
             self.metrics['cache_hits'] += 1
-            return self.cache[cache_key]
+            cached_result, cached_metadata = self.cache[cache_key]
+            latency = time.time() - start_time
+            metadata = ProviderMetadata(
+                model_name=cached_metadata.model_name,
+                provider_name="enhanced",
+                latency_ms=int(latency * 1000),
+                tokens_prompt=cached_metadata.tokens_prompt,
+                tokens_completion=cached_metadata.tokens_completion,
+                cached=True,
+                fallback=cached_metadata.fallback,
+                timestamp=datetime.now().isoformat()
+            )
+            return cached_result, metadata
 
         # Execute with fallback
         async def _summarize():
@@ -164,31 +238,74 @@ class EnhancedLLMProvider(ILLMProvider):
                 baseline_context=baseline_context
             )
 
-        result = asyncio.run(_summarize())
+        result, provider_metadata = asyncio.run(_summarize())
 
         # Cache result
-        self.cache[cache_key] = result
+        self.cache[cache_key] = (result, provider_metadata)
 
-        # Update metrics
-        if hasattr(result, 'metrics'):
-            self.metrics['tokens_used'] += result.metrics.get('tokens_prompt', 0) + result.metrics.get('tokens_completion', 0)
+        # Update metrics from provider metadata
+        self.metrics['tokens_used'] += provider_metadata.tokens_prompt + provider_metadata.tokens_completion
 
-        return result
+        latency = time.time() - start_time
+        metadata = ProviderMetadata(
+            model_name=provider_metadata.model_name,
+            provider_name="enhanced",
+            latency_ms=int(latency * 1000),
+            tokens_prompt=provider_metadata.tokens_prompt,
+            tokens_completion=provider_metadata.tokens_completion,
+            cached=False,
+            fallback=provider_metadata.fallback or (self.metrics['fallbacks'] > 0),
+            timestamp=datetime.now().isoformat()
+        )
+
+        return result, metadata
 
     def refine_rules(self, suggestions: List[Dict[str, Any]],
-                     examples: Optional[Dict[str, List[str]]] = None) -> List[Dict[str, Any]]:
+                     examples: Optional[Dict[str, List[str]]] = None) -> Tuple[List[Dict[str, Any]], ProviderMetadata]:
+
+        start_time = time.time()
 
         async def _refine():
             return await self._execute_with_fallback('refine_rules', suggestions, examples)
 
-        return asyncio.run(_refine())
+        result, provider_metadata = asyncio.run(_refine())
 
-    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Dict[str, Any]:
+        latency = time.time() - start_time
+        metadata = ProviderMetadata(
+            model_name=provider_metadata.model_name,
+            provider_name="enhanced",
+            latency_ms=int(latency * 1000),
+            tokens_prompt=provider_metadata.tokens_prompt,
+            tokens_completion=provider_metadata.tokens_completion,
+            cached=False,
+            fallback=provider_metadata.fallback or (self.metrics['fallbacks'] > 0),
+            timestamp=datetime.now().isoformat()
+        )
+
+        return result, metadata
+
+    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Tuple[Dict[str, Any], ProviderMetadata]:
+
+        start_time = time.time()
 
         async def _triage():
             return await self._execute_with_fallback('triage', reductions, correlations)
 
-        return asyncio.run(_triage())
+        result, provider_metadata = asyncio.run(_triage())
+
+        latency = time.time() - start_time
+        metadata = ProviderMetadata(
+            model_name=provider_metadata.model_name,
+            provider_name="enhanced",
+            latency_ms=int(latency * 1000),
+            tokens_prompt=provider_metadata.tokens_prompt,
+            tokens_completion=provider_metadata.tokens_completion,
+            cached=False,
+            fallback=provider_metadata.fallback or (self.metrics['fallbacks'] > 0),
+            timestamp=datetime.now().isoformat()
+        )
+
+        return result, metadata
 
     def _generate_cache_key(self, operation: str, *args) -> str:
         """Generate cache key for operation."""

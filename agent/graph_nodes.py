@@ -19,10 +19,24 @@ from .reduction import reduce_all
 from .llm_provider import get_llm_provider
 from .rules import Correlator, DEFAULT_RULES
 from .rule_gap_miner import mine_gap_candidates
+from .graph_state import normalize_graph_state
 try:  # Optional: message classes for tool planning/integration
     from langchain_core.messages import AIMessage, ToolMessage  # type: ignore
 except Exception:  # pragma: no cover
     AIMessage = ToolMessage = None  # type: ignore
+
+# Import batch processing helpers from scaffold
+try:
+    from .graph_nodes_scaffold import (
+        _batch_extract_finding_fields,
+        _batch_filter_findings_by_severity,
+        _batch_check_baseline_status,
+    )
+except ImportError:  # pragma: no cover
+    # Fallback if scaffold not available
+    def _batch_extract_finding_fields(findings): return {'severities': []}
+    def _batch_filter_findings_by_severity(fields, severity_levels): return []
+    def _batch_check_baseline_status(findings): return []
 
 
 def _append_warning(state: GraphState, module: str, stage: str, error: str, hint: str | None = None):
@@ -57,6 +71,9 @@ def enrich_findings(state: GraphState) -> GraphState:
 
     Converts raw_findings into enriched_findings using existing augment + knowledge code.
     """
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)
+
     try:
         findings = _findings_from_graph(state)
         sr = ScannerResult(scanner='mixed', finding_count=len(findings), findings=findings)
@@ -79,6 +96,9 @@ def enrich_findings(state: GraphState) -> GraphState:
 
 
 def correlate_findings(state: GraphState) -> GraphState:
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     try:
         findings: List[Finding] = []
         for finding_dict in state.get('enriched_findings', []) or []:
@@ -106,6 +126,9 @@ def correlate_findings(state: GraphState) -> GraphState:
 
 
 def summarize_host_state(state: GraphState) -> GraphState:
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     try:
         # Iteration guard: default max iterations 3
         max_iter = int(__import__('os').environ.get('AGENT_MAX_SUMMARY_ITERS', '3'))
@@ -143,6 +166,9 @@ def suggest_rules(state: GraphState) -> GraphState:
 
     Uses existing gap miner; writes a temp file to leverage current API.
     """
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     try:
         findings = state.get('enriched_findings') or []
         with tempfile.TemporaryDirectory() as td:
@@ -164,22 +190,31 @@ def suggest_rules(state: GraphState) -> GraphState:
 
 
 def should_suggest_rules(state: GraphState) -> str:  # Router for conditional edge
-    """Decide whether to invoke rule suggestion based on enriched findings.
+    """Decide whether to invoke rule suggestion based on enriched findings with optimized batch processing.
 
+    Optimized: Uses batch processing to eliminate redundant finding iterations.
     Heuristic: If at least one enriched finding has severity == 'high' (case-insensitive),
     proceed to the expensive suggestion phase; otherwise end the graph.
     """
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     try:
         enriched = state.get('enriched_findings') or []
-        high_severity_count = 0
-        for finding in enriched:
-            sev = str(finding.get('severity', '')).lower()
-            if sev == 'high':
-                high_severity_count += 1
-                if high_severity_count:
-                    break
-        if high_severity_count > 0:
+        if not enriched:
+            try:  # pragma: no cover - trivial import guard
+                from langgraph.graph import END  # type: ignore
+                return END  # type: ignore
+            except Exception:
+                return "__end__"  # Fallback symbolic end if library missing
+
+        # Batch check for high severity findings
+        fields = _batch_extract_finding_fields(enriched)
+        high_severity_indices = _batch_filter_findings_by_severity(fields, {'high'})
+
+        if high_severity_indices:
             return "suggest_rules"
+
         # Import END lazily to avoid hard dependency at import time
         try:  # pragma: no cover - trivial import guard
             from langgraph.graph import END  # type: ignore
@@ -195,50 +230,78 @@ def should_suggest_rules(state: GraphState) -> str:  # Router for conditional ed
 
 
 def choose_post_summarize(state: GraphState) -> str:  # Router after summarize
-    """Decide next step after summarize.
+    """Decide next step after summarize with optimized batch processing.
 
+    Optimized: Uses batch processing to eliminate redundant finding iterations.
     Order of precedence:
     1. If baseline cycle not yet done and any enriched finding missing baseline_status -> plan_baseline
     2. Else defer to should_suggest_rules routing (suggest_rules or END)
     """
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     if not state.get('baseline_cycle_done'):
         enriched = state.get('enriched_findings') or []
-        for finding in enriched:
-            if 'baseline_status' not in finding:  # simple heuristic trigger
-                return 'plan_baseline'
+        if not enriched:
+            return should_suggest_rules(state)
+
+        # Batch check for missing baseline status
+        missing_indices = _batch_check_baseline_status(enriched)
+        if missing_indices:
+            return 'plan_baseline'
+
     # Delegate to existing router
     return should_suggest_rules(state)
 
 
 def plan_baseline_queries(state: GraphState) -> GraphState:
-    """Construct tool call messages for baseline queries if needed.
+    """Construct tool call messages for baseline queries if needed with optimized batch processing.
 
+    Optimized: Uses batch processing to eliminate redundant finding iterations.
     Populates state['messages'] with an AIMessage containing tool_calls for each
     finding lacking baseline_status. ToolNode will execute these in batch.
     """
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     if AIMessage is None:  # Dependency missing; skip planning
         return state
     enriched = state.get('enriched_findings') or []
-    pending = [finding for finding in enriched if 'baseline_status' not in finding]
-    if not pending:
+    if not enriched:
         return state
+
+    # Batch check baseline status
+    missing_indices = _batch_check_baseline_status(enriched)
+    if not missing_indices:
+        return state
+
+    # Batch extract fields for missing findings
+    missing_findings = [enriched[i] for i in missing_indices]
+    fields = _batch_extract_finding_fields(missing_findings)
+
+    # Build tool calls using batched data
     tool_calls = []
     host_id = __import__('os').environ.get('AGENT_GRAPH_HOST_ID','graph_host')
-    for finding in pending:
-        fid = finding.get('id') or 'unknown'
-        title = finding.get('title') or ''
-        severity = finding.get('severity') or ''
-        scanner = finding.get('scanner') or 'mixed'
+
+    for i, (fid, title, severity, scanner) in enumerate(zip(
+        fields['ids'], fields['titles'], fields['severities'], fields['metadata_list']
+    )):
+        # Extract scanner from metadata if available
+        scanner_name = 'mixed'
+        if isinstance(scanner, dict):
+            scanner_name = scanner.get('scanner', 'mixed')
+
         tool_calls.append({
             'name': 'query_baseline',
             'args': {
-                'finding_id': fid,
-                'title': title,
-                'severity': severity,
-                'scanner': scanner,
+                'finding_id': fid or f'unknown_{i}',
+                'title': title or '',
+                'severity': severity or '',
+                'scanner': scanner_name,
                 'host_id': host_id
             }
         })
+
     msgs = state.get('messages') or []
     msgs.append(AIMessage(content="Baseline context required", tool_calls=tool_calls))  # type: ignore[arg-type]
     state['messages'] = msgs
@@ -250,6 +313,9 @@ def integrate_baseline_results(state: GraphState) -> GraphState:
 
     Marks baseline_cycle_done to prevent repeated looping.
     """
+    # Normalize state to ensure all mandatory keys exist
+    state = normalize_graph_state(state)  # type: ignore
+
     if ToolMessage is None:  # Dependency missing
         state['baseline_cycle_done'] = True
         return state

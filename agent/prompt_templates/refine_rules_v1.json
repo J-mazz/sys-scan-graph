@@ -1,0 +1,13 @@
+{
+  "id": "refine_rules_v1",
+  "version": "v1",
+  "name": "rule_refinement",
+  "description": "Template for refining security rules with contextual examples",
+  "template": "Given the following security rule suggestions and contextual examples, refine and improve the rules:\n\nRule Suggestions:\n{rule_suggestions}\n\nContextual Examples:\n{examples}\n\nCurrent Environment:\n{environment}\n\nPlease refine each rule by:\n1. Improving the rule logic and conditions\n2. Adding relevant tags based on the examples\n3. Setting appropriate confidence scores\n4. Providing clear rationales\n\nReturn the refined rules as a JSON array with objects containing: id, conditions, logic, tags, confidence, rationale.",
+  "variables": ["rule_suggestions", "examples", "environment"],
+  "response_format": "json",
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z",
+  "performance_score": 0.78,
+  "usage_count": 89
+}

@@ -80,3 +80,6 @@ agent/venv/
 .venv/
 */venv/
 */.venv/
+
+# Assets (tracked - contains documentation images)
+# assets/  # <- Intentionally NOT ignored - contains docs images

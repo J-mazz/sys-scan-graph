@@ -1,0 +1,13 @@
+{
+  "id": "triage_v1",
+  "version": "v1",
+  "name": "security_triage",
+  "description": "Template for triaging security findings and prioritizing response actions",
+  "template": "Analyze the following security scan data and correlations to triage findings:\n\nReductions Data:\n{reductions}\n\nCorrelations:\n{correlations}\n\nBusiness Context:\n{business_context}\n\nPlease perform triage analysis by:\n1. Identifying the top 5 most critical findings\n2. Assessing the correlation patterns and their significance\n3. Determining the overall security posture\n4. Recommending immediate response actions\n\nReturn analysis as JSON with: top_findings (array), correlation_count (number), security_posture (string), response_actions (array).",
+  "variables": ["reductions", "correlations", "business_context"],
+  "response_format": "json",
+  "created_at": "2024-01-15T11:00:00Z",
+  "updated_at": "2024-01-15T11:00:00Z",
+  "performance_score": 0.82,
+  "usage_count": 67
+}

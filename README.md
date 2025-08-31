@@ -2,7 +2,7 @@
 # sys-scan-graph
 
 <div align="center">
-  <img src="sys-scan-graph_badge.jpg" alt="sys-scan-graph Logo" width="500"/>
+  <img src="assets/sys-scan-graph_badge.jpg" alt="sys-scan-graph Logo" width="500"/>
 </div>
 ## System Security Scanner & Intelligence Graph
 **Sys-Scan-Graph**: is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
@@ -160,7 +160,7 @@ python -m agent.cli fleet-report --out fleet_report.json
 ## 6. High‑Level Architecture
 
 <div align="center">
-  <img src="sys-scan-graph_diagram.jpg" alt="System Architecture Diagram" width="1000"/>
+  <img src="assets/sys-scan-graph_diagram.jpg" alt="System Architecture Diagram" width="1000"/>
 </div>
 
 ```
@@ -564,7 +564,7 @@ Outputs:
 - manifest.json (version, rule pack SHA, embedding model hash, weights)
 
 <div align="center">
-  <img src="Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>
+  <img src="assets/Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>
 </div>
 The script prints total wall time for two enrichment runs; single-run latency should target <1.5s on a modern laptop for typical host sizes.
 
