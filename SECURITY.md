@@ -17,7 +17,7 @@ Please **do not open a public GitHub Issue for security problems**.
 Use one of these private channels instead:
 
 1. **GitHub Security Advisory (preferred)**  
-   Open a draft advisory here: https://github.com/J-mazz/sys-scan/security/advisories/new  
+   Open a draft advisory here: https://github.com/Mazzlabs/sys-scan-graph/security/advisories/new  
    This creates a private workspace where we can discuss details and coordinate a fix & disclosure timeline.
 
 2. **Email (fallback)**  

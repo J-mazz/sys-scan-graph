@@ -1,8 +1,21 @@
 <!-- REWRITTEN README (2025) -->
-# ---
+# sys-scan-graph
+
+<div align="center">
+  <img src="Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>
+</div>
+
+## System Security Scanner & Intelligence Graph
+
+**Repository Origin**: This is a proprietary fork of the open-source [`J-mazz/sys-scan`](https://github.com/J-mazz/sys-scan) repository. The core C++20 scanner is based on the MIT-licensed original, but this fork includes proprietary enhancements and the Intelligence Layer.
+
+Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine.
+
+---
+
 ## 1. Quick Start (Core)
 ```bash
-git clone https://github.com/J-mazz/sys-scan-graph.git
+git clone https://github.com/Mazzlabs/sys-scan-graph.git
 cd sys-scan-graph
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
@@ -19,7 +32,7 @@ cmake --build build -j$(nproc)
 - ✅ LangGraph analysis pipeline working with enriched reports and HTML output
 
 Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine. The open‑core scanner delivers trustworthy, reproducible telemetry; an optional proprietary Intelligence Layer (this fork) transforms that raw signal into correlated insights, baselines, rarity analytics, compliance gap normalization, ATT&CK coverage summaries, and executive reporting.
-![CI](https://github.com/J-mazz/sys-scan/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Mazzlabs/sys-scan-graph/actions/workflows/ci.yml/badge.svg)
 
 Key design pillars:
 * High‑signal, low‑noise findings (aggregation & baseline downgrades)
@@ -36,25 +49,33 @@ It targets Debian/Ubuntu (but aims to stay broadly portable) and is designed to 
 3. Core Scanners
 4. Output & Formats
 5. Rules Engine
-6. Privacy & Noise Reduction
-7. Security Hardening Model
-8. Determinism, Reproducibility & Provenance
-9. Risk & Severity Model
-10. Schema & Versioning
-11. Build & Install
-12. Usage Scenarios & Recipes
-13. CI / Pipeline Integration
-14. Examples (JSON / NDJSON / SARIF snippets)
-15. Advanced Flags Reference
-16. LangGraph Enrichment Graph (Optional)
-17. Roadmap & Ideas
-18. License & Usage
+6. High-Level Architecture
+7. Core Scanner Capabilities (OSS)
+8. LLM Provider Architecture
+9. Performance Baseline & Regression Detection
+10. Roadmap & Ideas
+11. License & Usage
+12. Intelligence Layer Pipeline / DAG
+13. LangGraph Orchestration & Cyclical Reasoning
+14. Risk & Probability Model
+15. Baseline, Rarity & Process Novelty
+16. Correlation & Rule Engine
+17. Compliance & Gap Normalization
+18. ATT&CK Coverage & Causal Hypotheses
+19. Follow-Ups, Trust & Policy Enforcement
+20. Performance, Determinism & Manifest
+21. Data Governance & Redaction
+22. Fleet & Rarity Reporting
+23. CLI Highlights
+24. Extensibility Guides
+25. Versioning & Roadmap
+26. License
 
 ---
 ## 1. Quick Start (Core)
 ```bash
-git clone https://github.com/J-mazz/sys-scan.git
-cd sys-scan
+git clone https://github.com/Mazzlabs/sys-scan-graph.git
+cd sys-scan-graph
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ./build/sys-scan --canonical --modules-summary --min-severity info > report.json
@@ -124,7 +145,7 @@ rule "Escalate deleted suspicious binary" {
 	when {
 Runtime overrides via env (`SYS_SCAN_PROV_*`) or `--slsa-level`. Deterministic canonical mode + optional timestamp zeroing yields stable hashes for attestations or artifact promotion.
 
-SYS_SCAN_CANON_TIME_ZERO=1 ./b/sys-scan --canonical > r.json
+SYS_SCAN_CANON_TIME_ZERO=1 ./build/sys-scan --canonical > r.json
 sha256sum r.json
 ```
 Generate provenance env file:
@@ -149,7 +170,12 @@ python -m agent.cli fleet-report --out fleet_report.json
 ```
 
 ---
-## 3. High‑Level Architecture
+## 6. High‑Level Architecture
+
+<div align="center">
+  <img src="sys-scan-graph_diagram.png" alt="System Architecture Diagram" width="600"/>
+</div>
+
 ```
 					+-------------------------+
 					|    Core Scanner (C++)   |
@@ -170,7 +196,7 @@ Core responsibilities: collection, minimal transformation, canonicalization, rep
 Intelligence Layer adds: enrichment, multi-signal correlation, temporal & cross-host analytics, calibrated risk & probability, summarization (LLM‑optional), ATT&CK coverage, compliance gap normalization, performance telemetry, deterministic output ordering.
 
 ---
-## 4. Core Scanner Capabilities (OSS)
+## 7. Core Scanner Capabilities (OSS)
 | Scanner | Key Signals |
 |---------|-------------|
 | process | Deleted / temp execs, SUID in home, hashed executables (opt) |
@@ -260,7 +286,7 @@ Use this to fail CI on unexpected slowdowns without altering functional output d
 All enrichment logic is additive; the Core scanner output format is not modified. If you only need raw deterministic scanning, ignore `agent/` entirely.
 
 ---
-## 17. Roadmap & Ideas
+## 10. Roadmap & Ideas
 See also inline comments / issues. Near‑term concepts:
 * Extended risk scoring calibrations.
 * Package integrity (dpkg/rpm verify) & mismatch aggregation.
@@ -269,13 +295,30 @@ See also inline comments / issues. Near‑term concepts:
 * Additional output signing backends (cosign, age).
 
 ----
-## 18. License & Usage
-Licensed under the MIT License. See `LICENSE`.
+## 11. License & Usage
+
+**Important Licensing Clarification:**
+
+This repository (`Mazzlabs/sys-scan-graph`) is a **proprietary fork** and does **NOT** carry an MIT license. It is based on the original open-source repository [`J-mazz/sys-scan`](https://github.com/J-mazz/sys-scan) which is MIT-licensed.
+
+### Licensing Structure
+
+- **Core Scanner (C++20)**: Based on the MIT-licensed `J-mazz/sys-scan` repository, but this fork includes proprietary modifications and enhancements
+- **Intelligence Layer (`agent/` directory)**: Proprietary restricted license - internal evaluation only
+- **This Repository**: No MIT license applies - proprietary license governs the entire codebase
+
+### Usage Rights
+
+- **Internal Use**: Permitted for evaluation and internal operations
+- **Redistribution**: Requires separate commercial agreement
+- **Commercial Use**: Contact Joseph@Mazzlabs.works for licensing terms
+
+See `LICENSE` file for complete licensing details and restrictions.
 
 Parallel execution: pass `--parallel` (and optionally `--parallel-threads N`) to run scanners concurrently. Ordering & timing records remain deterministic: starts are emitted in registration order, findings appended under a mutex, and completions normalized so final JSON ordering matches the sequential baseline.
 
 ---
-## 5. Intelligence Layer Pipeline / DAG
+## 12. Intelligence Layer Pipeline / DAG
 Sequential `pipeline.py` and DAG `graph_pipeline.py` implement these deterministic stages:
 1. Load / Validate (size & UTF‑8 guards, JSON schema optional)  
 2. Augment (host_id derivation, scan_id, tagging, host role classification, initial risk_subscores)  
@@ -296,7 +339,7 @@ Sequential `pipeline.py` and DAG `graph_pipeline.py` implement these determinist
 All transformations are local & deterministic given identical inputs, weights, calibration and rule pack.
 
 ---
-## 6. LangGraph Orchestration & Cyclical Reasoning
+## 13. LangGraph Orchestration & Cyclical Reasoning
 The LangGraph workflow implements a bounded baseline enrichment iteration followed by optional rule suggestion:
 * Active baseline enrichment loop: summarize -> (if any enriched finding lacks baseline_status) plan_baseline -> baseline_tools -> integrate_baseline -> summarize.
 * Iteration guard: `AGENT_MAX_SUMMARY_ITERS` (default 3) limits summarize passes; each pass increments `iteration_count`.
@@ -312,7 +355,7 @@ enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> 
 Fast path (no baseline needed): `enrich -> summarize -> suggest_rules -> END`.
 
 ---
-## 7. Risk & Probability Model
+## 14. Risk & Probability Model
 Risk subscores: impact, exposure, anomaly, confidence. Composite:
 ```
 raw = impact*W_i + exposure*W_e + anomaly*W_a
@@ -322,45 +365,45 @@ Weights: persistent JSON (`agent_risk_weights.json`) or env overrides. Logistic 
 CLI helpers: `risk-weights`, `risk-calibration`, `risk-decision` (analyst feedback to calibration table).
 
 ---
-## 8. Baseline, Rarity & Process Novelty
+## 15. Baseline, Rarity & Process Novelty
 SQLite schema tracks: finding first_seen & counts, module presence per host, per-scan metrics (drift analysis), calibration observations, process clusters (vector sums), EWMA metrics.
 Rarity file (`rarity.yaml`) produced via `rarity-generate-cmd` encodes fleet-wide module rarity scores feeding module reduction stats.
 Process novelty: deterministic 32-dim token hashed embedding + cosine distance; far vectors escalate anomaly (bounded by caps) & attach rationale.
 
 ---
-## 9. Correlation & Rule Engine
+## 16. Correlation & Rule Engine
 Rule merge order: user rule dirs (from config) first, then default in-repo rules, dedup by id (first wins). Conditions support field and metadata matching, ANY/ALL logic, exposure bonus (unique exposure tags). Predicate hit map recorded for explainability. Additional synthetic correlations: sequence anomalies, multi-host module propagation.
 
 ---
-## 10. Compliance & Gap Normalization
+## 17. Compliance & Gap Normalization
 Raw core may include `compliance_summary` and `compliance_gaps`. Intelligence Layer: severity normalization, remediation hint enrichment (knowledge map), metrics export (`compliance_gap_count`).
 
 ---
-## 11. ATT&CK Coverage & Causal Hypotheses
+## 18. ATT&CK Coverage & Causal Hypotheses
 Tag→Tech mapping (`agent/attack_mapping.yaml`) aggregated into coverage metrics: technique_count, techniques[], tag_hits{}. Heuristic causal hypotheses derived from correlation tags (`sequence_anomaly`, `module_propagation`, `metric_drift` + routing) – all marked speculative/low confidence.
 
 ---
-## 12. Follow‑Ups, Trust & Policy Enforcement
+## 19. Follow‑Ups, Trust & Policy Enforcement
 Deterministic follow-ups executed for selected findings (hash + package manager query). Trusted binary hashes (knowledge manifest) can downgrade severity & adjust rationale. Policy layer escalates severity for executables outside approved directories and tags denied paths.
 
 ---
-## 13. Performance, Determinism & Manifest
+## 20. Performance, Determinism & Manifest
 Every stage timed & counted; snapshot saved & compared to prior baseline (regression threshold env-configurable). Manifest (`manifest.json`) includes version, rule_pack_sha, weights, embedding_model_hash. Enriched output is canonicalized (sorted keys + stable ordering of arrays) to minimize diff noise.
 
 ---
-## 14. Data Governance & Redaction
+## 21. Data Governance & Redaction
 Redaction rules sanitize filesystem/user-identifying substrings. LLM summarization gated by risk threshold and redacted objects only. Token & estimated cost accounting embedded (`summaries.metrics`). Optional corpus insights (when `AGENT_LOAD_HF_CORPUS=1`) add high-level row counts & schema fingerprints (hashed column sets only).
 
 ---
-## 15. Fleet & Rarity Reporting
+## 22. Fleet & Rarity Reporting
 `fleet-report` aggregates: outlier hosts (z-score of finding.count.total), newly common modules (simultaneous first_seen), risk distribution histogram. Rarity generation uses module observation host counts to compute rarity scores consumed by reductions.
 
 ---
-## 16. CLI Highlights
+## 23. CLI Highlights
 Core (scanner): see `--help` for full list. Common:
 ```
-./sys-scan --canonical --min-severity low --fail-on high
-./sys-scan --ndjson --modules-summary
+./build/sys-scan --canonical --min-severity low --fail-on high
+./build/sys-scan --ndjson --modules-summary
 ```
 Agent:
 ```
@@ -375,7 +418,7 @@ python -m agent.cli verify --report report.json --verify-key keys/agent.vk
 ```
 
 ---
-## 17. Extensibility Guides
+## 24. Extensibility Guides
 | Extension | How |
 |-----------|-----|
 | New Scanner | Add C++ implementation, register in `ScannerRegistry`, maintain deterministic order |
@@ -388,7 +431,7 @@ python -m agent.cli verify --report report.json --verify-key keys/agent.vk
 Testing: minimal unit tests under `agent/tests/` demonstrate fuzzing & pipeline invariants (metric drift, rule scoring). Keep additions deterministic (avoid wall-clock except through provided time abstraction) for reproducible output.
 
 ---
-## 18. Versioning & Roadmap
+## 25. Versioning & Roadmap
 Schema: current core schema major = `2`. Increments only on breaking structural changes. Intelligence Layer output version header: `EnrichedOutput.version` (currently `agent_mvp_1`).
 
 Roadmap (abridged):
@@ -400,19 +443,26 @@ Roadmap (abridged):
 * Alternative signing backends (cosign/age) & build attestation format integration.
 
 ---
-## 19. License
-This repository is a hybrid distribution:
+## 26. License
 
-* Core Scanner (C++20) — MIT licensed. See `LICENSE` Section A ("Core Software") for full text.
-* Intelligence Layer (`agent/` and enriched artifacts) — Proprietary Restricted License. See `LICENSE` Section B. Internal evaluation and operation permitted; redistribution / SaaS / commercialization requires a separate agreement.
+**Proprietary Repository Notice:**
 
-SPDX identifiers used in source files:
-* `SPDX-License-Identifier: MIT` for Core code.
-* `SPDX-License-Identifier: LicenseRef-Proprietary-Intelligence` for proprietary components.
+This repository (`Mazzlabs/sys-scan-graph`) is a proprietary fork of the open-source [`J-mazz/sys-scan`](https://github.com/J-mazz/sys-scan) repository. **No MIT license applies to this repository.**
 
-Running the proprietary layer alongside the Core does not alter the Core's MIT licensing.
+### Repository Licensing
 
-For commercial licensing or redistribution inquiries: Joseph@Mazzlabs.works
+- **This Fork**: Proprietary license - see `LICENSE` file for complete terms
+- **Original Source**: Based on MIT-licensed `J-mazz/sys-scan` repository
+- **Core Scanner**: Proprietary modifications to the original MIT-licensed core
+- **Intelligence Layer**: Proprietary restricted license
+
+### Usage Terms
+
+- Internal evaluation and operation permitted
+- Redistribution, SaaS, or commercialization requires separate agreement
+- Contact: Joseph@Mazzlabs.works for commercial licensing
+
+See `LICENSE` file for detailed licensing terms and restrictions.
 
 ---
 ## Support / Questions
@@ -430,7 +480,7 @@ Open issues for bugs or design proposals (tag `design`). Security concerns: foll
 | Generate rarity file | `python -m agent.cli rarity-generate-cmd` |
 | Fleet report | `python -m agent.cli fleet-report` |
 | Rule gap mining | `python -m agent.cli rule-gap-mine --dir history --refine` |
-| Sign & verify | `python -m agent.cli keygen && python -m agent.cli sign ... && python -m agent.cli verify ...` |
+| Sign & verify | `python -m agent.cli keygen && python -m agent.cli sign --report report.json --signing-key keys/agent.sk && python -m agent.cli verify --report report.json --verify-key keys/agent.vk` |
 
 ---
 _End of README_
@@ -457,9 +507,9 @@ Key tests:
 Canonical JSON (`--canonical`) plus deterministic ordering (& optional `SYS_SCAN_CANON_TIME_ZERO=1`) enables stable hashing of reports. To attest integrity you can:
 Provenance override environment variables (if set, override embedded build constants): `SYS_SCAN_PROV_GIT_COMMIT`, `SYS_SCAN_PROV_COMPILER_ID`, `SYS_SCAN_PROV_COMPILER_VERSION`, `SYS_SCAN_PROV_CXX_STANDARD`, `SYS_SCAN_PROV_CXX_FLAGS`, `SYS_SCAN_PROV_SLSA_LEVEL`, `SYS_SCAN_PROV_BUILD_TYPE`.
 
-1. Produce report: `./sys-scan --canonical --output report.json`
-2. (Optional) Zero timestamps for fully reproducible hash: `SYS_SCAN_CANON_TIME_ZERO=1 ./sys-scan --canonical --output report.json`
-3. Sign with GPG: `./sys-scan --canonical --output report.json --sign-gpg <KEYID>` (emits `report.json.asc` detached signature)
+1. Produce report: `./build/sys-scan --canonical --output report.json`
+2. (Optional) Zero timestamps for fully reproducible hash: `SYS_SCAN_CANON_TIME_ZERO=1 ./build/sys-scan --canonical --output report.json`
+3. Sign with GPG: `./build/sys-scan --canonical --output report.json --sign-gpg <KEYID>` (emits `report.json.asc` detached signature)
 
 The `meta.provenance` object embeds build metadata for supply‑chain transparency:
 ```
