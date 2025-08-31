@@ -1,4 +1,5 @@
 #include "core/ScannerRegistry.h"
+#include "core/ScanContext.h"  // Added ScanContext include
 #include "core/Report.h"
 #include "core/JSONWriter.h"
 #include "core/Logging.h"
@@ -42,7 +43,7 @@ int main(int argc, char** argv) {
         return 2; // Parse error
     }
 
-    set_config(cfg);
+    // No need to set global config - using ScanContext pattern instead
 
     // Validate configuration
     ConfigValidator config_validator;
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
 
     // Register scanners
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     // Drop privileges if requested
     if (cfg.drop_priv) {
@@ -93,7 +94,8 @@ int main(int argc, char** argv) {
 
     // Run scanners
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);  // Create ScanContext with config and report references
+    registry.run_all(context);
 
     // Write output
     OutputWriter output_writer;

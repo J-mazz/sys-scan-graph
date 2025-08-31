@@ -11,9 +11,7 @@
 namespace sys_scan {
 
 bool OutputWriter::write_report(const Report& report, const Config& cfg) {
-    // Set the global config so JSONWriter can access it
-    set_config(cfg);
-    
+    // Config is passed directly to JSONWriter, no need for global state
     std::string json = json_writer_.write(report, cfg);
     json = format_json(json, cfg);
 

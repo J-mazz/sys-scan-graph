@@ -1,6 +1,7 @@
 #include "core/ScannerRegistry.h"
 #include "core/Report.h"
 #include "core/Config.h"
+#include "core/ScanContext.h"
 #include "core/RuleEngine.h"
 #include <cassert>
 #include <fstream>
@@ -51,14 +52,14 @@ int main(){
     "id=legacy_one\nfield=title\ncontains=World-writable\nmitre=T4000\n"
     );
 
-    cfg.rules_dir = tmp.string(); set_config(cfg);
+    cfg.rules_dir = tmp.string();
     // Explicitly load rules (mirrors main.cpp logic) before registering scanners
     {
         std::string warn; rule_engine().load_dir(cfg.rules_dir, warn); if(!warn.empty()) std::cerr << "Rule load warning: " << warn << "\n"; }
 
     // Run scanners
-    ScannerRegistry reg; reg.register_all_default();
-    Report rpt; reg.run_all(rpt);
+    ScannerRegistry reg; reg.register_all_default(cfg);
+    Report rpt; ScanContext context(cfg, rpt); reg.run_all(context);
 
     // Collect world_writable findings
     const auto& results = rpt.results();

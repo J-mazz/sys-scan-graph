@@ -1,6 +1,7 @@
 #include "core/ScannerRegistry.h"
 #include "core/Report.h"
 #include "core/Config.h"
+#include "core/ScanContext.h"
 #include "core/JSONWriter.h"
 #include <cassert>
 #include <iostream>
@@ -17,12 +18,12 @@ int main(){
         cfg.no_hostname_meta = true;
         cfg.pretty = false;
         cfg.process_inventory = true; // Enable process scanner
-        set_config(cfg);
 
         ScannerRegistry reg;
-        reg.register_all_default();
+        reg.register_all_default(cfg);
         Report rpt;
-        reg.run_all(rpt);
+        ScanContext context(cfg, rpt);
+        reg.run_all(context);
 
         JSONWriter writer;
         std::string out = writer.write(rpt, cfg);
@@ -44,12 +45,12 @@ int main(){
         cfg.no_hostname_meta = false;
         cfg.pretty = false;
         cfg.process_inventory = true;
-        set_config(cfg);
 
         ScannerRegistry reg;
-        reg.register_all_default();
+        reg.register_all_default(cfg);
         Report rpt;
-        reg.run_all(rpt);
+        ScanContext context(cfg, rpt);
+        reg.run_all(context);
 
         JSONWriter writer;
         std::string out = writer.write(rpt, cfg);

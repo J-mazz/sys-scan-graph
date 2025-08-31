@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(sys-scan VERSION 0.1.0 LANGUAGES CXX)
+project(sys-scan VERSION 5.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,7 +80,7 @@ add_library(sys_scan_core
   src/scanners/IntegrityScanner.cpp
   src/scanners/YaraScanner.cpp
   src/core/Privilege.cpp
-  $<$<BOOL:${WITH_EBPF}>:src/scanners/EbpfScanner.cpp>
+  src/scanners/EbpfScanner.cpp
 )
 
 if(WITH_EBPF)
@@ -319,6 +319,44 @@ if(BUILD_TESTS)
   add_executable(test_integration tests/test_integration.cpp)
   target_link_libraries(test_integration PRIVATE sys_scan_core GTest::gtest_main)
   add_test(NAME integration COMMAND test_integration)
+  
+  # Extended test files for comprehensive coverage
+  add_executable(test_argument_parser_extended tests/test_argument_parser_extended.cpp)
+  target_link_libraries(test_argument_parser_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME argument_parser_extended COMMAND test_argument_parser_extended)
+  
+  add_executable(test_config_validator_extended tests/test_config_validator_extended.cpp)
+  target_link_libraries(test_config_validator_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME config_validator_extended COMMAND test_config_validator_extended)
+  
+  add_executable(test_output_writer_extended tests/test_output_writer_extended.cpp)
+  target_link_libraries(test_output_writer_extended PRIVATE sys_scan_core GTest::gtest_main)
+  target_include_directories(test_output_writer_extended PRIVATE ${CMAKE_BINARY_DIR}/third_party)
+  add_test(NAME output_writer_extended COMMAND test_output_writer_extended)
+  
+  add_executable(test_exit_code_handler_extended tests/test_exit_code_handler_extended.cpp)
+  target_link_libraries(test_exit_code_handler_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME exit_code_handler_extended COMMAND test_exit_code_handler_extended)
+  
+  add_executable(test_gpg_signer_extended tests/test_gpg_signer_extended.cpp)
+  target_link_libraries(test_gpg_signer_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME gpg_signer_extended COMMAND test_gpg_signer_extended)
+  
+  add_executable(test_rule_engine_initializer_extended tests/test_rule_engine_initializer_extended.cpp)
+  target_link_libraries(test_rule_engine_initializer_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME rule_engine_initializer_extended COMMAND test_rule_engine_initializer_extended)
+  
+  add_executable(test_integration_extended tests/test_integration_extended.cpp)
+  target_link_libraries(test_integration_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME integration_extended COMMAND test_integration_extended)
+  
+  add_executable(test_system_extended tests/test_system_extended.cpp)
+  target_link_libraries(test_system_extended PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME system_extended COMMAND test_system_extended)
+  
+  add_executable(test_comprehensive_system tests/test_comprehensive_system.cpp)
+  target_link_libraries(test_comprehensive_system PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME comprehensive_system COMMAND test_comprehensive_system)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically

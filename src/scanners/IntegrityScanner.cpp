@@ -1,4 +1,5 @@
 #include "IntegrityScanner.h"
+#include "../core/ScanContext.h"
 #include "../core/Report.h"
 #include "../core/Config.h"
 #include "../core/Logging.h"
@@ -82,8 +83,8 @@ static std::string run_cmd_capture(const std::vector<std::string>& args) {
     }
 }
 
-void IntegrityScanner::scan(Report& report){
-    auto& cfg = config();
+void IntegrityScanner::scan(ScanContext& context){
+    auto& cfg = context.config;
     if(!cfg.integrity) return; // gated entirely
 
     size_t pkg_mismatch_count=0; size_t pkg_checked=0; size_t pkg_detail_emitted=0; std::vector<std::string> mismatch_sample; mismatch_sample.reserve(20);
@@ -102,7 +103,7 @@ void IntegrityScanner::scan(Report& report){
                     // Attempt to extract filename (dpkg -V lines: flags  path)
                     std::string path; size_t pos = line.find(' '); if(pos!=std::string::npos){ path = line.substr(pos+1); }
                     if(!path.empty() && rehash_files.size() < (size_t)cfg.integrity_pkg_rehash_limit) rehash_files.push_back(path);
-                    if(pkg_detail_emitted < (size_t)cfg.integrity_pkg_limit){ Finding f; f.id = std::string("pkg_mismatch:")+std::to_string(pkg_detail_emitted); f.title="Package file mismatch"; f.severity=Severity::Medium; f.description="dpkg verification mismatch"; f.metadata["raw"] = line; if(!path.empty()) f.metadata["path"] = path; report.add_finding(this->name(), std::move(f)); ++pkg_detail_emitted; }
+                    if(pkg_detail_emitted < (size_t)cfg.integrity_pkg_limit){ Finding f; f.id = std::string("pkg_mismatch:")+std::to_string(pkg_detail_emitted); f.title="Package file mismatch"; f.severity=Severity::Medium; f.description="dpkg verification mismatch"; f.metadata["raw"] = line; if(!path.empty()) f.metadata["path"] = path; context.report.add_finding(this->name(), std::move(f)); ++pkg_detail_emitted; }
                 }
             }
         } else if(fs::exists("/usr/bin/rpm")) {
@@ -111,7 +112,7 @@ void IntegrityScanner::scan(Report& report){
                 if(line.size() < 2) continue; bool mismatch=false; for(char c: line.substr(0,8)){ if(c!='.' && c!=' '){ mismatch=true; break; } }
                 if(!mismatch) continue; ++pkg_mismatch_count; if(mismatch_sample.size()<10) mismatch_sample.push_back(line.substr(0,40));
                 std::string path; if(line.size()>9) path = line.substr(9); if(!path.empty() && rehash_files.size() < (size_t)cfg.integrity_pkg_rehash_limit) rehash_files.push_back(path);
-                if(pkg_detail_emitted < (size_t)cfg.integrity_pkg_limit){ Finding f; f.id = std::string("pkg_mismatch:")+std::to_string(pkg_detail_emitted); f.title="Package file mismatch"; f.severity=Severity::Medium; f.description="rpm verification mismatch"; f.metadata["raw"] = line; if(!path.empty()) f.metadata["path"] = path; report.add_finding(this->name(), std::move(f)); ++pkg_detail_emitted; }
+                if(pkg_detail_emitted < (size_t)cfg.integrity_pkg_limit){ Finding f; f.id = std::string("pkg_mismatch:")+std::to_string(pkg_detail_emitted); f.title="Package file mismatch"; f.severity=Severity::Medium; f.description="rpm verification mismatch"; f.metadata["raw"] = line; if(!path.empty()) f.metadata["path"] = path; context.report.add_finding(this->name(), std::move(f)); ++pkg_detail_emitted; }
             }
         }
     }
@@ -132,7 +133,7 @@ void IntegrityScanner::scan(Report& report){
             std::error_code ec; if(!fs::is_regular_file(fpath, ec)) continue; std::ifstream ifs(fpath, std::ios::binary); if(!ifs) continue; unsigned char buf[8192];
             SHA256_CTX c; SHA256_Init(&c); while(ifs){ ifs.read((char*)buf, sizeof(buf)); std::streamsize got = ifs.gcount(); if(got>0) SHA256_Update(&c, buf, (size_t)got); }
             unsigned char md[32]; SHA256_Final(md, &c); static const char* hex="0123456789abcdef"; std::string hexsum; hexsum.reserve(64); for(int i=0;i<32;i++){ hexsum.push_back(hex[md[i]>>4]); hexsum.push_back(hex[md[i]&0xF]); }
-            Finding hf; hf.id = std::string("pkg_rehash:")+fpath; hf.title="Package mismatch file hash"; hf.severity=Severity::Info; hf.description="Recomputed SHA256 for mismatched file"; hf.metadata["path"] = fpath; hf.metadata["sha256"] = hexsum; report.add_finding(this->name(), std::move(hf));
+            Finding hf; hf.id = std::string("pkg_rehash:")+fpath; hf.title="Package mismatch file hash"; hf.severity=Severity::Info; hf.description="Recomputed SHA256 for mismatched file"; hf.metadata["path"] = fpath; hf.metadata["sha256"] = hexsum; context.report.add_finding(this->name(), std::move(hf));
         }
     }
 #endif
@@ -143,7 +144,7 @@ void IntegrityScanner::scan(Report& report){
     summary.metadata["pkg_mismatch_count"] = std::to_string(pkg_mismatch_count);
     if(!mismatch_sample.empty()){ std::string s; for(size_t i=0;i<mismatch_sample.size(); ++i){ if(i) s+=","; s+=mismatch_sample[i]; } summary.metadata["pkg_mismatch_sample"] = s; }
     if(cfg.integrity_ima){ summary.metadata["ima_entries"] = std::to_string(ima_entries); if(ima_fail>0) summary.metadata["ima_fail"] = std::to_string(ima_fail); }
-    report.add_finding(this->name(), std::move(summary));
+    context.report.add_finding(this->name(), std::move(summary));
 }
 
 }

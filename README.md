@@ -18,8 +18,8 @@ cmake --build build -j$(nproc)
 - ✅ Full system scan with 145+ findings successfully processed
 - ✅ LangGraph analysis pipeline working with enriched reports and HTML output
 
-Stable hash (canonical mode + optional time zero):> Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine. The open‑core scanner delivers trustworthy, reproducible telemetry; an optional proprietary Intelligence Layer (this fork) transforms that raw signal into correlated insights, baselines, rarity analytics, compliance gap normalization, ATT&CK coverage summaries, and executive reporting.
-![CI](https://github.com/J-mazz/sys-scan/actions/workflows/ci.yml/badge.svg) ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine. The open‑core scanner delivers trustworthy, reproducible telemetry; an optional proprietary Intelligence Layer (this fork) transforms that raw signal into correlated insights, baselines, rarity analytics, compliance gap normalization, ATT&CK coverage summaries, and executive reporting.
+![CI](https://github.com/J-mazz/sys-scan/actions/workflows/ci.yml/badge.svg)
 
 Key design pillars:
 * High‑signal, low‑noise findings (aggregation & baseline downgrades)
@@ -133,7 +133,7 @@ python -m venv agent/.venv
 source agent/.venv/bin/activate
 pip install -r agent/requirements.txt
 ./build/sys-scan --canonical --output report.json
-python -m agent.cli analyze --report report.json --out enriched_report.json --graph \
+python -m agent.cli analyze --report report.json --out enriched_report.json \
 	--checkpoint-dir checkpoints --index-dir runs --schema schema/v2.json
 jq '.summaries.attack_coverage.technique_count' enriched_report.json
 ```
@@ -215,14 +215,13 @@ python -m venv agent/.venv
 source agent/.venv/bin/activate
 pip install -r agent/requirements.txt
 ./build/sys-scan --canonical --output report.json
-python -m agent.cli analyze --report report.json --out enriched_report.json --graph \
+python -m agent.cli analyze --report report.json --out enriched_report.json \
 	--checkpoint-dir checkpoints --index-dir enriched_index --schema schema/v2.json
 ls checkpoints  # per-stage snapshots
 jq '.summaries.metrics | {correlations, "perf.total_ms": ."perf.total_ms"}' enriched_report.json
 ```
 
 Notable flags (agent `analyze` command):
-* `--graph` – use LangGraph DAG implementation.
 * `--checkpoint-dir DIR` – write per-node state snapshots.
 * `--schema PATH` – validate raw report against JSON Schema (adds warning on failure).
 * `--index-dir DIR` – append run metadata entries (time‑series index.json).

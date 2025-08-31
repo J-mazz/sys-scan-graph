@@ -6,6 +6,6 @@ class ProcessScanner : public Scanner {
 public:
     std::string name() const override { return "processes"; }
     std::string description() const override { return "Enumerate running processes with uid, gid, cmdline"; }
-    void scan(Report& report) override;
+    void scan(ScanContext& context) override;
 };
 }

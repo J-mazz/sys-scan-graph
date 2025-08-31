@@ -1,4 +1,5 @@
 #include "Compliance.h"
+#include "ScanContext.h"
 #include "Report.h"
 #include "Logging.h"
 #include <filesystem>
@@ -11,7 +12,7 @@ namespace sys_scan {
 static bool file_has_min_perms(const std::string& path, mode_t mask){
     struct stat st{}; if(::stat(path.c_str(), &st)!=0) return false; return (st.st_mode & mask) == mask; }
 
-void ComplianceScanner::scan(Report& report) {
+void ComplianceScanner::scan(ScanContext& context) {
     if(checks_.empty()) register_checks();
     std::vector<Finding> findings;
     findings.reserve(checks_.size());
@@ -45,18 +46,18 @@ void ComplianceScanner::scan(Report& report) {
     }
     // push scan result
     if(!findings.empty()) {
-        ScanResult sr; sr.scanner_name = name(); sr.start_time = std::chrono::system_clock::now(); sr.end_time = sr.start_time; sr.findings = std::move(findings); report.add_result(std::move(sr));
+        ScanResult sr; sr.scanner_name = name(); sr.start_time = std::chrono::system_clock::now(); sr.end_time = sr.start_time; sr.findings = std::move(findings); context.report.add_result(std::move(sr));
     }
     // store summary into report meta extension for now (future: dedicated structure)
     for(const auto& kv : by_standard){
         const auto& std_name = kv.first; const auto& sum = kv.second;
-        report.set_compliance_metric(std_name, "total_controls", std::to_string(sum.total_controls));
-        report.set_compliance_metric(std_name, "passed", std::to_string(sum.passed));
-        report.set_compliance_metric(std_name, "failed", std::to_string(sum.failed));
-        report.set_compliance_metric(std_name, "not_applicable", std::to_string(sum.not_applicable));
+        context.report.set_compliance_metric(std_name, "total_controls", std::to_string(sum.total_controls));
+        context.report.set_compliance_metric(std_name, "passed", std::to_string(sum.passed));
+        context.report.set_compliance_metric(std_name, "failed", std::to_string(sum.failed));
+        context.report.set_compliance_metric(std_name, "not_applicable", std::to_string(sum.not_applicable));
         int denom = (sum.passed + sum.failed) > 0 ? (sum.passed + sum.failed) : 1;
         double score = static_cast<double>(sum.passed)/denom;
-        report.set_compliance_metric(std_name, "score", std::to_string(score));
+        context.report.set_compliance_metric(std_name, "score", std::to_string(score));
     }
 }
 

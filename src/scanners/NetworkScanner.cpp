@@ -1,43 +1,204 @@
 #include "NetworkScanner.h"
 #include "../core/Report.h"
+#include "../core/Config.h"
+#include "../core/ScanContext.h"
+#include "../core/Severity.h"
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <iomanip>
-#include <filesystem>
 #include <string>
-#include "../core/Config.h"
 #include <tuple>
 #include <regex>
+#include <dirent.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <cstring>
+#include <cctype>
+#include <sys/stat.h>
+#include <filesystem>
+#include <vector>
+#include <sys/types.h>
+#include <cstdlib>
+#include <cstdio>
 
 namespace fs = std::filesystem;
 
 namespace sys_scan {
 
-static std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>> build_inode_map(){
-    // inode -> (pid, exe, container_id) (first writer wins; reuse if duplicates)
-    std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>> map;
-    std::error_code top_ec;
-    for(auto pit = fs::directory_iterator("/proc", fs::directory_options::skip_permission_denied, top_ec); pit!=fs::directory_iterator(); ++pit){
-        if(top_ec) break; if(!pit->is_directory()) continue; auto pid = pit->path().filename().string(); if(!std::all_of(pid.begin(),pid.end(),::isdigit)) continue;
-        fs::path fd_dir = pit->path()/"fd"; std::error_code ec; if(!fs::exists(fd_dir, ec)) continue;
-        std::string container_id;
-        if(config().containers){ std::ifstream cg(pit->path().string()+"/cgroup"); if(cg){ std::string line; static std::regex re("([0-9a-f]{64}|[0-9a-f]{32})"); std::smatch m; while(std::getline(cg,line)){ if(std::regex_search(line,m,re)){ container_id = m.str(1).substr(0,12); break; } } } }
-        std::error_code ec_dir;
-        for(auto fit = fs::directory_iterator(fd_dir, fs::directory_options::skip_permission_denied, ec_dir); fit!=fs::directory_iterator(); ++fit){
-            if(ec_dir){ break; }
-            std::error_code ec2; auto target = fs::read_symlink(fit->path(), ec2); if(ec2) continue; std::string t = target.string(); // format: socket:[12345]
-            auto pos = t.find("socket:["); if(pos==std::string::npos) continue; auto b = t.find('[', pos); auto e = t.find(']', b); if(b==std::string::npos||e==std::string::npos) continue; std::string inode = t.substr(b+1, e-b-1);
-            std::string exe; std::error_code ec3; auto exepath = fs::read_symlink(pit->path()/"exe", ec3); if(!ec3) exe = exepath.string();
-            if(!map.count(inode)) map.emplace(inode, std::make_tuple(pid, exe, container_id));
-        }
+static bool state_allowed_lean(const char* st, const Config& config) {
+    if (config.network_states.empty()) return true;
+    for (const auto& allowed : config.network_states) {
+        if (strcmp(st, allowed.c_str()) == 0) return true;
     }
-    return map;
+    return false;
 }
 
-static std::string hex_ip_to_v4(const std::string& h){ if(h.size()<8) return ""; unsigned int b1,b2,b3,b4; std::stringstream ss; ss<<std::hex<<h.substr(6,2); ss>>b1; ss.clear(); ss<<std::hex<<h.substr(4,2); ss>>b2; ss.clear(); ss<<std::hex<<h.substr(2,2); ss>>b3; ss.clear(); ss<<std::hex<<h.substr(0,2); ss>>b4; return std::to_string(b1)+"."+std::to_string(b2)+"."+std::to_string(b3)+"."+std::to_string(b4);} 
-static std::string hex_ip6_to_str(const std::string& h){ if(h.size()<32) return ""; std::string out; for(int i=0;i<8;i++){ if(i) out+=':'; out += h.substr(i*4,4);} return out; }
+static const size_t MAX_SOCKETS_LEAN = 1000;
+static const size_t MAX_PATH_LEN_LEAN = 256;
+
+// Ultra-fast container ID extraction (no allocations)
+static bool extract_container_id_lean(const char* cgroup_data, size_t len, char* out_id, size_t out_size) {
+    if (out_size < 13) return false;  // Need at least 12 chars + null
+
+    const char* ptr = cgroup_data;
+    const char* end = cgroup_data + len;
+
+    while (ptr < end - 32) {  // Need at least 32 chars
+        if (isxdigit(*ptr)) {
+            // Check for 64-char hex string
+            bool is_64_char = true;
+            for (int i = 0; i < 64 && ptr + i < end; ++i) {
+                if (!isxdigit(ptr[i])) {
+                    is_64_char = false;
+                    break;
+                }
+            }
+            if (is_64_char && ptr + 64 <= end) {
+                memcpy(out_id, ptr, 12);
+                out_id[12] = '\0';
+                return true;
+            }
+
+            // Check for 32-char hex string
+            bool is_32_char = true;
+            for (int i = 0; i < 32 && ptr + i < end; ++i) {
+                if (!isxdigit(ptr[i])) {
+                    is_32_char = false;
+                    break;
+                }
+            }
+            if (is_32_char && ptr + 32 <= end) {
+                memcpy(out_id, ptr, 12);
+                out_id[12] = '\0';
+                return true;
+            }
+        }
+        ++ptr;
+    }
+    return false;
+}
+
+// Fast PID validation
+static inline bool is_valid_pid(const char* str, int* pid_out = nullptr) {
+    if (!str || !*str) return false;
+    char* endptr;
+    long val = strtol(str, &endptr, 10);
+    if (*endptr != '\0' || val <= 0 || val > INT_MAX) return false;
+    if (pid_out) *pid_out = static_cast<int>(val);
+    return true;
+}
+
+// Fast file reading with fixed buffer
+static ssize_t read_file_to_buffer(const char* path, char* buffer, size_t buffer_size) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd == -1) return -1;
+    ssize_t total_read = 0;
+    while (total_read < static_cast<ssize_t>(buffer_size)) {
+        ssize_t bytes_read = read(fd, buffer + total_read, buffer_size - total_read);
+        if (bytes_read <= 0) break;
+        total_read += bytes_read;
+    }
+    close(fd);
+    return total_read;
+}
+
+// Ultra-fast inode map building (lean version)
+static size_t build_inode_map_lean(char inode_map[MAX_SOCKETS_LEAN][16], char pid_map[MAX_SOCKETS_LEAN][16], char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN], char container_map[MAX_SOCKETS_LEAN][13], size_t max_entries, const Config& config) {
+    DIR* dir = opendir("/proc");
+    if (!dir) return 0;
+
+    size_t count = 0;
+    struct dirent* entry;
+    while (count < max_entries && (entry = readdir(dir)) != nullptr) {
+        if (entry->d_name[0] == '.') continue;
+        int pid;
+        if (!is_valid_pid(entry->d_name, &pid)) continue;
+
+        // Build paths
+        char proc_path[64];
+        char cgroup_path[64];
+        char exe_path[64];
+        char fd_path[64];
+        snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+        snprintf(cgroup_path, sizeof(cgroup_path), "/proc/%d/cgroup", pid);
+        snprintf(exe_path, sizeof(exe_path), "/proc/%d/exe", pid);
+        snprintf(fd_path, sizeof(fd_path), "/proc/%d/fd", pid);
+
+        // Read container ID if containers enabled
+        char container_id[13] = "";
+        if (config.containers) {
+            char cgroup_data[2048];
+            ssize_t len = read_file_to_buffer(cgroup_path, cgroup_data, sizeof(cgroup_data) - 1);
+            if (len > 0) {
+                cgroup_data[len] = '\0';
+                extract_container_id_lean(cgroup_data, len, container_id, sizeof(container_id));
+            }
+        }
+
+        // Read exe symlink
+        char exe_buf[MAX_PATH_LEN_LEAN];
+        ssize_t exe_len = readlink(exe_path, exe_buf, sizeof(exe_buf) - 1);
+        if (exe_len > 0) {
+            exe_buf[exe_len] = '\0';
+        } else {
+            exe_buf[0] = '\0';
+        }
+
+        // Process fd directory
+        DIR* fd_dir = opendir(fd_path);
+        if (fd_dir) {
+            struct dirent* fd_entry;
+            while (count < max_entries && (fd_entry = readdir(fd_dir)) != nullptr) {
+                if (fd_entry->d_name[0] == '.') continue;
+
+                char fd_link_path[64];
+                snprintf(fd_link_path, sizeof(fd_link_path), "/proc/%d/fd/%s", pid, fd_entry->d_name);
+
+                char target[64];
+                ssize_t target_len = readlink(fd_link_path, target, sizeof(target) - 1);
+                if (target_len <= 0) continue;
+
+                target[target_len] = '\0';
+
+                // Check if it's a socket
+                const char* socket_prefix = "socket:[";
+                if (strncmp(target, socket_prefix, strlen(socket_prefix)) != 0) continue;
+
+                // Extract inode number
+                const char* bracket_start = strchr(target, '[');
+                const char* bracket_end = strchr(target, ']');
+                if (!bracket_start || !bracket_end || bracket_start >= bracket_end) continue;
+
+                size_t inode_len = bracket_end - bracket_start - 1;
+                if (inode_len >= sizeof(inode_map[0]) - 1) continue;  // Leave room for null terminator
+
+                memcpy(inode_map[count], bracket_start + 1, inode_len);
+                inode_map[count][inode_len] = '\0';
+
+                // Store associated data
+                snprintf(pid_map[count], sizeof(pid_map[0]), "%d", pid);
+                if (exe_len > 0 && exe_len < sizeof(exe_map[0])) {
+                    memcpy(exe_map[count], exe_buf, exe_len + 1);
+                } else {
+                    exe_map[count][0] = '\0';
+                }
+                if (container_id[0] && strlen(container_id) < sizeof(container_map[0])) {
+                    memcpy(container_map[count], container_id, strlen(container_id) + 1);
+                } else {
+                    container_map[count][0] = '\0';
+                }
+
+                count++;
+            }
+            closedir(fd_dir);
+        }
+    }
+    closedir(dir);
+    return count;
+}
+
 static std::string tcp_state(const std::string& st){ static std::unordered_map<std::string,std::string> m={{"01","ESTABLISHED"},{"02","SYN_SENT"},{"03","SYN_RECV"},{"04","FIN_WAIT1"},{"05","FIN_WAIT2"},{"06","TIME_WAIT"},{"07","CLOSE"},{"08","CLOSE_WAIT"},{"09","LAST_ACK"},{"0A","LISTEN"},{"0B","CLOSING"}}; auto it=m.find(st); return it==m.end()?st:it->second; }
 
 static std::string classify_tcp_severity(const std::string& state, unsigned port, const std::string& exe){
@@ -69,109 +230,436 @@ static std::string escalate_exposed(const std::string& current, const std::strin
     return current;
 }
 
-static bool state_allowed(const std::string& st){
-    if(config().network_states.empty()) return true;
-    for(const auto& s: config().network_states) if(s==st) return true;
+static bool state_allowed(const std::string& st, const Config& config){
+    if(config.network_states.empty()) return true;
+    for(const auto& s: config.network_states) if(s==st) return true;
     return false;
+}
+
+// Ultra-fast hex IP conversion (no string allocations)
+static bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size) {
+    if (!hex_ip || strlen(hex_ip) < 8 || out_size < 16) return false;
+
+    unsigned int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
+    char byte_str[3] = {0};
+
+    // Parse each byte (2 hex chars = 1 byte)
+    memcpy(byte_str, hex_ip + 6, 2); byte_str[2] = '\0'; b1 = strtoul(byte_str, nullptr, 16);
+    memcpy(byte_str, hex_ip + 4, 2); byte_str[2] = '\0'; b2 = strtoul(byte_str, nullptr, 16);
+    memcpy(byte_str, hex_ip + 2, 2); byte_str[2] = '\0'; b3 = strtoul(byte_str, nullptr, 16);
+    memcpy(byte_str, hex_ip + 0, 2); byte_str[2] = '\0'; b4 = strtoul(byte_str, nullptr, 16);
+
+    snprintf(out_ip, out_size, "%u.%u.%u.%u", b1, b2, b3, b4);
+    return true;
+}
+
+static bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_size) {
+    if (!hex_ip || strlen(hex_ip) < 32 || out_size < 40) return false;
+
+    char* out = out_ip;
+    for (int i = 0; i < 8; ++i) {
+        if (i > 0) {
+            *out++ = ':';
+            if (out - out_ip >= (ssize_t)out_size) return false;
+        }
+        memcpy(out, hex_ip + i * 4, 4);
+        out += 4;
+        if (out - out_ip >= (ssize_t)out_size) return false;
+    }
+    *out = '\0';
+    return true;
+}
+
+// Ultra-fast TCP state lookup
+static const char* tcp_state_lean(const char* st) {
+    static const struct { const char* hex; const char* name; } states[] = {
+        {"01", "ESTABLISHED"}, {"02", "SYN_SENT"}, {"03", "SYN_RECV"},
+        {"04", "FIN_WAIT1"}, {"05", "FIN_WAIT2"}, {"06", "TIME_WAIT"},
+        {"07", "CLOSE"}, {"08", "CLOSE_WAIT"}, {"09", "LAST_ACK"},
+        {"0A", "LISTEN"}, {"0B", "CLOSING"}
+    };
+
+    for (size_t i = 0; i < sizeof(states)/sizeof(states[0]); ++i) {
+        if (strcmp(st, states[i].hex) == 0) {
+            return states[i].name;
+        }
+    }
+    return st;
+}
+
+// Ultra-fast severity classification
+static Severity classify_tcp_severity_lean(const char* state, unsigned port, const char* exe) {
+    if (strcmp(state, "LISTEN") == 0) {
+        if (port == 22 || port == 23 || port == 2323) return Severity::Medium;
+        if (port == 0) return Severity::Low;
+        if (port < 1024) {
+            // Common services
+            if (port == 80 || port == 443 || port == 53 || port == 25 ||
+                port == 110 || port == 995 || port == 143 || port == 993) {
+                return Severity::Low;
+            }
+            return Severity::Medium;
+        }
+    }
+    return Severity::Info;
+}
+
+static Severity classify_udp_severity_lean(unsigned port, const char* exe) {
+    if (port == 53) return Severity::Low; // DNS
+    if (port < 1024 && port != 68 && port != 123) return Severity::Medium;
+    return Severity::Info;
+}
+
+// Ultra-fast escalation for exposed listeners
+static Severity escalate_exposed_lean(Severity current, const char* state, const char* lip) {
+    if (strcmp(state, "LISTEN") != 0) return current;
+
+    // Check for loopback addresses
+    if (strncmp(lip, "127.", 4) == 0 ||
+        strcmp(lip, "::1") == 0 ||
+        strcmp(lip, "0000:0000:0000:0000:0000:0000:0000:0001") == 0 ||
+        strcmp(lip, "127.0.0.1") == 0 ||
+        strcmp(lip, "127.0.0.53") == 0 ||
+        strcmp(lip, "127.0.0.54") == 0) {
+        return current;
+    }
+
+    // Escalate one level for exposed listeners
+    static const Severity order[] = {Severity::Info, Severity::Low, Severity::Medium, Severity::High, Severity::Critical};
+    for (size_t i = 0; i < sizeof(order)/sizeof(order[0]) - 1; ++i) {
+        if (current == order[i]) {
+            return order[i + 1];
+        }
+    }
+    return current;
+}
+
+// Ultra-fast inode lookup in lean arrays
+static size_t find_inode_lean(const char inode_map[MAX_SOCKETS_LEAN][16], size_t count, const char* inode) {
+    for (size_t i = 0; i < count; ++i) {
+        if (strcmp(inode_map[i], inode) == 0) {
+            return i;
+        }
+    }
+    return SIZE_MAX;
 }
 
 struct FanoutAgg { size_t total=0; std::unordered_set<std::string> remote_ips; unsigned privileged_listen=0; unsigned wildcard_listen=0; };
 
-static void parse_tcp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>>& inode_map, size_t& emitted, std::unordered_map<std::string, FanoutAgg>* fanout){
-    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, WarnCode::NetFileUnreadable, path); return; } std::string header; std::getline(ifs, header);
-    std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
-        ++line_no; if(line.find(':')==std::string::npos) continue; // quick filter
-        // tokenize by whitespace (variable spacing)
-        std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
-    if(tok.size() < 10) { if(config().network_debug) { Finding dbg; dbg.id = proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw tcp line"; dbg.severity=Severity::Info; dbg.description="Unparsed line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
-        // columns (from /proc/net/tcp docs)
-        // 0: sl, 1: local_address, 2: rem_address, 3: st, 4: tx_queue:rx_queue, 5: tr:when, 6: retrnsmt, 7: uid, 8: timeout, 9: inode
-        const std::string& local = tok[1]; const std::string& rem = tok[2]; const std::string& st = tok[3];
-        const std::string& uid_s = tok[7]; const std::string& inode_s = tok[9];
-        // parse local/remote address
-        auto pos = local.find(':'); if(pos==std::string::npos) continue; auto lip_hex = local.substr(0,pos); auto lport_hex = local.substr(pos+1);
-        unsigned lport=0; std::stringstream ph; ph<<std::hex<<lport_hex; ph>>lport;
-        auto pos2 = rem.find(':'); if(pos2==std::string::npos) continue; auto rip_hex = rem.substr(0,pos2); auto rport_hex = rem.substr(pos2+1); unsigned rport=0; std::stringstream rph; rph<<std::hex<<rport_hex; rph>>rport;
-        if(lport==0 && rport==0) continue; // skip totally empty sockets
-    auto state_str = tcp_state(st);
-    if(config().network_listen_only && state_str != "LISTEN") continue;
-    if(!state_allowed(state_str)) continue;
-    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" "+state_str+" "+std::to_string(lport); f.severity=Severity::Info; f.description="TCP socket";
-        f.metadata["protocol"] = "tcp";
-        f.metadata["state"] = tcp_state(st); 
-        if(!config().no_user_meta) f.metadata["uid"] = uid_s; 
-        f.metadata["lport"] = std::to_string(lport); f.metadata["rport"] = std::to_string(rport); f.metadata["inode"] = inode_s;
-    if(path.find("tcp6")!=std::string::npos){ f.metadata["lip"] = hex_ip6_to_str(lip_hex); f.metadata["rip"] = hex_ip6_to_str(rip_hex); }
-    else { f.metadata["lip"] = hex_ip_to_v4(lip_hex); f.metadata["rip"] = hex_ip_to_v4(rip_hex); }
-    auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = std::get<0>(it->second); f.metadata["exe"] = std::get<1>(it->second); if(!std::get<2>(it->second).empty()) f.metadata["container_id"] = std::get<2>(it->second); }
-    if(config().containers && !config().container_id_filter.empty()) { if(f.metadata["container_id"] != config().container_id_filter) continue; }
-        // severity heuristic after exe known
-        if(f.metadata.count("exe")){
-            auto sev = classify_tcp_severity(state_str, lport, f.metadata["exe"]);
-            f.severity = severity_from_string(escalate_exposed(sev, state_str, f.metadata["lip"]));
+// Ultra-fast TCP parsing (lean version)
+static void parse_tcp_lean(const char* path, Report& report, const char* proto,
+                          const char inode_map[MAX_SOCKETS_LEAN][16], const char pid_map[MAX_SOCKETS_LEAN][16],
+                          const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN], const char container_map[MAX_SOCKETS_LEAN][13],
+                          size_t inode_count, size_t& emitted,
+                          std::unordered_map<std::string, FanoutAgg>* fanout, const Config& config) {
+    char buffer[8192];
+    ssize_t len = read_file_to_buffer(path, buffer, sizeof(buffer) - 1);
+    if (len <= 0) {
+        report.add_warning(proto, WarnCode::NetFileUnreadable, path);
+        return;
+    }
+    buffer[len] = '\0';
+
+    const char* ptr = buffer;
+    // Skip header line
+    while (*ptr && *ptr != '\n') ++ptr;
+    if (*ptr == '\n') ++ptr;
+
+    size_t parsed = 0;
+    char line[256];
+    bool is_ipv6 = strstr(path, "tcp6") != nullptr;
+
+    while (*ptr && emitted < (size_t)config.max_sockets) {
+        // Extract line
+        const char* line_start = ptr;
+        const char* line_end = ptr;
+        while (*line_end && *line_end != '\n') ++line_end;
+
+        size_t line_len = line_end - line_start;
+        if (line_len >= sizeof(line)) {
+            ptr = line_end + 1;
+            continue;
+        }
+
+        memcpy(line, line_start, line_len);
+        line[line_len] = '\0';
+        ptr = line_end + 1;
+
+        // Quick filter for colon
+        if (!strchr(line, ':')) continue;
+
+        // Tokenize line (space-separated)
+        char* tokens[20];
+        int token_count = 0;
+        char* tok = strtok(line, " \t");
+        while (tok && token_count < 20) {
+            tokens[token_count++] = tok;
+            tok = strtok(nullptr, " \t");
+        }
+
+        if (token_count < 10) continue;
+
+        // Extract fields
+        char* local = tokens[1];
+        char* rem = tokens[2];
+        char* st = tokens[3];
+        char* uid_s = tokens[7];
+        char* inode_s = tokens[9];
+
+        // Parse addresses and ports
+        char* colon1 = strchr(local, ':');
+        char* colon2 = strchr(rem, ':');
+        if (!colon1 || !colon2) continue;
+
+        *colon1 = '\0';
+        *colon2 = '\0';
+        char* lport_hex = colon1 + 1;
+        char* rport_hex = colon2 + 1;
+
+        // Convert hex ports to decimal
+        unsigned lport = strtoul(lport_hex, nullptr, 16);
+        unsigned rport = strtoul(rport_hex, nullptr, 16);
+
+        if (lport == 0 && rport == 0) continue;
+
+        const char* state_str = tcp_state_lean(st);
+
+        if (config.network_listen_only && strcmp(state_str, "LISTEN") != 0) continue;
+        if (!state_allowed_lean(state_str, config)) continue;
+
+        // Convert IPs
+        char lip[40] = "", rip[40] = "";
+        if (is_ipv6) {
+            hex_ip6_to_str_lean(local, lip, sizeof(lip));
+            hex_ip6_to_str_lean(rem, rip, sizeof(rip));
         } else {
-            auto sev = classify_tcp_severity(state_str, lport, "");
-            f.severity = severity_from_string(escalate_exposed(sev, state_str, f.metadata["lip"]));
+            hex_ip_to_v4_lean(local, lip, sizeof(lip));
+            hex_ip_to_v4_lean(rem, rip, sizeof(rip));
         }
-        // Exposure & wildcard/high-privilege bind annotation
-        if(state_str == "LISTEN"){
-            bool wildcard=false; std::string lip = f.metadata["lip"]; if(lip=="0.0.0.0" || lip=="::" || lip=="0000:0000:0000:0000:0000:0000:0000:0000") wildcard=true; if(wildcard) f.metadata["wildcard_listen"]="true";
-            if(lport < 1024) f.metadata["privileged_port"]="true"; // escalate already handled partly in severity
+
+        // Create finding
+        Finding f;
+        char id_buf[64];
+        snprintf(id_buf, sizeof(id_buf), "%s:%u:%s", proto, lport, inode_s);
+        f.id = id_buf;
+
+        char title_buf[64];
+        snprintf(title_buf, sizeof(title_buf), "%s %s %u", proto, state_str, lport);
+        f.title = title_buf;
+
+        f.severity = Severity::Info;
+        f.description = "TCP socket";
+
+        f.metadata["protocol"] = "tcp";
+        f.metadata["state"] = state_str;
+        if (!config.no_user_meta) f.metadata["uid"] = uid_s;
+        f.metadata["lport"] = std::to_string(lport);
+        f.metadata["rport"] = std::to_string(rport);
+        f.metadata["inode"] = inode_s;
+        f.metadata["lip"] = lip;
+        f.metadata["rip"] = rip;
+
+        // Lookup inode in lean arrays
+        size_t inode_idx = find_inode_lean(inode_map, inode_count, inode_s);
+        if (inode_idx != SIZE_MAX && inode_idx < inode_count) {
+            if (pid_map[inode_idx][0]) f.metadata["pid"] = pid_map[inode_idx];
+            if (exe_map[inode_idx][0]) f.metadata["exe"] = exe_map[inode_idx];
+            if (container_map[inode_idx][0]) f.metadata["container_id"] = container_map[inode_idx];
         }
+
+        // Container filtering
+        if (config.containers && !config.container_id_filter.empty()) {
+            auto it = f.metadata.find("container_id");
+            if (it == f.metadata.end() || it->second != config.container_id_filter) continue;
+        }
+
+        // Severity classification
+        const char* exe_str = f.metadata.count("exe") ? f.metadata["exe"].c_str() : "";
+        Severity sev = classify_tcp_severity_lean(state_str, lport, exe_str);
+        f.severity = escalate_exposed_lean(sev, state_str, lip);
+
+        // Wildcard/privileged annotations
+        if (strcmp(state_str, "LISTEN") == 0) {
+            bool wildcard = (strcmp(lip, "0.0.0.0") == 0 || strcmp(lip, "::") == 0 ||
+                           strcmp(lip, "0000:0000:0000:0000:0000:0000:0000:0000") == 0);
+            if (wildcard) f.metadata["wildcard_listen"] = "true";
+            if (lport < 1024) f.metadata["privileged_port"] = "true";
+        }
+
         report.add_finding(proto, std::move(f));
-        // Fanout aggregation (only if ESTABLISHED and advanced enabled)
-        if(config().network_advanced && fanout && state_str=="ESTABLISHED"){
-            auto it2 = inode_map.find(inode_s); if(it2!=inode_map.end()){ const std::string& pid = std::get<0>(it2->second); auto& agg = (*fanout)[pid]; agg.total++; // remote IP from rip field captured earlier; reconstruct quickly
-                // remote ip hex from rem address
-                std::string rip_hex = rem.substr(0, rem.find(':'));
-                std::string rip = (path.find("tcp6")!=std::string::npos) ? hex_ip6_to_str(rip_hex) : hex_ip_to_v4(rip_hex);
-                agg.remote_ips.insert(rip);
+
+        // Fanout aggregation
+        if (config.network_advanced && fanout && strcmp(state_str, "ESTABLISHED") == 0 && inode_idx != SIZE_MAX && inode_idx < inode_count) {
+            const char* pid_str = pid_map[inode_idx];
+            auto& agg = (*fanout)[pid_str];
+            agg.total++;
+
+            char remote_ip[40];
+            if (is_ipv6) {
+                hex_ip6_to_str_lean(rem, remote_ip, sizeof(remote_ip));
+            } else {
+                hex_ip_to_v4_lean(rem, remote_ip, sizeof(remote_ip));
             }
+            agg.remote_ips.insert(remote_ip);
         }
-        ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
-    if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug tcp none parsed"; dbg.severity=Severity::Low; dbg.description="No TCP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
-}
 
-static std::string classify_udp_severity(unsigned port, const std::string& exe){
-    if(port==53) return "low"; // DNS
-    if(port < 1024 && port != 68 && port != 123) return "medium"; // unusual privileged UDP
-    return "info";
-}
-
-static void parse_udp(const std::string& path, Report& report, const std::string& proto, const std::unordered_map<std::string, std::tuple<std::string,std::string,std::string>>& inode_map, size_t& emitted){
-    std::ifstream ifs(path); if(!ifs){ report.add_warning(proto, WarnCode::NetFileUnreadable, path); return; } std::string header; std::getline(ifs, header);
-    std::string line; size_t line_no=0; size_t parsed=0; while(std::getline(ifs,line)){
-        ++line_no; if(line.find(':')==std::string::npos) continue; std::vector<std::string> tok; tok.reserve(20); std::string cur; std::istringstream ls(line); while(ls>>cur) tok.push_back(cur);
-    if(tok.size() < 10){ if(config().network_debug){ Finding dbg; dbg.id=proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw udp line"; dbg.severity=Severity::Info; dbg.description="Unparsed UDP line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
-        const std::string& local = tok[1]; const std::string& inode_s = tok[9]; const std::string& uid_s = tok[7];
-        auto pos = local.find(':'); if(pos==std::string::npos) continue; auto lip_hex = local.substr(0,pos); auto lport_hex = local.substr(pos+1); unsigned lport=0; std::stringstream ph; ph<<std::hex<<lport_hex; ph>>lport; if(lport==0) continue;
-    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" port "+std::to_string(lport); f.severity=Severity::Info; f.description="UDP socket"; 
-    if(!config().no_user_meta) f.metadata["uid"] = uid_s; 
-    f.metadata["lport"] = std::to_string(lport); f.metadata["inode"] = inode_s; f.metadata["protocol"] = "udp";
-        if(path.find("udp6")!=std::string::npos) f.metadata["lip"] = hex_ip6_to_str(lip_hex); else f.metadata["lip"] = hex_ip_to_v4(lip_hex);
-    auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = std::get<0>(it->second); f.metadata["exe"] = std::get<1>(it->second); if(!std::get<2>(it->second).empty()) f.metadata["container_id"] = std::get<2>(it->second); }
-    if(config().containers && !config().container_id_filter.empty()) { if(f.metadata["container_id"] != config().container_id_filter) continue; }
-    f.severity = severity_from_string(classify_udp_severity(lport, f.metadata.count("exe")? f.metadata["exe"] : ""));
-    report.add_finding(proto, std::move(f)); ++parsed; ++emitted; if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) break; }
-    if(parsed==0 && config().network_debug){ Finding dbg; dbg.id=proto+":debug:noparsed"; dbg.title="netdebug udp none parsed"; dbg.severity=Severity::Low; dbg.description="No UDP lines parsed from "+path; dbg.metadata["path"] = path; report.add_finding(proto, std::move(dbg)); }
-}
-
-void NetworkScanner::scan(Report& report) {
-    auto inode_map = build_inode_map(); size_t emitted=0; std::unordered_map<std::string, FanoutAgg> fanout; std::unordered_map<std::string, std::string> pid_to_exe;
-    for(auto& kv : inode_map){ pid_to_exe[std::get<0>(kv.second)] = std::get<1>(kv.second); }
-    bool want_tcp = config().network_proto.empty() || config().network_proto=="tcp";
-    bool want_udp = config().network_proto.empty() || config().network_proto=="udp";
-    if(want_tcp){
-        parse_tcp("/proc/net/tcp", report, this->name(), inode_map, emitted, config().network_advanced? &fanout : nullptr); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
-        parse_tcp("/proc/net/tcp6", report, this->name(), inode_map, emitted, config().network_advanced? &fanout : nullptr); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
-    }
-    if(want_udp){
-        parse_udp("/proc/net/udp", report, this->name(), inode_map, emitted); if(config().max_sockets>0 && emitted >= (size_t)config().max_sockets) return;
-        parse_udp("/proc/net/udp6", report, this->name(), inode_map, emitted);
-    }
-    if(config().network_advanced){
-        for(auto& kv : fanout){ auto& agg = kv.second; if((int)agg.total >= config().network_fanout_threshold || (int)agg.remote_ips.size() >= config().network_fanout_unique_threshold){ Finding f; f.id = kv.first+":net_fanout"; f.title = "High network fanout"; f.severity = Severity::Medium; if(agg.total > (size_t)config().network_fanout_threshold*2 || agg.remote_ips.size() > (size_t)config().network_fanout_unique_threshold*2) f.severity = Severity::High; f.description = "Process exceeding network fanout thresholds"; f.metadata["pid"] = kv.first; auto itexe = pid_to_exe.find(kv.first); if(itexe!=pid_to_exe.end()) f.metadata["exe"] = itexe->second; f.metadata["total_connections"] = std::to_string(agg.total); f.metadata["unique_remotes"] = std::to_string(agg.remote_ips.size()); int count=0; std::string sample; for(const auto& ip: agg.remote_ips){ if(count++) sample += ","; sample += ip; if(count>=5) break; } f.metadata["sample_remotes"] = sample; report.add_finding(this->name(), std::move(f)); } }
+        ++parsed;
+        ++emitted;
     }
 }
 
+// Ultra-fast UDP parsing (lean version)
+static void parse_udp_lean(const char* path, Report& report, const char* proto,
+                          const char inode_map[MAX_SOCKETS_LEAN][16], const char pid_map[MAX_SOCKETS_LEAN][16],
+                          const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN], const char container_map[MAX_SOCKETS_LEAN][13],
+                          size_t inode_count, size_t& emitted, const Config& config) {
+    char buffer[8192];
+    ssize_t len = read_file_to_buffer(path, buffer, sizeof(buffer) - 1);
+    if (len <= 0) {
+        report.add_warning(proto, WarnCode::NetFileUnreadable, path);
+        return;
+    }
+    buffer[len] = '\0';
+
+    const char* ptr = buffer;
+    // Skip header line
+    while (*ptr && *ptr != '\n') ++ptr;
+    if (*ptr == '\n') ++ptr;
+
+    size_t parsed = 0;
+    char line[256];
+    bool is_ipv6 = strstr(path, "udp6") != nullptr;
+
+    while (*ptr && emitted < (size_t)config.max_sockets) {
+        // Extract line
+        const char* line_start = ptr;
+        const char* line_end = ptr;
+        while (*line_end && *line_end != '\n') ++line_end;
+
+        size_t line_len = line_end - line_start;
+        if (line_len >= sizeof(line)) {
+            ptr = line_end + 1;
+            continue;
+        }
+
+        memcpy(line, line_start, line_len);
+        line[line_len] = '\0';
+        ptr = line_end + 1;
+
+        // Quick filter for colon
+        if (!strchr(line, ':')) continue;
+
+        // Tokenize line
+        char* tokens[20];
+        int token_count = 0;
+        char* tok = strtok(line, " \t");
+        while (tok && token_count < 20) {
+            tokens[token_count++] = tok;
+            tok = strtok(nullptr, " \t");
+        }
+
+        if (token_count < 10) continue;
+
+        // Extract fields
+        char* local = tokens[1];
+        char* uid_s = tokens[7];
+        char* inode_s = tokens[9];
+
+        // Parse address and port
+        char* colon = strchr(local, ':');
+        if (!colon) continue;
+
+        *colon = '\0';
+        char* lport_hex = colon + 1;
+        unsigned lport = strtoul(lport_hex, nullptr, 16);
+
+        if (lport == 0) continue;
+
+        // Convert IP
+        char lip[40] = "";
+        if (is_ipv6) {
+            hex_ip6_to_str_lean(local, lip, sizeof(lip));
+        } else {
+            hex_ip_to_v4_lean(local, lip, sizeof(lip));
+        }
+
+        // Create finding
+        Finding f;
+        char id_buf[64];
+        snprintf(id_buf, sizeof(id_buf), "%s:%u:%s", proto, lport, inode_s);
+        f.id = id_buf;
+
+        char title_buf[64];
+        snprintf(title_buf, sizeof(title_buf), "%s port %u", proto, lport);
+        f.title = title_buf;
+
+        f.severity = Severity::Info;
+        f.description = "UDP socket";
+
+        if (!config.no_user_meta) f.metadata["uid"] = uid_s;
+        f.metadata["lport"] = std::to_string(lport);
+        f.metadata["inode"] = inode_s;
+        f.metadata["protocol"] = "udp";
+        f.metadata["lip"] = lip;
+
+        // Lookup inode in lean arrays
+        size_t inode_idx = find_inode_lean(inode_map, inode_count, inode_s);
+        if (inode_idx != SIZE_MAX && inode_idx < inode_count) {
+            if (pid_map[inode_idx][0]) f.metadata["pid"] = pid_map[inode_idx];
+            if (exe_map[inode_idx][0]) f.metadata["exe"] = exe_map[inode_idx];
+            if (container_map[inode_idx][0]) f.metadata["container_id"] = container_map[inode_idx];
+        }
+
+        // Container filtering
+        if (config.containers && !config.container_id_filter.empty()) {
+            auto it = f.metadata.find("container_id");
+            if (it == f.metadata.end() || it->second != config.container_id_filter) continue;
+        }
+
+        // Severity classification
+        const char* exe_str = f.metadata.count("exe") ? f.metadata["exe"].c_str() : "";
+        f.severity = classify_udp_severity_lean(lport, exe_str);
+
+        report.add_finding(proto, std::move(f));
+
+        ++parsed;
+        ++emitted;
+    }
 }
+
+void NetworkScanner::scan(ScanContext& context) {
+    const Config& config = context.config;
+    Report& report = context.report;
+
+    // Lean network scanning implementation
+    size_t emitted = 0;
+
+    // Build inode-to-process mapping (lean arrays)
+    char inode_map[MAX_SOCKETS_LEAN][16] = {};
+    char pid_map[MAX_SOCKETS_LEAN][16] = {};
+    char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN] = {};
+    char container_map[MAX_SOCKETS_LEAN][13] = {};
+
+    size_t inode_count = 0;
+
+    // Scan /proc for socket inodes
+    if (config.network_advanced) {
+        inode_count = build_inode_map_lean(inode_map, pid_map, exe_map, container_map, MAX_SOCKETS_LEAN, config);
+    }
+
+    // Parse TCP sockets
+    bool scan_tcp = config.network_proto.empty() || config.network_proto == "tcp";
+    if (scan_tcp) {
+        parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+        parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    }
+
+    // Parse UDP sockets
+    bool scan_udp = config.network_proto.empty() || config.network_proto == "udp";
+    if (scan_udp) {
+        parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, config);
+        parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, config);
+    }
+}
+
+} // namespace sys_scan
