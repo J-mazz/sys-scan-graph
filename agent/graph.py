@@ -36,6 +36,12 @@ class GraphState(TypedDict, total=False):
     final_metrics: Dict[str, Any]                  # Aggregated final metrics snapshot
     cache: Dict[str, Any]                          # General-purpose cache store (centralized)
     llm_provider_mode: str                         # Active LLM provider mode (normal|fallback|null)
+    # Performance optimization fields
+    current_stage: str                             # Current processing stage for observability
+    start_time: str                                # Processing start timestamp
+    cache_hits: List[str]                          # Cache hit tracking
+    summarize_progress: float                      # Summarization progress (0.0-1.0)
+    host_id: str                                   # Host identifier for baseline queries
 
 # Runtime graph assembly (enhanced workflow builder)
 try:  # Optional dependency guard
@@ -97,6 +103,54 @@ try:  # Optional dependency guard
         scaffold_cache_manager = None  # type: ignore
         scaffold_metrics_collector = None  # type: ignore
 
+    # Attempt to import performance-optimized nodes
+    try:
+        from .graph_nodes_performance import (
+            enrich_findings_batch,
+            correlate_findings_batch,
+            summarize_host_state_streaming,
+            query_baseline_batch,
+            parallel_node_execution,
+        )  # type: ignore
+    except Exception:  # pragma: no cover - performance nodes optional
+        enrich_findings_batch = None  # type: ignore
+        correlate_findings_batch = None  # type: ignore
+        summarize_host_state_streaming = None  # type: ignore
+        query_baseline_batch = None  # type: ignore
+        parallel_node_execution = None  # type: ignore
+
+    # Attempt to import scalability nodes
+    try:
+        from .graph_nodes_scalability import (
+            parallel_findings_processing,
+            horizontal_scaling_router,
+            adaptive_batch_sizing,
+            initialize_scalability,
+            shutdown_scalability,
+        )  # type: ignore
+    except Exception:  # pragma: no cover - scalability nodes optional
+        parallel_findings_processing = None  # type: ignore
+        horizontal_scaling_router = None  # type: ignore
+        adaptive_batch_sizing = None  # type: ignore
+        initialize_scalability = None  # type: ignore
+        shutdown_scalability = None  # type: ignore
+
+    # Attempt to import reliability nodes
+    try:
+        from .graph_nodes_reliability import (
+            reliable_enrich_findings,
+            reliable_correlate_findings,
+            reliable_summarize_state,
+            initialize_reliability,
+            shutdown_reliability,
+        )  # type: ignore
+    except Exception:  # pragma: no cover - reliability nodes optional
+        reliable_enrich_findings = None  # type: ignore
+        reliable_correlate_findings = None  # type: ignore
+        reliable_summarize_state = None  # type: ignore
+        initialize_reliability = None  # type: ignore
+        shutdown_reliability = None  # type: ignore
+
     from .tools import query_baseline
 except Exception:  # pragma: no cover - graph optional
     StateGraph = None  # type: ignore
@@ -117,6 +171,18 @@ except Exception:  # pragma: no cover - graph optional
     scaffold_risk_analyzer = scaffold_compliance_checker = None  # type: ignore
     scaffold_error_handler = scaffold_human_feedback_node = None  # type: ignore
     scaffold_cache_manager = scaffold_metrics_collector = None  # type: ignore
+    # Performance nodes
+    enrich_findings_batch = correlate_findings_batch = None  # type: ignore
+    summarize_host_state_streaming = query_baseline_batch = None  # type: ignore
+    parallel_node_execution = None  # type: ignore
+    # Scalability nodes
+    parallel_findings_processing = horizontal_scaling_router = None  # type: ignore
+    adaptive_batch_sizing = initialize_scalability = None  # type: ignore
+    shutdown_scalability = None  # type: ignore
+    # Reliability nodes
+    reliable_enrich_findings = reliable_correlate_findings = None  # type: ignore
+    reliable_summarize_state = initialize_reliability = None  # type: ignore
+    shutdown_reliability = None  # type: ignore
     query_baseline = None  # type: ignore
 
 
@@ -132,7 +198,7 @@ def _select(
     return None
 
 
-def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
+def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
     """Build and compile a StateGraph workflow.
 
     Parameters:
@@ -152,6 +218,9 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
     global scaffold_suggest_rules, enhanced_suggest_rules, scaffold_correlate_findings
     global scaffold_risk_analyzer, scaffold_compliance_checker, scaffold_error_handler, scaffold_human_feedback_node
     global scaffold_cache_manager, scaffold_metrics_collector
+    global enrich_findings_batch, correlate_findings_batch, summarize_host_state_streaming, query_baseline_batch, parallel_node_execution
+    global parallel_findings_processing, horizontal_scaling_router, adaptive_batch_sizing, initialize_scalability, shutdown_scalability
+    global reliable_enrich_findings, reliable_correlate_findings, reliable_summarize_state, initialize_reliability, shutdown_reliability
     if scaffold_enrich_findings is None:
         try:  # pragma: no cover - recovery path
             from importlib import import_module
@@ -169,20 +238,42 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
             scaffold_human_feedback_node = getattr(sm, 'human_feedback_node', None)
             scaffold_cache_manager = getattr(sm, 'cache_manager', None)
             scaffold_metrics_collector = getattr(sm, 'metrics_collector', None)
+
+            # Import performance nodes
+            pm = import_module('agent.graph_nodes_performance')
+            enrich_findings_batch = getattr(pm, 'enrich_findings_batch', None)
+            correlate_findings_batch = getattr(pm, 'correlate_findings_batch', None)
+            summarize_host_state_streaming = getattr(pm, 'summarize_host_state_streaming', None)
+            query_baseline_batch = getattr(pm, 'query_baseline_batch', None)
+            parallel_node_execution = getattr(pm, 'parallel_node_execution', None)
+
+            # Import scalability nodes
+            sm = import_module('agent.graph_nodes_scalability')
+            parallel_findings_processing = getattr(sm, 'parallel_findings_processing', None)
+            horizontal_scaling_router = getattr(sm, 'horizontal_scaling_router', None)
+            adaptive_batch_sizing = getattr(sm, 'adaptive_batch_sizing', None)
+            initialize_scalability = getattr(sm, 'initialize_scalability', None)
+            shutdown_scalability = getattr(sm, 'shutdown_scalability', None)
+
+            # Import reliability nodes
+            rm = import_module('agent.graph_nodes_reliability')
+            reliable_enrich_findings = getattr(rm, 'reliable_enrich_findings', None)
+            reliable_correlate_findings = getattr(rm, 'reliable_correlate_findings', None)
+            reliable_summarize_state = getattr(rm, 'reliable_summarize_state', None)
+            initialize_reliability = getattr(rm, 'initialize_reliability', None)
+            shutdown_reliability = getattr(rm, 'shutdown_reliability', None)
         except Exception:
             pass
 
-    # Core selection
-    enrich_node = enhanced and _select(enhanced_enrich_findings) or _select(scaffold_enrich_findings)
+    # Core selection - prefer reliability, then performance, then enhanced, then scaffold, then legacy
+    enrich_node = _select(reliable_enrich_findings, enrich_findings_batch, enhanced_enrich_findings, scaffold_enrich_findings)
     if enrich_node is None:
         return None, None
-    summarize_node = enhanced and _select(enhanced_summarize_host_state) or _select(scaffold_summarize_host_state, legacy_summarize_host_state)
-    suggest_node = enhanced and _select(enhanced_suggest_rules) or _select(scaffold_suggest_rules, legacy_suggest_rules)
-    if summarize_node is None or suggest_node is None:
-        return None, None
 
-    correlate_node = _select(scaffold_correlate_findings, legacy_correlate_findings)
-    plan_baseline_node = _select(scaffold_plan_baseline_queries, legacy_plan_baseline_queries)
+    summarize_node = _select(reliable_summarize_state, summarize_host_state_streaming, enhanced_summarize_host_state, scaffold_summarize_host_state, legacy_summarize_host_state)
+    correlate_node = _select(reliable_correlate_findings, correlate_findings_batch, scaffold_correlate_findings, legacy_correlate_findings)
+    suggest_node = _select(enhanced_suggest_rules, scaffold_suggest_rules, legacy_suggest_rules)
+    plan_baseline_node = _select(query_baseline_batch, scaffold_plan_baseline_queries, legacy_plan_baseline_queries)
     integrate_baseline_node = _select(scaffold_integrate_baseline_results, legacy_integrate_baseline_results)
     choose_post_summarize_node = _select(scaffold_choose_post_summarize, legacy_choose_post_summarize)
     should_suggest_rules_node = _select(scaffold_should_suggest_rules, legacy_should_suggest_rules)
@@ -194,6 +285,9 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
     human_feedback_node = _select(scaffold_human_feedback_node)
     cache_manager_node = _select(scaffold_cache_manager)
     metrics_collector_node = _select(scaffold_metrics_collector)
+    # Scalability nodes
+    parallel_processing_node = _select(parallel_findings_processing)
+    scaling_router_node = _select(horizontal_scaling_router)
 
     wf = StateGraph(GraphState)  # type: ignore[arg-type]
     # Node registration
@@ -220,7 +314,11 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
         wf.add_node("cache_manager", cache_manager_node)  # type: ignore[arg-type]
     if metrics_collector_node:
         wf.add_node("metrics_collector", metrics_collector_node)  # type: ignore[arg-type]
-    # tool_coordinator currently not wired; skip registration to avoid unreachable validation error
+    # Scalability nodes
+    if parallel_processing_node:
+        wf.add_node("parallel_processing", parallel_processing_node)  # type: ignore[arg-type]
+    if scaling_router_node:
+        wf.add_node("scaling_router", scaling_router_node)  # type: ignore[arg-type]
 
     # Entry
     wf.set_entry_point("enrich")
@@ -240,6 +338,12 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
 
     # Post summarize conditional: baseline planning or proceed
     def _post_summarize_router(state: GraphState) -> str:  # type: ignore
+        # Check if scalability routing is available and needed
+        if callable(scaling_router_node):  # type: ignore
+            scaling_decision = scaling_router_node(state)  # type: ignore
+            if scaling_decision in ["parallel_processing", "batch_processing"]:
+                return scaling_decision
+
         # If baseline cycle logic present, delegate to choose_post_summarize; else always proceed
         if callable(choose_post_summarize_node):  # type: ignore
             return choose_post_summarize_node(state)  # type: ignore
@@ -248,6 +352,9 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
     mapping_after_summarize = {"proceed_suggest": "suggest_rules", "suggest_rules": "suggest_rules"}
     if plan_baseline_node:
         mapping_after_summarize["plan_baseline"] = "plan_baseline"
+    # Add scalability mappings
+    if parallel_processing_node:
+        mapping_after_summarize["parallel_processing"] = "parallel_processing"
     if END is not None:
         if metrics_collector_node is not None:
             mapping_after_summarize[END] = "metrics_collector"  # type: ignore
@@ -264,6 +371,10 @@ def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
             wf.add_edge("baseline_tools", "summarize")
         except Exception:  # pragma: no cover
             pass
+
+    # Add scalability edges
+    if parallel_processing_node:
+        wf.add_edge("parallel_processing", "suggest_rules")
 
     # advanced_router currently disabled in workflow wiring pending refactor (would require router-only integration)
 

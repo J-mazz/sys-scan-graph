@@ -27,13 +27,14 @@ struct ScanResult {
 };
 
 class Report; // fwd
+struct ScanContext; // fwd
 
 class Scanner {
 public:
     virtual ~Scanner() = default;
     virtual std::string name() const = 0;
     virtual std::string description() const = 0;
-    virtual void scan(Report& report) = 0;
+    virtual void scan(ScanContext& context) = 0; // Updated to accept ScanContext
 };
 
 using ScannerPtr = std::unique_ptr<Scanner>; 

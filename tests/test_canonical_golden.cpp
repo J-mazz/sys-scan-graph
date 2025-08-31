@@ -58,7 +58,7 @@ static std::string sha256(const std::string& data){ Sha256Ctx ctx; sha256_init(c
 } // namespace
 
 int main(){
-    Config cfg; cfg.canonical=true; cfg.pretty=false; cfg.compact=true; set_config(cfg);
+    Config cfg; cfg.canonical=true; cfg.pretty=false; cfg.compact=true;
     Report r; r.start_scanner("dummy");
     Finding f; f.id="x"; f.title="Title"; f.description="Desc"; f.severity=Severity::Low; f.metadata["k"]="v"; r.add_finding("dummy", std::move(f)); r.end_scanner("dummy");
     setenv("SYS_SCAN_META_HOSTNAME","host",1);

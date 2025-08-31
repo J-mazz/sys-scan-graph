@@ -9,6 +9,9 @@
 
 namespace sys_scan {
 
+// Forward declaration to avoid circular includes
+struct ScanContext;
+
 struct ComplianceControlResult {
     std::string standard;      // e.g. pci_dss_4_0
     std::string control_id;    // e.g. 3.4
@@ -41,7 +44,7 @@ protected:
 public:
     virtual ~ComplianceScanner() = default;
     virtual void register_checks() = 0;
-    void scan(Report& report) override;
+    void scan(ScanContext& context) override;
 };
 
 class PCIComplianceScanner : public ComplianceScanner {

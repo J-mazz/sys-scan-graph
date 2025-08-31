@@ -1,4 +1,5 @@
 #include "KernelHardeningScanner.h"
+#include "../core/ScanContext.h"
 #include "../core/Report.h"
 #include "../core/Config.h"
 #include <fstream>
@@ -13,8 +14,8 @@ static std::string read_first_line(const char* path){ std::ifstream f(path); if(
 static bool file_exists(const char* p){ return access(p, F_OK)==0; }
 static std::string read_all(const char* path){ std::ifstream f(path); if(!f.is_open()) return {}; std::ostringstream ss; ss<<f.rdbuf(); return ss.str(); }
 
-void KernelHardeningScanner::scan(Report& report){
-    if(!config().hardening) return;
+void KernelHardeningScanner::scan(ScanContext& context){
+    if(!context.config.hardening) return;
 
     // Lockdown status (since Linux 5.4) /sys/kernel/security/lockdown shows e.g. "none [integrity] confidentiality"
     {
@@ -25,11 +26,11 @@ void KernelHardeningScanner::scan(Report& report){
             std::string active;
             if(lb!=std::string::npos && rb!=std::string::npos && rb>lb) active = lockdown.substr(lb+1, rb-lb-1);
             if(active.empty() || active=="none"){
-                Finding f; f.id="kernel:lockdown:disabled"; f.title="Kernel lockdown inactive"; f.severity=Severity::Medium; f.description="Kernel lockdown not enforced; consider integrity or confidentiality mode"; f.metadata["raw"] = lockdown; report.add_finding(name(), std::move(f));
+                Finding f; f.id="kernel:lockdown:disabled"; f.title="Kernel lockdown inactive"; f.severity=Severity::Medium; f.description="Kernel lockdown not enforced; consider integrity or confidentiality mode"; f.metadata["raw"] = lockdown; context.report.add_finding(name(), std::move(f));
             } else if(active=="integrity"){
-                Finding f; f.id="kernel:lockdown:integrity"; f.title="Kernel lockdown integrity mode"; f.severity=Severity::Info; f.description="Kernel lockdown integrity mode active"; f.metadata["raw"] = lockdown; report.add_finding(name(), std::move(f));
+                Finding f; f.id="kernel:lockdown:integrity"; f.title="Kernel lockdown integrity mode"; f.severity=Severity::Info; f.description="Kernel lockdown integrity mode active"; f.metadata["raw"] = lockdown; context.report.add_finding(name(), std::move(f));
             } else if(active=="confidentiality"){
-                Finding f; f.id="kernel:lockdown:confidentiality"; f.title="Kernel lockdown confidentiality mode"; f.severity=Severity::Info; f.description="Kernel lockdown confidentiality mode active"; f.metadata["raw"] = lockdown; report.add_finding(name(), std::move(f));
+                Finding f; f.id="kernel:lockdown:confidentiality"; f.title="Kernel lockdown confidentiality mode"; f.severity=Severity::Info; f.description="Kernel lockdown confidentiality mode active"; f.metadata["raw"] = lockdown; context.report.add_finding(name(), std::move(f));
             }
         }
     }
@@ -38,8 +39,8 @@ void KernelHardeningScanner::scan(Report& report){
     if(file_exists("/sys/firmware/efi")){
         // dbx revocation list presence
         bool have_dbx = file_exists("/sys/firmware/efi/efivars/dbx*");
-        Finding f; f.id = "kernel:secureboot:efi"; f.title = "EFI firmware detected"; f.severity=Severity::Info; f.description = "System booted with EFI (secure boot state heuristic)"; f.metadata["efi"]="present"; report.add_finding(name(), std::move(f));
-        if(!have_dbx){ Finding f2; f2.id="kernel:secureboot:dbx-missing"; f2.title="EFI dbx revocation list not detected"; f2.severity=Severity::Low; f2.description="Could not locate dbx revocation entries (heuristic)"; report.add_finding(name(), std::move(f2)); }
+        Finding f; f.id = "kernel:secureboot:efi"; f.title = "EFI firmware detected"; f.severity=Severity::Info; f.description = "System booted with EFI (secure boot state heuristic)"; f.metadata["efi"]="present"; context.report.add_finding(name(), std::move(f));
+        if(!have_dbx){ Finding f2; f2.id="kernel:secureboot:dbx-missing"; f2.title="EFI dbx revocation list not detected"; f2.severity=Severity::Low; f2.description="Could not locate dbx revocation entries (heuristic)"; context.report.add_finding(name(), std::move(f2)); }
     }
 
     // IMA/EVM appraisal: check securityfs
@@ -47,15 +48,15 @@ void KernelHardeningScanner::scan(Report& report){
         std::string ima_policy = read_all("/sys/kernel/security/ima/policy");
         if(!ima_policy.empty()){
             bool has_appraise = ima_policy.find("appraise")!=std::string::npos;
-            Finding f; f.id="kernel:ima:policy"; f.title="IMA policy present"; f.severity=Severity::Info; f.description = has_appraise?"IMA policy includes appraisal":"IMA policy lacks explicit appraisal"; f.metadata["appraise"] = has_appraise?"yes":"no"; report.add_finding(name(), std::move(f));
+            Finding f; f.id="kernel:ima:policy"; f.title="IMA policy present"; f.severity=Severity::Info; f.description = has_appraise?"IMA policy includes appraisal":"IMA policy lacks explicit appraisal"; f.metadata["appraise"] = has_appraise?"yes":"no"; context.report.add_finding(name(), std::move(f));
         }
     }
 
     // TPM presence
     if(file_exists("/dev/tpm0") || file_exists("/dev/tpmrm0")){
-        Finding f; f.id="kernel:tpm:present"; f.title="TPM device present"; f.severity=Severity::Info; f.description="Trusted Platform Module detected"; report.add_finding(name(), std::move(f));
+        Finding f; f.id="kernel:tpm:present"; f.title="TPM device present"; f.severity=Severity::Info; f.description="Trusted Platform Module detected"; context.report.add_finding(name(), std::move(f));
     } else {
-        Finding f; f.id="kernel:tpm:absent"; f.title="No TPM device"; f.severity=Severity::Low; f.description="TPM not detected (may reduce attestation options)"; report.add_finding(name(), std::move(f));
+        Finding f; f.id="kernel:tpm:absent"; f.title="No TPM device"; f.severity=Severity::Low; f.description="TPM not detected (may reduce attestation options)"; context.report.add_finding(name(), std::move(f));
     }
 
     // Security-relevant sysctls (read /proc/sys/...)
@@ -75,7 +76,7 @@ void KernelHardeningScanner::scan(Report& report){
         std::string val = read_sysctl(c.path); if(val.empty()) continue; // skip if not present
         // trim whitespace
         while(!val.empty() && (val.back()=='\n' || val.back()=='\r' || val.back()==' ')) val.pop_back();
-        Finding f; f.id = std::string("kernel:") + c.id; f.title = c.title; f.metadata["path"] = c.path; f.metadata["value"] = val; f.metadata["expected"] = c.expect; if(val==c.expect){ f.severity=Severity::Info; f.description=c.good_desc; } else { f.severity=c.sev; f.description=c.bad_desc; } report.add_finding(name(), std::move(f));
+        Finding f; f.id = std::string("kernel:") + c.id; f.title = c.title; f.metadata["path"] = c.path; f.metadata["value"] = val; f.metadata["expected"] = c.expect; if(val==c.expect){ f.severity=Severity::Info; f.description=c.good_desc; } else { f.severity=c.sev; f.description=c.bad_desc; } context.report.add_finding(name(), std::move(f));
     }
 }
 

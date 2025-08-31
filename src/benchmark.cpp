@@ -16,6 +16,7 @@
 #include "core/Report.h"
 #include "core/ScannerRegistry.h"
 #include "core/Scanner.h"
+#include "core/ScanContext.h"
 
 namespace fs = std::filesystem;
 namespace sys_scan {
@@ -36,19 +37,33 @@ public:
 
         // Create test configuration
         Config cfg;
-        cfg.enable_scanners = {"IOCScanner", "ProcessScanner", "NetworkScanner", "SuidScanner",
-                              "WorldWritableScanner", "KernelParamScanner", "ModuleScanner",
-                              "MACScanner", "MountScanner", "KernelHardeningScanner"};
+        cfg.enable_scanners = {"ioc", "processes", "suid_sgid",
+                              "world_writable", "kernel_params", "modules",
+                              "mac", "mounts", "kernel_hardening",
+                              "systemd_units", "auditd", "containers",
+                              "integrity", "yara"
+#ifdef SYS_SCAN_HAVE_EBPF
+                              , "ebpf_exec_trace"
+#endif
+                              };
         cfg.min_severity = "info";
+        cfg.hardening = true;
+        cfg.integrity = true;
+        cfg.rules_enable = true;
 
         // Run individual scanner benchmarks
         std::vector<BenchmarkResult> results;
 
-        // Test each scanner individually
+        // Test each scanner individually - expanded to include all available scanners
         std::vector<std::string> scanners = {
-            "ioc", "processes", "network", "suid_sgid",
+            "ioc", "processes", "suid_sgid",
             "world_writable", "kernel_params", "modules",
-            "mac", "mounts", "kernel_hardening"
+            "mac", "mounts", "kernel_hardening",
+            "systemd_units", "auditd", "containers",
+            "integrity", "yara"
+#ifdef SYS_SCAN_HAVE_EBPF
+            , "ebpf_exec_trace"
+#endif
         };
 
         for (const auto& scanner_name : scanners) {
@@ -83,22 +98,22 @@ private:
             Report report;
             ScannerRegistry registry;
 
-            // Register all default scanners
-            registry.register_all_default();
-
             // Create config with only the target scanner enabled
             Config single_cfg = cfg;
             single_cfg.enable_scanners = {scanner_name};
             single_cfg.disable_scanners.clear();
 
-            // Set the global config for this test
-            set_config(single_cfg);
+            // Register all default scanners with config
+            registry.register_all_default(single_cfg);
+
+            // Create scan context
+            ScanContext context(single_cfg, report);
 
             // Measure execution time
             auto start = std::chrono::high_resolution_clock::now();
 
             // Run the scanner
-            registry.run_all(report);
+            registry.run_all(context);
 
             auto end = std::chrono::high_resolution_clock::now();
             result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -126,17 +141,17 @@ private:
             Report report;
             ScannerRegistry registry;
 
-            // Register all default scanners
-            registry.register_all_default();
+            // Register all default scanners with config
+            registry.register_all_default(cfg);
 
-            // Set the global config
-            set_config(cfg);
+            // Create scan context
+            ScanContext context(cfg, report);
 
             // Measure execution time
             auto start = std::chrono::high_resolution_clock::now();
 
             // Run all scanners
-            registry.run_all(report);
+            registry.run_all(context);
 
             auto end = std::chrono::high_resolution_clock::now();
             result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

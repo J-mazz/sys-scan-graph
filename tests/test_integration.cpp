@@ -7,6 +7,7 @@
 #include "core/Config.h"
 #include "core/Report.h"
 #include "core/ScannerRegistry.h"
+#include "core/ScanContext.h"
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
@@ -66,10 +67,11 @@ TEST_F(IntegrationTest, CompleteScanWorkflow) {
 
     // Step 5: Register and run scanners
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     // Verify we got some results
     ASSERT_FALSE(report.results().empty());
@@ -109,10 +111,11 @@ TEST_F(IntegrationTest, MultipleOutputFormats) {
 
     // Run minimal scan
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     OutputWriter output_writer;
 
@@ -174,10 +177,11 @@ TEST_F(IntegrationTest, SeverityFilteringWorkflow) {
 
     // Run scan
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     OutputWriter output_writer;
     ASSERT_TRUE(output_writer.write_report(report, cfg));
@@ -211,10 +215,11 @@ TEST_F(IntegrationTest, ScannerEnableDisableWorkflow) {
 
     // Run scan with selective scanners
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     OutputWriter output_writer;
     ASSERT_TRUE(output_writer.write_report(report, cfg));
@@ -236,10 +241,11 @@ TEST_F(IntegrationTest, ErrorHandlingWorkflow) {
 
     // Run scan
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     OutputWriter output_writer;
     // This should fail due to invalid output path
@@ -272,10 +278,11 @@ TEST_F(IntegrationTest, FastScanOptimizationWorkflow) {
 
     // Run optimized scan
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     OutputWriter output_writer;
     ASSERT_TRUE(output_writer.write_report(report, cfg));
@@ -315,10 +322,11 @@ TEST_F(IntegrationTest, ExternalFileLoadingWorkflow) {
 
     // Run scan
     ScannerRegistry registry;
-    registry.register_all_default();
+    registry.register_all_default(cfg);
 
     Report report;
-    registry.run_all(report);
+    ScanContext context(cfg, report);
+    registry.run_all(context);
 
     OutputWriter output_writer;
     ASSERT_TRUE(output_writer.write_report(report, cfg));

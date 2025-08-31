@@ -135,7 +135,10 @@ The Intelligence Layer consumes a raw Core report and produces an enriched artif
 | `enrichment_results` | Auxiliary data: token accounting, perf snapshot, warnings |
 | `integrity` | SHA256 & optional signature verification status |
 
-### Pipeline Stages 
+### Legacy Pipeline Stages (Preserved for Reference)
+
+The original sequential pipeline implementation has been moved to `agent/legacy/pipeline.py` and is preserved for reference. The following stages represent the legacy linear processing approach:
+
 1. Load & Validate: size guard, UTF‑8 strict decode, JSON parse, schema (optional).  
 2. Augment: host_id & scan_id derivation, tagging, risk subscore seed, host role classification (role rationale added).  
 3. Knowledge Enrichment: ports, modules, SUID expectations, org attribution (YAML packs).  
@@ -154,9 +157,10 @@ The Intelligence Layer consumes a raw Core report and produces an enriched artif
 16. Canonicalize: stable ordering & JSON cleansing for reproducible hashing.  
 
 ### Policy & Governance
-* Policy layer escalates severity (and impact subscore) for executables outside approved directories (config/env allowlist + default system dirs).
-* Redaction filters user paths (`/home/<user>` etc.) before any LLM or summarization call.
-* Risk weights & logistic calibration user-editable via CLI; stored persistently.
+
+- Policy layer escalates severity (and impact subscore) for executables outside approved directories (config/env allowlist + default system dirs).
+- Redaction filters user paths (`/home/<user>` etc.) before any LLM or summarization call.
+- Risk weights & logistic calibration user-editable via CLI; stored persistently.
 
 ### Baseline Database
 SQLite schema versions (current v5) track: finding rarity, module observations, metric time series, calibration observations, process clusters. EWMA metrics support smoother drift detection and future predictive heuristics.
@@ -177,27 +181,33 @@ Metrics collector wraps key stages, storing count/total/avg. Regression detectio
 If verification key (`AGENT_VERIFY_KEY_B64`) present, raw report signature verification performed; integrity block records digest, match flags, and errors without aborting enrichment (best-effort). Separate CLI commands for key generation, sign, and verify.
 
 ---
-## 3. LangGraph DAG & Cyclical Reasoning
-`graph_pipeline.py` and `graph.py` implement a LangGraph workflow with a bounded baseline enrichment cycle:
-* Entry chain: enrich -> summarize -> (router) baseline cycle or rule suggestion.
-* Baseline cycle: plan_baseline -> baseline_tools -> integrate_baseline -> summarize (re-enters summarize with added context) guarded by `AGENT_MAX_SUMMARY_ITERS` (default 3) and `baseline_cycle_done` flag.
-* Conditional Routing: `choose_post_summarize` decides whether additional baseline queries are needed (missing `baseline_status`) before proceeding to rule suggestion.
-* Rule Suggestion: mined via `suggest_rules` after summary iterations conclude or routing short-circuits.
-* Determinism Guards: iteration_count tracked; max iterations enforced; baseline cycle executed at most once; state transitions purely function-of-input under fixed environment.
-* Tool Integration: Baseline queries executed through ToolNode (structured `query_baseline` tool_calls) returning structured ToolMessages integrated deterministically.
+## 3. LangGraph DAG & Cyclical Reasoning (Canonical Implementation)
+
+`graph_pipeline.py` and `graph.py` implement the **canonical LangGraph workflow** that serves as the default execution path for the intelligence layer. This replaces the legacy linear pipeline and provides a bounded baseline enrichment cycle:
+
+- Entry chain: enrich -> summarize -> (router) baseline cycle or rule suggestion.
+- Baseline cycle: plan_baseline -> baseline_tools -> integrate_baseline -> summarize (re-enters summarize with added context) guarded by `AGENT_MAX_SUMMARY_ITERS` (default 3) and `baseline_cycle_done` flag.
+- Conditional Routing: `choose_post_summarize` decides whether additional baseline queries are needed (missing `baseline_status`) before proceeding to rule suggestion.
+- Rule Suggestion: mined via `suggest_rules` after summary iterations conclude or routing short-circuits.
+- Determinism Guards: iteration_count tracked; max iterations enforced; baseline cycle executed at most once; state transitions purely function-of-input under fixed environment.
+- Tool Integration: Baseline queries executed through ToolNode (structured `query_baseline` tool_calls) returning structured ToolMessages integrated deterministically.
 
 Loop pattern (current implementation):
-```
+
+```bash
 enrich -> summarize -> plan_baseline -> baseline_tools -> integrate_baseline -> summarize -> (router) -> suggest_rules -> END
 ```
+
 If no baseline context needed: `enrich -> summarize -> suggest_rules -> END`.
 Environment variable `AGENT_MAX_SUMMARY_ITERS` caps summarize passes; exceeding limit appends a deterministic warning and halts further iterations.
 
 ### 3.1 Enhanced Scaffold Workflow (2025 Integration)
+
 An enhanced, asynchronously capable workflow is now available (default when `AGENT_GRAPH_MODE=enhanced`) that wires in additional analytical and operational nodes exported from `graph_nodes_scaffold.py`.
 
 Enhanced sequence (simplified):
-```
+
+```bash
 enrich(enhanced) -> correlate -> risk_analyzer -> compliance_checker -> summarize(enhanced)
   -> (router choose_post_summarize: plan_baseline | suggest_rules | metrics_collector)
   -> (optional baseline cycle) -> suggest_rules(enhanced)
@@ -205,35 +215,37 @@ enrich(enhanced) -> correlate -> risk_analyzer -> compliance_checker -> summariz
 ```
 
 Key additions:
-* `enhanced_enrich_findings` / `enhanced_summarize_host_state` / `enhanced_suggest_rules`: async variants with caching, metrics, streaming flag, and optional rule refinement.
-* `risk_analyzer` & `compliance_checker`: pre‑summary analytics producing `risk_assessment` and `compliance_check` blocks used downstream and surfaced in final metrics.
-* Operational tail: `error_handler`, `human_feedback_node`, `cache_manager`, `metrics_collector` ensure graceful degradation, feedback integration, cache consolidation and a deterministic `final_metrics` snapshot even on early termination paths (router END is redirected through `metrics_collector`).
-* Deterministic caching: enrichment cache keyed by SHA256 of canonical JSON of `raw_findings`; summary iterations tracked; cache hit metrics recorded.
-* Dynamic recovery: `build_workflow()` performs a late import recovery to tolerate early import ordering issues during test discovery, ensuring enhanced nodes remain available even if the module was first imported before scaffold initialization.
+- `enhanced_enrich_findings` / `enhanced_summarize_host_state` / `enhanced_suggest_rules`: async variants with caching, metrics, streaming flag, and optional rule refinement.
+- `risk_analyzer` & `compliance_checker`: pre‑summary analytics producing `risk_assessment` and `compliance_check` blocks used downstream and surfaced in final metrics.
+- Operational tail: `error_handler`, `human_feedback_node`, `cache_manager`, `metrics_collector` ensure graceful degradation, feedback integration, cache consolidation and a deterministic `final_metrics` snapshot even on early termination paths (router END is redirected through `metrics_collector`).
+- Deterministic caching: enrichment cache keyed by SHA256 of canonical JSON of `raw_findings`; summary iterations tracked; cache hit metrics recorded.
+- Dynamic recovery: `build_workflow()` performs a late import recovery to tolerate early import ordering issues during test discovery, ensuring enhanced nodes remain available even if the module was first imported before scaffold initialization.
 
 Environment toggles:
-* `AGENT_GRAPH_MODE=enhanced|baseline` selects enhanced vs legacy core nodes.
-* `AGENT_MAX_SUMMARY_ITERS` caps summarize iterations (applies to both modes).
-* `AGENT_KB_REQUIRE_SIGNATURES=1` with `AGENT_KB_PUBKEY` enforces knowledge file signature presence (adds `SignatureMissing` warnings gathered by the knowledge layer).
+- `AGENT_GRAPH_MODE=enhanced|baseline` selects enhanced vs legacy core nodes.
+- `AGENT_MAX_SUMMARY_ITERS` caps summarize iterations (applies to both modes).
+- `AGENT_KB_REQUIRE_SIGNATURES=1` with `AGENT_KB_PUBKEY` enforces knowledge file signature presence (adds `SignatureMissing` warnings gathered by the knowledge layer).
 
 Metrics & Finalization:
-* Each enhanced node records `*_duration` plus call counters.
-* `metrics_collector` aggregates counts (suggestions, enriched, correlated), cache size, compliance standard count, risk level, provider mode, degraded flag, and total duration (if `start_time` present) into `final_metrics`.
-* Early END decisions (e.g. no high‑severity findings) are routed through `metrics_collector` to guarantee consistent terminal accounting.
+- Each enhanced node records `*_duration` plus call counters.
+- `metrics_collector` aggregates counts (suggestions, enriched, correlated), cache size, compliance standard count, risk level, provider mode, degraded flag, and total duration (if `start_time` present) into `final_metrics`.
+- Early END decisions (e.g. no high‑severity findings) are routed through `metrics_collector` to guarantee consistent terminal accounting.
 
 Fallback / Disabled Components:
-* `advanced_router` and `tool_coordinator` are present in scaffold exports but intentionally not yet wired into the enhanced DAG pending a pure router refactor (current implementation returns string values which require dedicated conditional edge wiring distinct from state mutating nodes).
-* The system automatically falls back to baseline sync nodes if enhanced async counterparts are unavailable.
+- `advanced_router` and `tool_coordinator` are present in scaffold exports but intentionally not yet wired into the enhanced DAG pending a pure router refactor (current implementation returns string values which require dedicated conditional edge wiring distinct from state mutating nodes).
+- The system automatically falls back to baseline sync nodes if enhanced async counterparts are unavailable.
 
 Error & Resilience:
-* All nodes defensively coerce placeholder `None` containers (introduced by graph initialization) into concrete lists/dicts before mutation to avoid `TypeError` on enhanced asynchronous paths.
-* `error_handler` centralizes detection of timeout / degraded mode signals and increments structured metrics (`timeout_error_count`, etc.).
+- All nodes defensively coerce placeholder `None` containers (introduced by graph initialization) into concrete lists/dicts before mutation to avoid `TypeError` on enhanced asynchronous paths.
+- `error_handler` centralizes detection of timeout / degraded mode signals and increments structured metrics (`timeout_error_count`, etc.).
 
 ---
 ## 4. Canonicalization & Reproducibility Guarantees
+
 Enriched output re-serialized into a canonical dict ordering (keys sorted; arrays left in stable constructed order) before final Pydantic model rehydration. This ensures:
-* Stable hashes across environments given identical inputs, configs, weights, calibration, rule pack, baseline DB state, and versions.
-* Low-noise diffs for CI gating & artifact promotion.
+
+- Stable hashes across environments given identical inputs, configs, weights, calibration, rule pack, baseline DB state, and versions.
+- Low-noise diffs for CI gating & artifact promotion.
 
 ---
 ## 5. Security & Privacy Considerations
@@ -260,39 +272,59 @@ No external network calls by default. Optional corpus enrichment (`AGENT_LOAD_HF
 
 ---
 ## 7. Roadmap (Architectural)
-* Native module decompression (remove shelling to `xz`,`gzip`).
-* Structured warning channel in core (separate from findings).
-* Bounded LangGraph iterative refinement (rule & action optimization).
-* Formal provenance & SBOM correlation linking enriched findings to package metadata.
+
+- Native module decompression (remove shelling to `xz`,`gzip`).
+- Structured warning channel in core (separate from findings).
+- Bounded LangGraph iterative refinement (rule & action optimization).
+- Formal provenance & SBOM correlation linking enriched findings to package metadata.
 
 ---
 ## 8. Diagrams
+
 ### Core → Intelligence Layer Data Flow
-```
-┌─────────────┐   JSON (schema v2)   ┌─────────────────────┐
-│ Core Scan   │─────────────────────▶│ Intelligence Layer  │
-│ (C++20)     │                      │ (Python)            │
-└─────┬───────┘                      └─────┬───────────────┘
-    │ timings                             │ enriched JSON
-    ▼                                     ▼
-  canonical JSON                       canonical enriched JSON
+
+```mermaid
+graph TD
+    A[Core Scan<br/>C++20] --> B[Intelligence Layer<br/>Python - LangGraph]
+    A --> C[canonical JSON]
+    B --> D[canonical enriched JSON]
 ```
 
-### Intelligence Layer Stage Graph (Current Linear)
+### Intelligence Layer Execution Paths
+
+**Canonical LangGraph Path (Default):**
+```mermaid
+graph TD
+    A[enrich] --> B[summarize]
+    B --> C{router}
+    C -->|baseline needed| D[plan_baseline]
+    C -->|no baseline| E[suggest_rules]
+    D --> F[baseline_tools]
+    F --> G[integrate_baseline]
+    G --> B
+    B --> H[END]
+    E --> H
 ```
+
+**Legacy Linear Pipeline (Preserved for Reference):**
+```bash
 load -> validate -> augment -> correlate -> baseline -> novelty -> sequence -> drift -> multi_host -> reduce -> followups -> actions -> summarize -> output
 ```
 
 ---
 ## 9. Known Limitations
-* Core severity taxonomy still string-based (enum refactor pending).
-* Rule engine matching primitive (no regex/DSL in proprietary layer—future safe expansion planned).
-* Process embedding intentionally lightweight; not semantic; may miss nuanced novelty.
-* ATT&CK mapping subset; coverage counts not weighted by evidentiary strength.
-* Cyclical reasoning hooks present conceptually, not yet activated (ensures current determinism baseline).
+
+- Core severity taxonomy still string-based (enum refactor pending).
+- Rule engine matching primitive (no regex/DSL in proprietary layer—future safe expansion planned).
+- Process embedding intentionally lightweight; not semantic; may miss nuanced novelty.
+- ATT&CK mapping subset; coverage counts not weighted by evidentiary strength.
+- Cyclical reasoning hooks present conceptually, not yet activated (ensures current determinism baseline).
 
 ---
 ## 10. Contact
+
 Design proposals: open issue tagged `design`. For security disclosures follow `SECURITY.md`.
 
-_End of Architecture Document_
+---
+
+End of Architecture Document

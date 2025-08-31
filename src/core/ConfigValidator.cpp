@@ -77,8 +77,7 @@ void ConfigValidator::apply_fast_scan_optimizations(Config& cfg) {
     // Set fast scan optimizations
     cfg.modules_summary_only = true;
 
-    // Re-set config after mutation
-    set_config(cfg);
+    // No need to set global config - mutations are reflected in the passed reference
 }
 
 bool ConfigValidator::load_external_files(Config& cfg) {
@@ -143,7 +142,7 @@ bool ConfigValidator::load_ioc_allowlist(Config& cfg) {
     }
 
     // Update global config with merged allowlist
-    set_config(cfg);
+    // No need to set global config - mutations are reflected in the passed reference
     return true;
 }
 
@@ -162,7 +161,7 @@ bool ConfigValidator::load_suid_expected(Config& cfg) {
     }
 
     // Update global config
-    set_config(cfg);
+    // No need to set global config - mutations are reflected in the passed reference
     return true;
 }
 

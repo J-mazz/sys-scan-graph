@@ -2,18 +2,17 @@
 #include "core/Report.h"
 #include "core/JSONWriter.h"
 #include "core/Config.h"
+#include "core/ScanContext.h"
 #include <cassert>
 #include <iostream>
 #include <string>
 
 int main(){
     using namespace sys_scan;
-    Config cfg; set_config(cfg);
-    cfg.pretty = true;  // Enable pretty printing for test
+    Config cfg; cfg.pretty = true;  // Enable pretty printing for test
     cfg.compact = false; // Ensure compact is disabled
-    set_config(cfg);    // Update global config
-    ScannerRegistry reg; reg.register_all_default();
-    Report rpt; reg.run_all(rpt);
+    ScannerRegistry reg; reg.register_all_default(cfg);
+    Report rpt; ScanContext context(cfg, rpt); reg.run_all(context);
     JSONWriter w; auto j = w.write(rpt, cfg);
     // Basic smoke: ensure schema version marker and risk_score appear.
     if (j.find("\"json_schema_version\": \"2\"") == std::string::npos) {

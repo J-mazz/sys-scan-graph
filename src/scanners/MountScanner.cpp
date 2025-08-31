@@ -1,4 +1,5 @@
 #include "MountScanner.h"
+#include "../core/ScanContext.h"
 #include "../core/Report.h"
 #include "../core/Config.h"
 #include <fstream>
@@ -22,12 +23,12 @@ static bool has_opt(const std::string& opts, const std::string& key){
     }
 }
 
-void MountScanner::scan(Report& report){
-    const auto& cfg = config();
+void MountScanner::scan(ScanContext& context){
+    const auto& cfg = context.config;
     if(!cfg.hardening) return; // opt-in
 
     std::ifstream f("/proc/mounts");
-    if(!f.is_open()) { report.add_warning(name(), WarnCode::MountsUnreadable, "/proc/mounts"); return; }
+    if(!f.is_open()) { context.report.add_warning(name(), WarnCode::MountsUnreadable, "/proc/mounts"); return; }
     std::string line;
 
     std::unordered_set<std::string> sensitive = {"/", "/home", "/tmp", "/var", "/var/tmp", "/boot", "/efi"};
@@ -44,7 +45,7 @@ void MountScanner::scan(Report& report){
         bool is_sensitive = sensitive.count(mountpoint) || mountpoint.rfind("/home/",0)==0; // any /home/*
 
         auto emit = [&](const std::string& id_suffix, Severity sev, const std::string& title, const std::string& desc){
-            Finding f; f.id = std::string("mount:") + id_suffix + ":" + mountpoint; f.title = title; f.severity = sev; f.description = desc; f.metadata["mount"] = mountpoint; f.metadata["device"] = dev; f.metadata["fstype"] = fstype; f.metadata["options"] = opts; report.add_finding(name(), std::move(f)); };
+            Finding f; f.id = std::string("mount:") + id_suffix + ":" + mountpoint; f.title = title; f.severity = sev; f.description = desc; f.metadata["mount"] = mountpoint; f.metadata["device"] = dev; f.metadata["fstype"] = fstype; f.metadata["options"] = opts; context.report.add_finding(name(), std::move(f)); };
 
         // World-writable device mount detection (simplified): look for fstype ext*,xfs,btrfs and absence of nodev/nosuid/noexec on sensitive mounts or tmp
         bool is_tmp_like = (mountpoint=="/tmp" || mountpoint=="/var/tmp");

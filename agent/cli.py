@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import typer
 from rich import print
-from .pipeline import run_pipeline
+from .legacy.pipeline import run_pipeline
 from .graph_pipeline import run_graph
 from .rules import load_rules_dir, lint_rules, dry_run_apply
 from .baseline import BaselineStore
@@ -29,21 +29,17 @@ app = typer.Typer(help="sys-scan intelligence layer (agent MVP)")
 @app.command()
 def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="Path to sys-scan JSON report"),
             out: Path = typer.Option("enriched_report.json", help="Output enriched JSON path"),
-            graph: bool = typer.Option(False, help="Use LangGraph DAG implementation"),
-            checkpoint_dir: Path = typer.Option(None, help="Directory to write per-node state checkpoints (graph mode only)"),
-            schema: Path = typer.Option(None, help="Path to JSON schema for validation (graph mode)"),
-            index_dir: Path = typer.Option(None, help="Directory to append time-series index entries (graph mode)"),
+            checkpoint_dir: Path = typer.Option(None, help="Directory to write per-node state checkpoints"),
+            schema: Path = typer.Option(None, help="Path to JSON schema for validation"),
+            index_dir: Path = typer.Option(None, help="Directory to append time-series index entries"),
             dry_run: bool = typer.Option(False, help="Sandbox dry-run (no external commands executed)"),
             prev: Path = typer.Option(None, help="Previous enriched report for diff")):
     cfg = load_config()
     if dry_run:
         sandbox_config(dry_run=True)
-    if graph:
-        enriched = run_graph(report, str(checkpoint_dir) if checkpoint_dir else None, str(schema) if schema else None, str(index_dir) if index_dir else None)
-    else:
-        enriched = run_pipeline(report)
+    enriched = run_graph(report, str(checkpoint_dir) if checkpoint_dir else None, str(schema) if schema else None, str(index_dir) if index_dir else None)
     out.write_text(enriched.model_dump_json(indent=2))
-    print(f"[green]Wrote enriched output -> {out} (graph={graph})")
+    print(f"[green]Wrote enriched output -> {out} (LangGraph mode)")
     # HTML artifact
     if cfg.reports.html_enabled:
         write_html(enriched, Path(cfg.reports.html_path))
@@ -68,9 +64,9 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
             print(f"[red]Diff/notify error: {e}")
     # Manifest
     write_manifest(cfg)
-    if graph and checkpoint_dir:
+    if checkpoint_dir:
         print(f"[cyan]Checkpoints in {checkpoint_dir}")
-    if graph and index_dir:
+    if index_dir:
         print(f"[cyan]Index updated at {index_dir}/index.json")
 
 @app.command()

@@ -1,6 +1,7 @@
 #include "core/ScannerRegistry.h"
 #include "core/Report.h"
 #include "core/Config.h"
+#include "core/ScanContext.h"
 #include "core/RuleEngine.h"
 #include "core/JSONWriter.h"
 #include <cassert>
@@ -18,12 +19,12 @@ int main(){
     std::ofstream r(tmp+"/t.rule");
     r << "id=t_rule\nfield=title\ncontains=World-writable\nmitre=T9999\n"; r.close();
 
-    Config cfg; cfg.enable_scanners = {"world_writable"}; cfg.rules_enable = true; cfg.rules_dir = tmp; cfg.ndjson = true; set_config(cfg);
+    Config cfg; cfg.enable_scanners = {"world_writable"}; cfg.rules_enable = true; cfg.rules_dir = tmp; cfg.ndjson = true;
     // Load rules manually (mirrors main)
     std::string warn; rule_engine().load_dir(cfg.rules_dir, warn);
 
-    ScannerRegistry reg; reg.register_all_default();
-    Report rpt; reg.run_all(rpt);
+    ScannerRegistry reg; reg.register_all_default(cfg);
+    Report rpt; ScanContext context(cfg, rpt); reg.run_all(context);
     JSONWriter w; std::string out = w.write(rpt, cfg);
 
     // Find at least one finding line containing mitre_techniques":"T9999

@@ -1,4 +1,5 @@
 #include "AuditdScanner.h"
+#include "../core/ScanContext.h"
 #include "../core/Report.h"
 #include "../core/Config.h"
 #include <fstream>
@@ -12,8 +13,8 @@ namespace fs = std::filesystem;
 
 static std::string read_all(const fs::path& p){ std::ifstream f(p); if(!f.is_open()) return {}; std::ostringstream ss; ss<<f.rdbuf(); return ss.str(); }
 
-void AuditdScanner::scan(Report& report){
-    if(!config().hardening) return;
+void AuditdScanner::scan(ScanContext& context){
+    if(!context.config.hardening) return;
 
     // Collect audit rules from /etc/audit/rules.d/*.rules and /etc/audit/audit.rules
     std::vector<fs::path> paths;
@@ -26,7 +27,7 @@ void AuditdScanner::scan(Report& report){
     std::string combined;
     for(const auto& p : paths){ combined += read_all(p); combined += "\n"; }
     if(combined.empty()){
-        Finding f; f.id="auditd:rules:missing"; f.title="No auditd rules detected"; f.severity=Severity::Medium; f.description="Could not read auditd rules files"; report.add_finding(name(), std::move(f));
+        Finding f; f.id="auditd:rules:missing"; f.title="No auditd rules detected"; f.severity=Severity::Medium; f.description="Could not read auditd rules files"; context.report.add_finding(name(), std::move(f));
         return;
     }
 
@@ -52,12 +53,12 @@ void AuditdScanner::scan(Report& report){
 
     for(const auto& p : pats){
         bool ok = matched.count(p.id);
-        Finding f; f.id = std::string("auditd:") + p.id; f.title = p.title; f.description = ok ? p.desc : (std::string(p.title) + " missing"); f.severity = ok ? Severity::Info : Severity::Medium; report.add_finding(name(), std::move(f));
+        Finding f; f.id = std::string("auditd:") + p.id; f.title = p.title; f.description = ok ? p.desc : (std::string(p.title) + " missing"); f.severity = ok ? Severity::Info : Severity::Medium; context.report.add_finding(name(), std::move(f));
     }
 
     // Execve coverage absence escalated severity
     if(!matched.count("execve")){
-        Finding f; f.id="auditd:execve:absent"; f.title="Execve auditing missing"; f.severity=Severity::High; f.description="Audit rules lack -S execve; process execution coverage incomplete"; report.add_finding(name(), std::move(f));
+        Finding f; f.id="auditd:execve:absent"; f.title="Execve auditing missing"; f.severity=Severity::High; f.description="Audit rules lack -S execve; process execution coverage incomplete"; context.report.add_finding(name(), std::move(f));
     }
 }
 

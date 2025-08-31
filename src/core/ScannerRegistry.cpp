@@ -1,4 +1,5 @@
 #include "ScannerRegistry.h"
+#include "ScanContext.h"  // Added ScanContext include
 #include "Report.h"
 #include "Logging.h"
 #include "Config.h"
@@ -23,9 +24,7 @@
 #include "../scanners/IntegrityScanner.h"
 #include "../scanners/YaraScanner.h"
 #include "Compliance.h"
-#ifdef SYS_SCAN_HAVE_EBPF
 #include "../scanners/EbpfScanner.h"
-#endif
 
 namespace sys_scan {
 
@@ -33,7 +32,7 @@ void ScannerRegistry::register_scanner(ScannerPtr scanner) {
     scanners_.push_back(std::move(scanner));
 }
 
-void ScannerRegistry::register_all_default() {
+void ScannerRegistry::register_all_default(const Config& config) {
     register_scanner(std::make_unique<ProcessScanner>());
     register_scanner(std::make_unique<NetworkScanner>());
     register_scanner(std::make_unique<KernelParamScanner>());
@@ -47,19 +46,22 @@ void ScannerRegistry::register_all_default() {
     register_scanner(std::make_unique<SystemdUnitScanner>());
     register_scanner(std::make_unique<AuditdScanner>());
     register_scanner(std::make_unique<ContainerScanner>());
-    if(config().integrity){
+    if(config.integrity){
         register_scanner(std::make_unique<IntegrityScanner>());
     }
-    if(config().rules_enable){
+    if(config.rules_enable){
         register_scanner(std::make_unique<YaraScanner>());
     }
 #ifdef SYS_SCAN_HAVE_EBPF
     register_scanner(std::make_unique<EbpfScanner>());
+#else
+    // Register EbpfScanner even without eBPF support for fallback functionality
+    register_scanner(std::make_unique<EbpfScanner>());
 #endif
     // Compliance scanners (initial: PCI). Conditional on cfg.compliance
-    if(config().compliance) {
+    if(config.compliance) {
         bool include_pci = true;
-        const auto& subset = config().compliance_standards;
+        const auto& subset = config.compliance_standards;
         if(!subset.empty()) {
             include_pci = std::find(subset.begin(), subset.end(), "pci_dss_4_0") != subset.end();
         }
@@ -69,17 +71,20 @@ void ScannerRegistry::register_all_default() {
     }
 }
 
-void ScannerRegistry::run_all(Report& report) {
-    auto& cfg = config();
+void ScannerRegistry::run_all(ScanContext& context) {
+    const auto& cfg = context.config;  // Use config from context
+    // Attach the active configuration to the report for rule engine and filtering
+    context.report.attach_config(cfg);
     if(cfg.parallel) {
-        run_all_parallel(report);
+        run_all_parallel(context);
     } else {
-        run_all_sequential(report);
+        run_all_sequential(context);
     }
 }
 
-void ScannerRegistry::run_all_sequential(Report& report) {
-    auto& cfg = config();
+void ScannerRegistry::run_all_sequential(ScanContext& context) {
+    const auto& cfg = context.config;  // Use config from context
+    Report& report = context.report;   // Get report from context
     auto is_enabled = [&](const std::string& name){
         if(!cfg.enable_scanners.empty()) {
             bool found = std::find(cfg.enable_scanners.begin(), cfg.enable_scanners.end(), name)!=cfg.enable_scanners.end();
@@ -95,7 +100,7 @@ void ScannerRegistry::run_all_sequential(Report& report) {
         Logger::instance().debug("Starting scanner: " + s->name());
         report.start_scanner(s->name());
         try {
-            s->scan(report);
+            s->scan(context);  // Pass context instead of report
         } catch(const std::exception& ex) {
             Finding f;
             f.id = s->name() + ":error";
@@ -109,8 +114,9 @@ void ScannerRegistry::run_all_sequential(Report& report) {
     }
 }
 
-void ScannerRegistry::run_all_parallel(Report& report) {
-    auto& cfg = config();
+void ScannerRegistry::run_all_parallel(ScanContext& context) {
+    const auto& cfg = context.config;  // Use config from context
+    Report& report = context.report;   // Get report from context
     auto is_enabled = [&](const std::string& name){
         if(!cfg.enable_scanners.empty()) {
             bool found = std::find(cfg.enable_scanners.begin(), cfg.enable_scanners.end(), name)!=cfg.enable_scanners.end();
@@ -157,7 +163,7 @@ void ScannerRegistry::run_all_parallel(Report& report) {
         Logger::instance().debug("Starting scanner: " + name);
         return ScanJob{idx, std::async(std::launch::async, [&, idx, name](){
             try {
-                scanners_[idx]->scan(report); // scanners add findings directly (must be thread-safe)
+                scanners_[idx]->scan(context); // Pass context instead of report
                 return std::string();
             } catch(const std::exception& ex) {
                 return std::string(ex.what());

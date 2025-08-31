@@ -1,4 +1,5 @@
 #include "YaraScanner.h"
+#include "../core/ScanContext.h"
 #include "../core/Report.h"
 #include "../core/Config.h"
 #include "../core/Logging.h"
@@ -20,8 +21,8 @@ static std::vector<std::string> load_patterns(const std::string& dir){
     return pats;
 }
 
-void YaraScanner::scan(Report& report){
-    const auto& cfg = config();
+void YaraScanner::scan(ScanContext& context){
+    const auto& cfg = context.config;
     // No config flag yet; enable only if rules_dir contains a yara subdir (future: add dedicated flags)
     std::string yara_dir = cfg.rules_dir.empty()? std::string(): (cfg.rules_dir+"/yara");
     auto patterns = load_patterns(yara_dir);
@@ -32,7 +33,7 @@ void YaraScanner::scan(Report& report){
     // Limit total files & matches to control runtime
     size_t file_limit = 2000; size_t match_limit = 200; size_t scanned=0; size_t emitted=0;
 
-    for(const auto& root : roots){ std::error_code ec; for(auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec) break; if(!it->is_regular_file(ec)) continue; if(scanned++ > file_limit) return; auto path = it->path(); std::ifstream ifs(path, std::ios::binary); if(!ifs) continue; std::string content; content.resize(8192); ifs.read(&content[0], content.size()); content.resize(ifs.gcount()); for(const auto& pat : patterns){ if(content.find(pat)!=std::string::npos){ Finding f; f.id = path.string()+":yara:"+pat.substr(0,16); f.title = "Pseudo-YARA pattern match"; f.severity=Severity::Medium; f.description="Pattern found in file prefix"; f.metadata["pattern"] = pat; f.metadata["path"] = path.string(); report.add_finding(this->name(), std::move(f)); if(++emitted >= match_limit) return; }
+    for(const auto& root : roots){ std::error_code ec; for(auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it!=fs::recursive_directory_iterator(); ++it){ if(ec) break; if(!it->is_regular_file(ec)) continue; if(scanned++ > file_limit) return; auto path = it->path(); std::ifstream ifs(path, std::ios::binary); if(!ifs) continue; std::string content; content.resize(8192); ifs.read(&content[0], content.size()); content.resize(ifs.gcount()); for(const auto& pat : patterns){ if(content.find(pat)!=std::string::npos){ Finding f; f.id = path.string()+":yara:"+pat.substr(0,16); f.title = "Pseudo-YARA pattern match"; f.severity=Severity::Medium; f.description="Pattern found in file prefix"; f.metadata["pattern"] = pat;   f.metadata["path"] = path.string(); context.report.add_finding(this->name(), std::move(f)); if(++emitted >= match_limit) return; }
         }
     } }
 }

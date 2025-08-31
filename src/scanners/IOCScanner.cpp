@@ -1,285 +1,247 @@
 #include "IOCScanner.h"
-#include "../core/Report.h"
-#include "../core/Utils.h"
-#include <filesystem>
-#include <fstream>
-#include <regex>
-#include <unordered_set>
-#include <unordered_map>
-#include "../core/Config.h"
-#include <sys/stat.h>
-#include <dirent.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <cstring>
 #include <cctype>
-#include <dirent.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <cstring>
+#include <dirent.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <unistd.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <sys/stat.h>
+#include "../core/Config.h"
+#include "../core/Report.h"
+#include "../core/ScanContext.h"
+#include "../core/Utils.h"
 
-namespace fs = std::filesystem;
 namespace sys_scan {
 
-static bool is_executable(const fs::path& p){ struct stat st{}; if(stat(p.c_str(), &st)!=0) return false; return (st.st_mode & S_IXUSR)||(st.st_mode & S_IXGRP)||(st.st_mode & S_IXOTH); }
-static bool has_suid(const fs::path& p){ struct stat st{}; if(lstat(p.c_str(), &st)!=0) return false; return (st.st_mode & S_ISUID); }
-
-// Fast string matching functions to replace regex where possible
-static bool fast_string_match(const std::string& str, const std::vector<std::string>& patterns) {
-    for (const auto& pattern : patterns) {
-        if (str.find(pattern) != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
+// Fast PID validation using integer conversion
+static inline bool is_valid_pid(const char* str, int* pid_out = nullptr) {
+    if (!str || !*str) return false;
+    char* endptr;
+    long val = strtol(str, &endptr, 10);
+    if (*endptr != '\0' || val <= 0 || val > INT_MAX) return false;
+    if (pid_out) *pid_out = static_cast<int>(val);
+    return true;
 }
 
-static bool fast_path_match(const std::string& path, const std::vector<std::string>& prefixes) {
-    for (const auto& prefix : prefixes) {
-        if (path.rfind(prefix, 0) == 0) {  // starts_with check
-            return true;
-        }
-    }
-    return false;
-}
-
-// Fast directory iteration using POSIX calls
-static std::vector<std::string> fast_list_dir(const char* path) {
-    std::vector<std::string> entries;
-    DIR* dir = opendir(path);
-    if (!dir) return entries;
-
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_name[0] == '.') continue;  // Skip hidden files
-        entries.push_back(entry->d_name);
-    }
-    closedir(dir);
-    return entries;
-}
-
-// Fast file reading using POSIX calls
-static std::string fast_read_file(const char* path) {
-    int fd = open(path, O_RDONLY);
-    if (fd == -1) return "";
-
-    std::string content;
-    char buffer[4096];
-    ssize_t bytes_read;
-    while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
-        content.append(buffer, bytes_read);
+// Fast file reading with fixed buffer
+static ssize_t read_file_to_buffer(const char* path, char* buffer, size_t buffer_size) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd == -1) return -1;
+    ssize_t total_read = 0;
+    while (total_read < static_cast<ssize_t>(buffer_size)) {
+        ssize_t bytes_read = read(fd, buffer + total_read, buffer_size - total_read);
+        if (bytes_read <= 0) break;
+        total_read += bytes_read;
     }
     close(fd);
-    return content;
+    return total_read;
 }
 
-void IOCScanner::scan(Report& report) {
-    // Memory-optimized version with streaming and limited data structures
+// Batch file operations to reduce system calls
+struct ProcessFiles {
+    char cmdline[4096];
+    char exe_target[PATH_MAX];
+    char environ[2048];
+    ssize_t cmdline_len, exe_len, environ_len;
 
-    // Use fixed-size arrays instead of vectors for better memory control
-    const char* suspicious_names[] = {"kworker", "cryptominer", "xmrig", "minerd", "kthreadd", "malware", "bot"};
+    bool read_all(int pid) {
+        char path_buf[64];
+        snprintf(path_buf, sizeof(path_buf), "/proc/%d/cmdline", pid);
+        cmdline_len = read_file_to_buffer(path_buf, cmdline, sizeof(cmdline) - 1);
+        if (cmdline_len > 0) cmdline[cmdline_len] = '\0';
+
+        snprintf(path_buf, sizeof(path_buf), "/proc/%d/exe", pid);
+        exe_len = readlink(path_buf, exe_target, sizeof(exe_target) - 1);
+        if (exe_len > 0) exe_target[exe_len] = '\0';
+
+        snprintf(path_buf, sizeof(path_buf), "/proc/%d/environ", pid);
+        environ_len = read_file_to_buffer(path_buf, environ, sizeof(environ) - 1);
+        if (environ_len > 0) environ[environ_len] = '\0';
+
+        return cmdline_len > 0;
+    }
+};
+
+// Memory-efficient process info
+struct ProcessInfo {
+    int pid;
+    uint8_t flags;  // 1=pattern_match, 2=deleted_exe, 4=world_writable, 8=env_issue
+    char exe_key[256];
+    char cmd_sample[128];
+
+    void set_exe_key(const char* exe, size_t len) {
+        size_t copy_len = std::min(len, sizeof(exe_key) - 1);
+        memcpy(exe_key, exe, copy_len);
+        exe_key[copy_len] = '\0';
+    }
+
+    void set_cmd_sample(const char* cmd, size_t len) {
+        size_t copy_len = std::min(len, sizeof(cmd_sample) - 1);
+        memcpy(cmd_sample, cmd, copy_len);
+        cmd_sample[copy_len] = '\0';
+    }
+};
+
+// Fast directory reading
+static size_t list_proc_pids(int* pid_buffer, size_t max_pids) {
+    DIR* dir = opendir("/proc");
+    if (!dir) return 0;
+
+    size_t count = 0;
+    struct dirent* entry;
+    while (count < max_pids && (entry = readdir(dir)) != nullptr) {
+        if (entry->d_name[0] == '.') continue;
+        int pid;
+        if (is_valid_pid(entry->d_name, &pid)) {
+            pid_buffer[count++] = pid;
+        }
+    }
+    closedir(dir);
+    return count;
+}
+
+void IOCScanner::scan(ScanContext& context) {
+    // Constants - no runtime allocations
+    static const char* suspicious_names[] = {
+        "kworker", "cryptominer", "xmrig", "minerd", "kthreadd", "malware", "bot"
+    };
+    static const char* ww_dirs[] = {"/tmp", "/dev/shm", "/var/tmp", "/home"};
+    static const char* env_vars[] = {"LD_PRELOAD=", "LD_LIBRARY_PATH="};
+
     const size_t suspicious_count = sizeof(suspicious_names) / sizeof(suspicious_names[0]);
-
-    const char* ww_dirs[] = {"/tmp", "/dev/shm", "/var/tmp"};
     const size_t ww_dirs_count = sizeof(ww_dirs) / sizeof(ww_dirs[0]);
+    const size_t env_vars_count = sizeof(env_vars) / sizeof(env_vars[0]);
 
-    // Use smaller, more memory-efficient data structures
-    // Limit maximum entries to prevent memory exhaustion
-    const size_t MAX_PROC_ENTRIES = 1000;
-    const size_t MAX_ENV_ENTRIES = 500;
+    // Fixed limits for memory control
+    const size_t MAX_PROCESSES = 2000;
+    const size_t MAX_HITS = 500;
 
-    std::unordered_map<std::string, std::vector<std::string>> proc_hits;  // exe -> pids
-    std::unordered_map<std::string, std::string> proc_cmds;  // exe -> first cmd
-    std::unordered_map<std::string, uint8_t> proc_flags;  // exe -> flags (bitmask)
+    int pid_buffer[MAX_PROCESSES];
+    ProcessInfo proc_info[MAX_HITS];
+    size_t hit_count = 0;
 
-    // Process /proc directory with memory limits
-    auto proc_entries = fast_list_dir("/proc");
-    size_t proc_count = 0;
+    // Fast directory scan
+    size_t pid_count = list_proc_pids(pid_buffer, MAX_PROCESSES);
 
-    for (const auto& pid_str : proc_entries) {
-        if (proc_count >= MAX_PROC_ENTRIES) break;  // Memory limit
+    // Process each PID
+    for (size_t i = 0; i < pid_count && hit_count < MAX_HITS; ++i) {
+        int pid = pid_buffer[i];
 
-        // Validate PID
-        bool is_valid_pid = true;
-        for (char c : pid_str) {
-            if (!isdigit(c)) {
-                is_valid_pid = false;
-                break;
+        ProcessFiles files;
+        if (!files.read_all(pid)) continue;
+
+        // Analyze patterns
+        bool pattern_match = false;
+        bool ww_path = false;
+        bool deleted_exe = false;
+        bool ww_exe = false;
+        bool env_issue = false;
+
+        // Check cmdline
+        if (files.cmdline_len > 0) {
+            // Check for suspicious patterns
+            for (size_t j = 0; j < suspicious_count; ++j) {
+                if (strstr(files.cmdline, suspicious_names[j])) {
+                    pattern_match = true;
+                    break;
+                }
             }
-        }
-        if (!is_valid_pid) continue;
-
-        std::string pid = pid_str;
-        proc_count++;
-
-        // Read cmdline efficiently
-        std::string cmdline_path = "/proc/" + pid + "/cmdline";
-        std::string raw_cmd = fast_read_file(cmdline_path.c_str());
-        if (raw_cmd.empty()) continue;
-
-        // Replace null bytes with spaces for string processing
-        for (char& c : raw_cmd) {
-            if (c == '\0') c = ' ';
-        }
-
-        // Fast pattern matching without regex
-        bool matched = false;
-        if (raw_cmd.find("/tmp/") != std::string::npos ||
-            raw_cmd.find("/dev/shm/") != std::string::npos ||
-            raw_cmd.find("/var/tmp/") != std::string::npos ||
-            raw_cmd.find("/home/") != std::string::npos) {
-            matched = true;
-        }
-
-        // Check suspicious names
-        if (!matched) {
-            for (size_t i = 0; i < suspicious_count; ++i) {
-                if (raw_cmd.find(suspicious_names[i]) != std::string::npos) {
-                    matched = true;
+            // Check for world-writable paths
+            for (size_t j = 0; j < ww_dirs_count; ++j) {
+                if (strstr(files.cmdline, ww_dirs[j])) {
+                    ww_path = true;
                     break;
                 }
             }
         }
 
-        // Read exe symlink
-        std::string exe_path = "/proc/" + pid + "/exe";
-        char exe_buf[PATH_MAX];
-        ssize_t len = readlink(exe_path.c_str(), exe_buf, sizeof(exe_buf) - 1);
-        std::string exe_target;
-        if (len > 0) {
-            exe_buf[len] = '\0';
-            exe_target = exe_buf;
-        }
-
-        bool deleted = (!exe_target.empty() && exe_target.find("(deleted)") != std::string::npos);
-        bool ww_exec = false;
-        if (!exe_target.empty()) {
-            for (size_t i = 0; i < ww_dirs_count; ++i) {
-                if (exe_target.rfind(ww_dirs[i], 0) == 0) {
-                    ww_exec = true;
-                    break;
-                }
-            }
-        }
-
-        if (matched || deleted || ww_exec) {
-            std::string key = exe_target.empty() ? raw_cmd : exe_target;
-
-            // Limit key length to prevent memory issues
-            if (key.length() > 1024) key = key.substr(0, 1024);
-
-            auto& pids = proc_hits[key];
-            if (pids.size() < 10) {  // Limit PIDs per process
-                pids.push_back(pid);
-            }
-
-            if (proc_cmds.find(key) == proc_cmds.end()) {
-                proc_cmds[key] = raw_cmd.substr(0, 512);  // Limit cmd length
-            }
-
-            uint8_t flags = 0;
-            if (matched) flags |= 1;
-            if (deleted) flags |= 2;
-            if (ww_exec) flags |= 4;
-            proc_flags[key] = flags;
-        }
-
-        // Memory-efficient environment checking
-        if (proc_hits.size() < MAX_ENV_ENTRIES) {
-            std::string env_path = "/proc/" + pid + "/environ";
-            int env_fd = open(env_path.c_str(), O_RDONLY);
-            if (env_fd != -1) {
-                char env_buf[2048];  // Fixed buffer size
-                ssize_t env_len = read(env_fd, env_buf, sizeof(env_buf) - 1);
-                close(env_fd);
-
-                if (env_len > 0) {
-                    env_buf[env_len] = '\0';
-                    std::string env_data(env_buf, env_len);
-
-                    bool has_preload = env_data.find("LD_PRELOAD=") != std::string::npos;
-                    bool has_libpath = env_data.find("LD_LIBRARY_PATH=") != std::string::npos;
-
-                    if (has_preload || has_libpath) {
-                        bool temp_ref = (env_data.find("/tmp/") != std::string::npos ||
-                                       env_data.find("/dev/shm/") != std::string::npos);
-
-                        std::string key = exe_target.empty() ? std::string("<unknown>") : exe_target;
-                        if (key.length() > 512) key = key.substr(0, 512);
-
-                        // Store minimal env info
-                        std::string env_key = key + ":env";
-                        uint8_t env_flags = 0;
-                        if (temp_ref) env_flags |= 1;
-                        if (has_preload) env_flags |= 2;
-                        if (has_libpath) env_flags |= 4;
-
-                        proc_flags[env_key] = env_flags;
-                        auto& env_pids = proc_hits[env_key];
-                        if (env_pids.size() < 5) {
-                            env_pids.push_back(pid);
-                        }
+        // Check exe
+        if (files.exe_len > 0) {
+            deleted_exe = strstr(files.exe_target, "(deleted)") != nullptr;
+            if (!ww_exe) {
+                for (size_t j = 0; j < ww_dirs_count; ++j) {
+                    if (strncmp(files.exe_target, ww_dirs[j], strlen(ww_dirs[j])) == 0) {
+                        ww_exe = true;
+                        break;
                     }
                 }
             }
         }
-    }
 
-    // Generate findings with memory cleanup
-    for (const auto& kv : proc_hits) {
-        const std::string& key = kv.first;
-        const std::vector<std::string>& pids = kv.second;
+        // Check environment
+        if (files.environ_len > 0) {
+            for (size_t j = 0; j < env_vars_count; ++j) {
+                if (strstr(files.environ, env_vars[j])) {
+                    env_issue = true;
+                    break;
+                }
+            }
+        }
 
-        if (key.find(":env") != std::string::npos) {
-            // Environment finding
-            uint8_t flags = proc_flags[key];
-            std::string sev = "medium";
-            std::string rule = "ld_env";
-            std::string desc = "LD_* environment usage";
+        // Store if suspicious
+        if (pattern_match || ww_path || deleted_exe || ww_exe || env_issue) {
+            ProcessInfo& info = proc_info[hit_count++];
+            info.pid = pid;
 
-            if (flags & 1) {  // temp_ref
-                rule += "_tmp";
-                desc += " referencing tmp";
+            // Set flags
+            info.flags = 0;
+            if (pattern_match || ww_path) info.flags |= 1;
+            if (deleted_exe) info.flags |= 2;
+            if (ww_exe) info.flags |= 4;
+            if (env_issue) info.flags |= 8;
+
+            // Set exe key
+            if (files.exe_len > 0) {
+                info.set_exe_key(files.exe_target, files.exe_len);
+            } else if (files.cmdline_len > 0) {
+                const char* end = (const char*)memchr(files.cmdline, '\0', files.cmdline_len);
+                size_t len = end ? (end - files.cmdline) : files.cmdline_len;
+                info.set_exe_key(files.cmdline, std::min(len, sizeof(info.exe_key) - 1));
             }
 
-            Finding f;
-            f.id = key;
-            f.title = "Environment IOC";
-            f.severity = severity_from_string(sev);
-            f.description = desc;
-            f.metadata["rule"] = rule;
-            f.metadata["pid_count"] = std::to_string(pids.size());
-            report.add_finding(this->name(), std::move(f));
-        } else {
-            // Process finding
-            uint8_t flags = proc_flags[key];
-            std::string sev = "high";
-            if (flags & 2) sev = "critical";  // deleted
-            else if (flags & 4) sev = "high";  // ww_exec
-
-            auto cmd_it = proc_cmds.find(key);
-            std::string desc = (cmd_it != proc_cmds.end()) ? cmd_it->second : key;
-
-            Finding f;
-            f.id = key + ":proc_ioc";
-            f.title = "Process IOC";
-            f.severity = severity_from_string(sev);
-            f.description = desc;
-            f.metadata["pid_count"] = std::to_string(pids.size());
-
-            if (flags & 1) f.metadata["pattern_match"] = "true";
-            if (flags & 2) f.metadata["deleted_exe"] = "true";
-            if (flags & 4) f.metadata["world_writable_exec"] = "true";
-
-            report.add_finding(this->name(), std::move(f));
+            // Set command sample
+            if (files.cmdline_len > 0) {
+                info.set_cmd_sample(files.cmdline, files.cmdline_len);
+            }
         }
     }
 
-    // Clear memory after processing
-    proc_hits.clear();
-    proc_cmds.clear();
-    proc_flags.clear();
+    // Generate findings
+    for (size_t i = 0; i < hit_count; ++i) {
+        const ProcessInfo& info = proc_info[i];
 
+        Finding f;
+        f.id = std::string(info.exe_key) + ":" + std::to_string(info.pid);
+        f.title = "Process IOC Detected";
+
+        // Determine severity
+        if (info.flags & 2) {  // deleted exe
+            f.severity = Severity::Critical;
+            f.description = "Process with deleted executable: " + std::string(info.exe_key);
+        } else if (info.flags & 4) {  // world writable exe
+            f.severity = Severity::High;
+            f.description = "Process with world-writable executable: " + std::string(info.exe_key);
+        } else if (info.flags & 8) {  // env issue
+            f.severity = Severity::Medium;
+            f.description = "Process with suspicious environment: " + std::string(info.exe_key);
+        } else {
+            f.severity = Severity::Low;
+            f.description = "Process with suspicious patterns: " + std::string(info.exe_key);
+        }
+
+        // Add metadata
+        f.metadata["pid"] = std::to_string(info.pid);
+        f.metadata["command"] = std::string(info.cmd_sample);
+
+        if (info.flags & 1) f.metadata["pattern_match"] = "true";
+        if (info.flags & 2) f.metadata["deleted_executable"] = "true";
+        if (info.flags & 4) f.metadata["world_writable_executable"] = "true";
+        if (info.flags & 8) f.metadata["environment_issue"] = "true";
+
+        context.report.add_finding(this->name(), std::move(f));
+    }
 }
 
 }
