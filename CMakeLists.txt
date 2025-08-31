@@ -18,13 +18,12 @@ set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenan
 
 # eBPF support
 if(WITH_EBPF)
-  # Use the working bpftool from generic tools
-  set(BPFTOOL "/usr/lib/linux-tools-6.8.0-79/bpftool")
-  if(NOT EXISTS ${BPFTOOL})
+  find_program(BPFTOOL_EXECUTABLE bpftool)
+  if(NOT BPFTOOL_EXECUTABLE)
     if(WITH_EBPF_STRICT)
-      message(FATAL_ERROR "bpftool not found at ${BPFTOOL}, required for WITH_EBPF_STRICT")
+      message(FATAL_ERROR "bpftool not found in PATH, required for WITH_EBPF_STRICT")
     else()
-      message(WARNING "bpftool not found, eBPF will use stub skeletons")
+      message(WARNING "bpftool not found in PATH, eBPF scanners will be disabled")
       set(WITH_EBPF OFF)
     endif()
   endif()
@@ -67,6 +66,7 @@ add_library(sys_scan_core
   src/scanners/NetworkScanner.cpp
   src/scanners/KernelParamScanner.cpp
   src/scanners/ModuleScanner.cpp
+  src/scanners/ModuleHelpers.cpp
   src/scanners/ModuleUtils.cpp
   src/scanners/WorldWritableScanner.cpp
   src/scanners/SuidScanner.cpp
@@ -81,7 +81,6 @@ add_library(sys_scan_core
   src/scanners/YaraScanner.cpp
   src/core/Privilege.cpp
   $<$<BOOL:${WITH_EBPF}>:src/scanners/EbpfScanner.cpp>
-  $<$<BOOL:${WITH_EBPF}>:src/ebpf/ProcessExecBPF.cpp>
 )
 
 if(WITH_EBPF)
@@ -122,7 +121,7 @@ if(WITH_EBPF)
   add_custom_command(
     OUTPUT ${BPF_SKEL}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
-    COMMAND ${BPFTOOL} gen skeleton ${BPF_OBJ} > ${BPF_SKEL}
+    COMMAND ${BPFTOOL_EXECUTABLE} gen skeleton ${BPF_OBJ} > ${BPF_SKEL}
     DEPENDS ${BPF_OBJ}
     COMMENT "Generating eBPF skeleton"
   )
@@ -164,7 +163,21 @@ endif()
 # libseccomp (sandbox)
 if(ENABLE_SECCOMP)
   find_library(LIBSECCOMP_LIB seccomp)
-  if(LIBSECCOMP_LIB)
+  if(NOT LIBSECCOMP_LIB)
+    # Try alternative library names and paths
+    find_library(LIBSECCOMP_LIB seccomp2)
+    if(NOT LIBSECCOMP_LIB)
+      find_library(LIBSECCOMP_LIB seccomp.so.2)
+      if(NOT LIBSECCOMP_LIB)
+        # Try direct path
+        set(LIBSECCOMP_LIB "/usr/lib/x86_64-linux-gnu/libseccomp.so")
+        if(NOT EXISTS ${LIBSECCOMP_LIB})
+          set(LIBSECCOMP_LIB "/usr/lib/x86_64-linux-gnu/libseccomp.so.2")
+        endif()
+      endif()
+    endif()
+  endif()
+  if(LIBSECCOMP_LIB AND EXISTS ${LIBSECCOMP_LIB})
     target_link_libraries(sys_scan_core PUBLIC ${LIBSECCOMP_LIB})
     target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_SECCOMP=1)
   endif()
@@ -173,6 +186,10 @@ endif()
 # libcap (capability dropping)
 if(ENABLE_CAPABILITIES)
   find_library(LIBCAP_LIB cap)
+  if(NOT LIBCAP_LIB)
+    # Try alternative library names
+    find_library(LIBCAP_LIB cap2)
+  endif()
   if(LIBCAP_LIB)
     target_link_libraries(sys_scan_core PUBLIC ${LIBCAP_LIB})
     target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_LIBCAP=1)
@@ -202,6 +219,10 @@ endif()
 add_executable(sys-scan src/main.cpp)
 
 target_link_libraries(sys-scan PRIVATE sys_scan_core)
+
+# Benchmark executable
+add_executable(sys-scan-benchmark src/benchmark.cpp)
+target_link_libraries(sys-scan-benchmark PRIVATE sys_scan_core)
 
 # Tests
 if(BUILD_TESTS)
@@ -263,6 +284,10 @@ if(BUILD_TESTS)
   add_executable(test_operational_error_risk tests/test_operational_error_risk.cpp)
   target_link_libraries(test_operational_error_risk PRIVATE sys_scan_core)
   add_test(NAME operational_error_risk COMMAND test_operational_error_risk)
+  
+  add_executable(test_pii_suppression tests/test_pii_suppression.cpp)
+  target_link_libraries(test_pii_suppression PRIVATE sys_scan_core)
+  add_test(NAME pii_suppression COMMAND test_pii_suppression)
   
   # Unit tests for new modular components
   add_executable(test_argument_parser tests/test_argument_parser.cpp)

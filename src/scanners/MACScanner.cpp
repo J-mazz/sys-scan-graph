@@ -10,7 +10,6 @@
 namespace fs = std::filesystem;
 namespace sys_scan {
 
-static std::string read_file_trim(const std::string& p){ std::ifstream f(p); if(!f) return ""; std::string s; std::getline(f,s); while(!s.empty() && (s.back()=='\n'||s.back()=='\r')) s.pop_back(); return s; }
 static bool file_exists(const std::string& p){ struct stat st{}; return ::stat(p.c_str(), &st)==0; }
 
 void MACScanner::scan(Report& report) {
@@ -22,7 +21,7 @@ void MACScanner::scan(Report& report) {
     bool selinux_enforcing = false; bool selinux_permissive=false; bool selinux_present=false;
     if(selinux_fs){
         selinux_present = true;
-        std::string enforce = read_file_trim("/sys/fs/selinux/enforce");
+        std::string enforce = utils::read_file_trim("/sys/fs/selinux/enforce");
         if(enforce=="1") selinux_enforcing=true; else if(enforce=="0") selinux_permissive=true;
     }
     // Config file
@@ -36,7 +35,7 @@ void MACScanner::scan(Report& report) {
     // AppArmor
     bool apparmor_enabled=false; std::string apparmor_mode_line;
     if(file_exists("/sys/module/apparmor/parameters/enabled")){
-        apparmor_mode_line = read_file_trim("/sys/module/apparmor/parameters/enabled");
+        apparmor_mode_line = utils::read_file_trim("/sys/module/apparmor/parameters/enabled");
         // Typical contents: "Y" or "enforce"
         if(!apparmor_mode_line.empty()) apparmor_enabled = true;
     }

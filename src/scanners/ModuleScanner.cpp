@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <vector>
 #include "ModuleUtils.h"
+#include "ModuleHelpers.h"
 #ifdef SYS_SCAN_HAVE_OPENSSL
 #include <openssl/evp.h>
 #endif
@@ -75,10 +76,6 @@ void ModuleScanner::scan(Report& report) {
     size_t wx_section_modules = 0; size_t large_text_section_modules = 0; size_t suspicious_name_section_modules = 0;
     std::vector<std::string> wx_section_sample; std::vector<std::string> large_text_section_sample; std::vector<std::string> suspicious_section_name_sample;
     size_t wx_section_sample_limit = 5; size_t large_text_section_sample_limit=5; size_t suspicious_section_name_sample_limit=5;
-    auto suspicious_section_name = [](const std::string& n){ if(n.empty()) return false; static const char* bad[] = {".evil",".rootkit",".hide",".__mod",".__kern",".backdoor"}; for(auto* b: bad){ if(n==b) return true; } // heuristic: very short or high entropy names unlikely except .note,.bss etc
-        if(n.size()==1) return true; if(n[0]=='.' && n.size()>1 && std::isdigit((unsigned char)n[1]) && std::isdigit((unsigned char)n.back())) return true; return false; };
-    auto read_file_prefix = [](const std::string& p, size_t max_bytes){ std::ifstream f(p, std::ios::binary); if(!f) return std::string(); std::string data; data.resize(max_bytes); f.read(&data[0], max_bytes); data.resize(f.gcount()); return data; };
-    auto read_file_all = [](const std::string& p){ std::ifstream f(p, std::ios::binary); if(!f) return std::string(); std::ostringstream oss; oss<<f.rdbuf(); return oss.str(); };
     // Bounded streaming decompression helpers (defense-in-depth against oversized / malicious inputs)
     // Decompression moved to ModuleUtils (bounded streaming)
     auto is_out_of_tree_path = [](const std::string& p){ return p.find("/extra/")!=std::string::npos || p.find("/updates/")!=std::string::npos || p.find("dkms")!=std::string::npos || p.find("nvidia")!=std::string::npos || p.find("virtualbox")!=std::string::npos || p.find("vmware")!=std::string::npos; };
@@ -86,31 +83,45 @@ void ModuleScanner::scan(Report& report) {
         std::istringstream ls(line); std::string name; ls>>name; if(name.empty()) continue; ++total; if(sample.size()<sample_limit) sample.push_back(name);
         auto itp = name_to_path.find(name); std::string path = (itp==name_to_path.end()? std::string() : itp->second);
         bool oot=false; if(!path.empty() && is_out_of_tree_path(path)) { oot=true; ++likely_out_of_tree; if(oot_sample.size()<oot_sample_limit) oot_sample.push_back(name); }
-        // Unsigned detection: if path points to uncompressed .ko, scan for signature marker
-        bool unsigned_mod=false;
-        bool missing_file=false;
+        // Unsigned detection
+        bool unsigned_mod = false;
+        bool missing_file = false;
         std::string full;
-        if(!path.empty()){
-            full = std::string("/lib/modules/")+rel+"/"+path;
-            if(path.rfind(".ko") == path.size()-3){
+        if (!path.empty()) {
+            full = std::string("/lib/modules/") + rel + "/" + path;
+            if (path.rfind(".ko") == path.size() - 3) {
                 // uncompressed
-                auto contents = read_file_prefix(full, 4096); // signature marker near end, but often present in first blocks for signed modules header (heuristic)
-                // fallback to full read if not found
-                if(contents.find("Module signature appended")==std::string::npos){ contents = read_file_all(full); if(contents.find("Module signature appended")==std::string::npos) unsigned_mod=true; }
-            } else if(path.rfind(".ko.xz") == path.size()-6 || path.rfind(".ko.gz") == path.size()-6){
+                unsigned_mod = SignatureAnalyzer::is_unsigned_module(full);
+            } else if (CompressionUtils::is_compressed(path)) {
                 ++compressed_count;
                 std::string contents;
-                if(path.rfind(".ko.xz") == path.size()-6) contents = decompress_xz_bounded(full); else contents = decompress_gz_bounded(full);
-                if(contents.empty()){
+                if (path.rfind(".ko.xz") == path.size() - 6) {
+                    contents = CompressionUtils::decompress_xz_bounded(full);
+                } else {
+                    contents = CompressionUtils::decompress_gz_bounded(full);
+                }
+                if (contents.empty()) {
                     report.add_warning(this->name(), WarnCode::DecompressFail, path);
                 } else {
-                    ++compressed_scanned; if(contents.find("Module signature appended")==std::string::npos){ unsigned_mod=true; ++compressed_unsigned; if(compressed_unsigned_sample.size()<unsigned_sample_limit) compressed_unsigned_sample.push_back(name); }
+                    ++compressed_scanned;
+                    if (contents.find("Module signature appended") == std::string::npos) {
+                        unsigned_mod = true;
+                        ++compressed_unsigned;
+                        if (compressed_unsigned_sample.size() < unsigned_sample_limit) compressed_unsigned_sample.push_back(name);
+                    }
                 }
             }
-            // File existence check (indicates deleted after load or tampering)
-            if(!std::filesystem::exists(full)) { missing_file=true; ++missing_file_count; if(missing_file_sample.size()<missing_file_sample_limit) missing_file_sample.push_back(name); }
+            // File existence check
+            if (!std::filesystem::exists(full)) {
+                missing_file = true;
+                ++missing_file_count;
+                if (missing_file_sample.size() < missing_file_sample_limit) missing_file_sample.push_back(name);
+            }
         }
-        if(unsigned_mod){ ++unsigned_count; if(unsigned_sample.size()<unsigned_sample_limit) unsigned_sample.push_back(name); }
+        if (unsigned_mod) {
+            ++unsigned_count;
+            if (unsigned_sample.size() < unsigned_sample_limit) unsigned_sample.push_back(name);
+        }
         // Hidden module detection: present in /proc/modules but not in sysfs and not built-in
         if(sysfs_modules.find(name)==sysfs_modules.end() && builtin_modules.find(name)==builtin_modules.end()){
             ++hidden_in_proc_only_count; if(hidden_sample.size()<hidden_sample_limit) hidden_sample.push_back(name);
@@ -123,37 +134,39 @@ void ModuleScanner::scan(Report& report) {
                 if(oot) { f.metadata["out_of_tree"]="true"; if(f.severity < Severity::High) f.description="Out-of-tree kernel module"; }
                 if(missing_file){ f.metadata["missing_file"]="true"; f.severity = Severity::High; f.description="Module file missing on disk"; }
                 if(hidden_proc_only) { f.metadata["hidden_sysfs"] = "true"; f.severity = Severity::High; f.description = "Module present in /proc/modules but missing in /sys/module"; }
-                // ELF section heuristics (only if we have path)
-                if(!full.empty()){
-                    std::ifstream ef(full, std::ios::binary); if(ef){ unsigned char ehdr[64]; ef.read((char*)ehdr, sizeof(ehdr)); if(ef.gcount() >= 52 && ehdr[0]==0x7f && ehdr[1]=='E' && ehdr[2]=='L' && ehdr[3]=='F'){
-                        bool is64 = (ehdr[4]==2); bool le = (ehdr[5]==1); auto rd16=[&](const unsigned char* p){ return le? (uint16_t)p[0] | ((uint16_t)p[1]<<8) : (uint16_t)p[1] | ((uint16_t)p[0]<<8); }; auto rd32=[&](const unsigned char* p){ return le? (uint32_t)p[0] | ((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24) : (uint32_t)p[3] | ((uint32_t)p[2]<<8)|((uint32_t)p[1]<<16)|((uint32_t)p[0]<<24); }; auto rd64=[&](const unsigned char* p){ uint64_t v=0; if(le){ for(int i=7;i>=0;--i){ v = (v<<8) | p[i]; } } else { for(int i=0;i<8;i++){ v = (v<<8) | p[i]; } } return v; };
-                        uint16_t e_shentsize = rd16(ehdr + (is64?58:46)); uint16_t e_shnum = rd16(ehdr + (is64?60:48)); uint32_t e_shoff32 = rd32(ehdr + (is64?40:32)); uint64_t e_shoff = is64? rd64(ehdr+40) : e_shoff32;
-                        if(e_shoff && e_shentsize && e_shnum && e_shnum < 512){
-                            ef.seekg(e_shoff, std::ios::beg);
-                            struct SecInfo { std::string name; uint64_t flags=0; uint64_t size=0; };
-                            std::vector<SecInfo> secs; secs.reserve(e_shnum);
-                            std::vector<unsigned char> shbuf(e_shentsize);
-                            for(uint16_t si=0; si<e_shnum; ++si){ if(!ef.read((char*)shbuf.data(), e_shentsize)) break; uint64_t flags=0; uint64_t size=0; if(is64){ flags = rd64(&shbuf[8]); size = rd64(&shbuf[32]); } else { flags = rd32(&shbuf[8]); size = rd32(&shbuf[16]); } secs.push_back({"", flags, size}); }
-                            uint16_t e_shstrndx = rd16(ehdr + (is64?62:50)); if(e_shstrndx < secs.size()){
-                                ef.seekg(e_shoff + (uint64_t)e_shstrndx * e_shentsize, std::ios::beg); std::vector<unsigned char> sh(e_shentsize); if(ef.read((char*)sh.data(), e_shentsize)){
-                                    uint64_t stroff = is64? rd64(&sh[24]) : rd32(&sh[16]); uint64_t strsize = is64? rd64(&sh[32]) : rd32(&sh[20]); if(stroff && strsize && strsize < 1*1024*1024){ std::vector<char> strtab(strsize); ef.seekg(stroff, std::ios::beg); if(ef.read(strtab.data(), strsize)){
-                                            ef.seekg(e_shoff, std::ios::beg);
-                                            for(uint16_t si=0; si<secs.size(); ++si){ if(!ef.read((char*)shbuf.data(), e_shentsize)) break; uint32_t name_off = rd32(&shbuf[0]); if(name_off < strtab.size()) secs[si].name = std::string(&strtab[name_off]); }
-                                        } }
+                // ELF section heuristics
+                if (!full.empty()) {
+                    auto sections = ElfModuleHeuristics::parse_sections(full);
+                    if (!sections.empty()) {
+                        if (ElfModuleHeuristics::has_wx_section(sections)) {
+                            f.metadata["wx_section"] = "true";
+                            if (f.severity < Severity::High) f.severity = Severity::High;
+                        }
+                        if (ElfModuleHeuristics::has_large_text_section(sections)) {
+                            uint64_t text_size = 0;
+                            for (const auto& s : sections) {
+                                if (s.name == ".text") text_size = s.size;
+                            }
+                            f.metadata["large_text_section"] = std::to_string(text_size);
+                            if (f.severity < Severity::High) f.severity = Severity::High;
+                        }
+                        if (ElfModuleHeuristics::has_suspicious_section_name(sections)) {
+                            for (const auto& s : sections) {
+                                if (ElfModuleHeuristics::has_suspicious_section_name({s})) {
+                                    f.metadata["suspicious_section_name"] = s.name;
+                                    if (f.severity < Severity::High) f.severity = Severity::High;
+                                    break;
                                 }
                             }
-                            static const uint64_t SHF_WRITE=0x1, SHF_ALLOC=0x2, SHF_EXECINSTR=0x4; uint64_t text_size=0; uint64_t file_text_threshold=0;
-                            for(const auto& s : secs){ if(s.name.empty()) continue; bool exec = (s.flags & SHF_EXECINSTR)!=0; bool write = (s.flags & SHF_WRITE)!=0; if(exec && write){ f.metadata["wx_section"]="true"; if(f.severity < Severity::High) f.severity = Severity::High; }
-                                if(s.name==".text") text_size = s.size; if(suspicious_section_name(s.name)){ f.metadata["suspicious_section_name"]=s.name; if(f.severity < Severity::High) f.severity = Severity::High; }
-                            }
-                            // crude .text size anomaly heuristic (> 5MB) typical modules far smaller
-                            if(text_size > 5*1024*1024){ f.metadata["large_text_section"] = std::to_string(text_size); if(f.severity < Severity::High) f.severity = Severity::High; }
                         }
                     }
                 }
 #ifdef SYS_SCAN_HAVE_OPENSSL
-                if(cfg.modules_hash && !full.empty()){
-                    std::ifstream mf(full, std::ios::binary); if(mf){ unsigned char md[32]; unsigned int mdlen=0; std::vector<unsigned char> buf(8192); EVP_MD_CTX* ctx = EVP_MD_CTX_new(); if(ctx && EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr)==1){ size_t totalb=0; while(mf && totalb < 2*1024*1024){ mf.read((char*)buf.data(), buf.size()); auto got = mf.gcount(); if(got<=0) break; EVP_DigestUpdate(ctx, buf.data(), (size_t)got); totalb += (size_t)got; } if(EVP_DigestFinal_ex(ctx, md, &mdlen)==1 && mdlen==32){ static const char* hex="0123456789abcdef"; std::string hexhash; hexhash.reserve(64); for(unsigned i=0;i<32;i++){ hexhash.push_back(hex[md[i]>>4]); hexhash.push_back(hex[md[i]&0xF]); } f.metadata["sha256"] = hexhash; } } if(ctx) EVP_MD_CTX_free(ctx); }
+                if (cfg.modules_hash && !full.empty()) {
+                    std::string hash = SignatureAnalyzer::compute_sha256(full);
+                    if (!hash.empty()) {
+                        f.metadata["sha256"] = hash;
+                    }
                 }
 #endif
                 if(!path.empty()) f.metadata["path"] = path; report.add_finding(this->name(), std::move(f));
@@ -194,8 +207,6 @@ void ModuleScanner::scan(Report& report) {
         else { f.metadata["kallsyms_readable"] = "no"; }
     }
     report.add_finding(this->name(), std::move(f));
-} // end scan
-
 } // end scan
 
 } // namespace sys_scan

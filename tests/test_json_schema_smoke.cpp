@@ -14,7 +14,7 @@ int main(){
     set_config(cfg);    // Update global config
     ScannerRegistry reg; reg.register_all_default();
     Report rpt; reg.run_all(rpt);
-    JSONWriter w; auto j = w.write(rpt);
+    JSONWriter w; auto j = w.write(rpt, cfg);
     // Basic smoke: ensure schema version marker and risk_score appear.
     if (j.find("\"json_schema_version\": \"2\"") == std::string::npos) {
         std::cerr << "JSON content around schema version:\n";

@@ -24,7 +24,7 @@ int main(){
 
     ScannerRegistry reg; reg.register_all_default();
     Report rpt; reg.run_all(rpt);
-    JSONWriter w; std::string out = w.write(rpt);
+    JSONWriter w; std::string out = w.write(rpt, cfg);
 
     // Find at least one finding line containing mitre_techniques":"T9999
     bool seen=false; std::istringstream is(out); std::string line; while(std::getline(is,line)){

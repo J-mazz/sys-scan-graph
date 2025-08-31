@@ -11,7 +11,7 @@ int main(){
     Config cfg; cfg.no_user_meta = true; cfg.no_cmdline_meta = true; cfg.no_hostname_meta = true; cfg.pretty = false; set_config(cfg);
     ScannerRegistry reg; reg.register_all_default();
     Report rpt; reg.run_all(rpt);
-    JSONWriter writer; std::string out = writer.write(rpt);
+    JSONWriter writer; std::string out = writer.write(rpt, cfg);
     // Assert suppressed fields not present
     assert(out.find("\"hostname\"") == std::string::npos);
     assert(out.find("\"uid\"") == std::string::npos);

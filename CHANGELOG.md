@@ -59,8 +59,12 @@ All notable changes will be documented in this file.
   - `agent/pipeline.py`: Fixed `augment()` and `baseline_rarity()` functions
   - `agent/graph_analysis.py`: Fixed fid_to_obj lookup loop
 - **LangGraph Analysis**: Successfully executed AI-powered security analysis on system scan results, generating enriched reports with correlations, risk scoring, and HTML output
+- **Test Suite Memory Corruption**: Fixed dangling pointer issues in `test_integration.cpp` by replacing temporary `string().c_str()` calls with persistent string variables for file paths used in argument arrays
+- **Config Struct Initialization**: Added default values (`= ""`) to all `std::string` members in `Config.h` to ensure proper initialization and prevent undefined behavior
+- **Argument Parsing Validation**: Corrected argument counts in integration tests to match actual argument array sizes, ensuring deterministic test execution
 
 ## [0.1.0] - Initial Release
+
 - Core scanners (processes, network, kernel params, modules, world_writable, suid_sgid, ioc, mac)
 - JSON summary & severity filtering
 - Module summary mode & IOC aggregation
