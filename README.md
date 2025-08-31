@@ -10,11 +10,11 @@
 
 It combines a high-performance C++ scanning engine with a Python-based intelligence layer to deliver deterministic, reproducible results. The core engine gathers data and outputs it in multiple formats (JSON, NDJSON, SARIF, HTML). This report is then ingested by a robust LangGraph agent that analyzes, organizes, and enriches the findings, providing deep insights with unprecedented speed.
 
-    Core Engine: Blazing-fast and deterministic scanning built in C++.
+ -   Core Engine: Blazing-fast and deterministic scanning built in C++.
 
-    Intelligence Layer: Advanced analysis and enrichment powered by Python and LangGraph.
+ -   Intelligence Layer: Advanced analysis and enrichment powered by Python and LangGraph.
 
-    Unified Reporting: Get a single, clear report in the format you need.
+ -   Unified Reporting: Get a single, clear report in the format you need.
 
 
 **Repository Origin**: This is a proprietary fork of the open-source [`J-mazz/sys-scan`](https://github.com/J-mazz/sys-scan) repository. The core C++20 scanner is based on the MIT-licensed original, but this fork includes proprietary enhancements and the Intelligence Layer.
