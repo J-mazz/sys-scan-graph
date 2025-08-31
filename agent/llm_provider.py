@@ -9,8 +9,9 @@ reproduces existing summarize / rule refinement behaviour.
 Future real models can implement this interface and be injected through
 `set_llm_provider` or an environment-driven factory.
 """
-from typing import Protocol, List, Optional, Dict, Any
+from typing import Protocol, List, Optional, Dict, Any, Tuple, NamedTuple
 import re, os, time
+from datetime import datetime
 from .models import Reductions, Correlation, Summaries, ActionItem
 from .llm_models import (
     PromptAOutput, PromptBOutput, PromptCOutput,
@@ -19,21 +20,41 @@ from .llm_models import (
 from .redaction import redact_reductions
 
 
+class ProviderMetadata(NamedTuple):
+    """Structured metadata returned by LLM providers."""
+    model_name: str
+    provider_name: str
+    latency_ms: int
+    tokens_prompt: int
+    tokens_completion: int
+    cached: bool = False
+    fallback: bool = False
+    error_message: Optional[str] = None
+    retry_count: int = 0
+    cost_estimate: Optional[float] = None
+    temperature: Optional[float] = None
+    timestamp: Optional[str] = None
+
+
 class ILLMProvider(Protocol):
-    """Stable LLM abstraction.
+    """Stable LLM abstraction with comprehensive telemetry.
 
     All methods must be pure / deterministic w.r.t provided arguments unless
     a true stochastic model is injected (in which case upstream caching /
-    versioning should account for that)."""
+    versioning should account for that).
+
+    Each method returns a tuple of (result, metadata) where metadata contains
+    structured telemetry information.
+    """
 
     def summarize(self, reductions: Reductions, correlations: List[Correlation], actions: List[ActionItem], *,
                   skip: bool = False, previous: Optional[Summaries] = None,
-                  skip_reason: Optional[str] = None, baseline_context: Optional[Dict[str, Any]] = None) -> Summaries: ...
+                  skip_reason: Optional[str] = None, baseline_context: Optional[Dict[str, Any]] = None) -> Tuple[Summaries, ProviderMetadata]: ...
 
     def refine_rules(self, suggestions: List[Dict[str, Any]],
-                     examples: Optional[Dict[str, List[str]]] = None) -> List[Dict[str, Any]]: ...
+                     examples: Optional[Dict[str, List[str]]] = None) -> Tuple[List[Dict[str, Any]], ProviderMetadata]: ...
 
-    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Dict[str, Any]: ...
+    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Tuple[Dict[str, Any], ProviderMetadata]: ...
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
@@ -103,7 +124,7 @@ class NullLLMProvider:
     # ----------------- interface implementations -----------------
     def summarize(self, reductions: Reductions, correlations: List[Correlation], actions: List[ActionItem], *,
                   skip: bool = False, previous: Optional[Summaries] = None,
-                  skip_reason: Optional[str] = None, baseline_context: Optional[Dict[str, Any]] = None) -> Summaries:
+                  skip_reason: Optional[str] = None, baseline_context: Optional[Dict[str, Any]] = None) -> Tuple[Summaries, ProviderMetadata]:
         start = time.time()
         if skip and previous:
             reused = previous.model_copy(deep=True)
@@ -118,7 +139,19 @@ class NullLLMProvider:
                 'skip_reason': skip_reason or 'low_change'
             }
             reused.metrics = (reused.metrics or {}) | metrics
-            return reused
+
+            metadata = ProviderMetadata(
+                model_name="null-heuristic",
+                provider_name="null",
+                latency_ms=0,
+                tokens_prompt=0,
+                tokens_completion=0,
+                cached=True,
+                fallback=False,
+                timestamp=datetime.now().isoformat()
+            )
+            return reused, metadata
+
         try:
             red_red = redact_reductions(reductions)
         except Exception:  # pragma: no cover - fallback
@@ -160,7 +193,7 @@ class NullLLMProvider:
             'triage_summary.top_findings': [tf.get('id') for tf in red_red.top_findings[:5]],
             'action_narrative': [a.correlation_refs for a in actions if a.correlation_refs]
         }
-        return Summaries(
+        summaries = Summaries(
             executive_summary=executive,
             analyst=analyst,
             consistency_findings=[i.model_dump() for i in consistency_obj.findings],
@@ -170,16 +203,47 @@ class NullLLMProvider:
             explanation_provenance=provenance
         )
 
-    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Dict[str, Any]:
+        metadata = ProviderMetadata(
+            model_name="null-heuristic",
+            provider_name="null",
+            latency_ms=elapsed,
+            tokens_prompt=prompt_tokens,
+            tokens_completion=completion_tokens,
+            cached=False,
+            fallback=False,
+            timestamp=datetime.now().isoformat()
+        )
+
+        return summaries, metadata
+
+    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Tuple[Dict[str, Any], ProviderMetadata]:
+        start_time = time.time()
+        
         triage_obj = self._prompt_b_triage(reductions, correlations)
-        return {
+        result = {
             "top_findings": [tf.model_dump() for tf in triage_obj.top_findings],
             "correlation_count": triage_obj.correlation_count
         }
+        
+        latency = time.time() - start_time
+        metadata = ProviderMetadata(
+            model_name="null-heuristic",
+            provider_name="null",
+            latency_ms=int(latency * 1000),
+            tokens_prompt=0,
+            tokens_completion=0,
+            cached=False,
+            fallback=False,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        return result, metadata
 
     def refine_rules(self, suggestions: List[Dict[str, Any]],
-                     examples: Optional[Dict[str, List[str]]] = None) -> List[Dict[str, Any]]:
+                     examples: Optional[Dict[str, List[str]]] = None) -> Tuple[List[Dict[str, Any]], ProviderMetadata]:
         """Heuristic rule refinement (ported from rule_gap_miner.refine_with_llm)."""
+        start_time = time.time()
+        
         refined = []
         for s in suggestions:
             rid_val = s.get('id') or ''
@@ -212,7 +276,20 @@ class NullLLMProvider:
                 refined = llm_refine(refined, examples or {})
             except Exception:
                 pass
-        return refined
+        
+        latency = time.time() - start_time
+        metadata = ProviderMetadata(
+            model_name="null-heuristic",
+            provider_name="null",
+            latency_ms=int(latency * 1000),
+            tokens_prompt=0,
+            tokens_completion=0,
+            cached=False,
+            fallback=False,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        return refined, metadata
 
 
 # ----------------- Provider registry / injection -----------------

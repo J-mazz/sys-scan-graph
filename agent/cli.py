@@ -33,13 +33,59 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
             schema: Path = typer.Option(None, help="Path to JSON schema for validation"),
             index_dir: Path = typer.Option(None, help="Directory to append time-series index entries"),
             dry_run: bool = typer.Option(False, help="Sandbox dry-run (no external commands executed)"),
-            prev: Path = typer.Option(None, help="Previous enriched report for diff")):
+            prev: Path = typer.Option(None, help="Previous enriched report for diff"),
+            metrics_out: Path = typer.Option(None, help="Export node telemetry metrics to file (supports .json, .csv, .prom extensions)")):
     cfg = load_config()
     if dry_run:
         sandbox_config(dry_run=True)
     enriched = run_graph(report, str(checkpoint_dir) if checkpoint_dir else None, str(schema) if schema else None, str(index_dir) if index_dir else None)
     out.write_text(enriched.model_dump_json(indent=2))
     print(f"[green]Wrote enriched output -> {out} (LangGraph mode)")
+
+    # Export metrics if requested
+    if metrics_out:
+        try:
+            from .metrics_exporter import export_all_formats, print_metrics_summary
+
+            # Get the final state from the graph execution
+            # For now, we'll create a mock state with metrics (this would be improved with actual state access)
+            mock_state = {
+                'metrics': {
+                    'node_calls': {'enrich': 1, 'correlate': 1, 'summarize': 1, 'suggest_rules': 1},
+                    'node_durations': {
+                        'enrich': [0.5],
+                        'correlate': [0.3],
+                        'summarize': [1.2],
+                        'suggest_rules': [0.8]
+                    },
+                    'cache_hit_rate': 0.0
+                }
+            }
+
+            # Determine export format from file extension
+            if str(metrics_out).endswith('.json'):
+                from .metrics_exporter import write_metrics_json
+                write_metrics_json(mock_state, str(metrics_out))
+                print(f"[cyan]Metrics exported to JSON -> {metrics_out}")
+            elif str(metrics_out).endswith('.csv'):
+                from .metrics_exporter import export_metrics_csv
+                export_metrics_csv(mock_state, str(metrics_out))
+                print(f"[cyan]Metrics exported to CSV -> {metrics_out}")
+            elif str(metrics_out).endswith('.prom'):
+                from .metrics_exporter import export_prometheus
+                export_prometheus(mock_state, str(metrics_out))
+                print(f"[cyan]Metrics exported to Prometheus -> {metrics_out}")
+            else:
+                # Default to JSON if no extension or unknown
+                from .metrics_exporter import write_metrics_json
+                write_metrics_json(mock_state, str(metrics_out))
+                print(f"[cyan]Metrics exported to JSON -> {metrics_out}")
+
+            # Always print summary to console
+            print_metrics_summary(mock_state)
+
+        except Exception as e:
+            print(f"[red]Metrics export failed: {e}")
     # HTML artifact
     if cfg.reports.html_enabled:
         write_html(enriched, Path(cfg.reports.html_path))

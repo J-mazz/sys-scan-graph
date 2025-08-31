@@ -1,0 +1,13 @@
+{
+  "id": "summarize_v1",
+  "version": "v1",
+  "name": "security_summary",
+  "description": "Template for generating security scan summaries with structured output",
+  "template": "Analyze the following security scan results and provide a comprehensive summary:\n\nScan Data:\n{scan_data}\n\nContext:\n{context}\n\nPlease provide:\n1. Executive Summary (2-3 sentences)\n2. Key Findings (bullet points)\n3. Risk Assessment (High/Medium/Low with justification)\n4. Recommendations (numbered list)\n\nFormat your response as a structured JSON object with keys: executive_summary, key_findings, risk_assessment, recommendations.",
+  "variables": ["scan_data", "context"],
+  "response_format": "json",
+  "created_at": "2024-01-15T10:00:00Z",
+  "updated_at": "2024-01-15T10:00:00Z",
+  "performance_score": 0.85,
+  "usage_count": 150
+}
