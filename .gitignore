@@ -63,3 +63,10 @@ Testing/
 # Environment / secrets
 .env
 .env.*
+
+# Virtual environments
+venv/
+agent/venv/
+.venv/
+*/venv/
+*/.venv/
