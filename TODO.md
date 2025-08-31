@@ -1,143 +1,349 @@
-# Local TODO (not committed)
+# **sys-scan-graph: Unified Intelligence Core Roadmap**
 
-## eBPF Implementation Status: COMPLETED
+## **Vision: LangGraph-Powered Intelligence Platform**
 
-**Status Update (2025-08-30)**: eBPF implementation is now working in the current environment. All basic events (exec.trace and net.connect) are captured successfully with proper metadata.
+The future of sys-scan-graph is not a C++ scanner with a Python script attached; it is a single, cohesive product where the **LangGraph-powered agent is the central intelligence core.** This represents a fundamental architectural shift: we are moving from a linear data-processing pipeline to a dynamic, stateful, and conversational analysis engine.
 
-### eBPF Resume Plan
+**Key Principles:**
 
-1. Ensure per-kernel bpftool binary available:
-   - Packages (Ubuntu): `linux-tools-$(uname -r) linux-cloud-tools-$(uname -r)`
-   - Verify: `/usr/lib/linux-tools-$(uname -r)/bpftool` exists; wrapper warning gone.
-2. Confirm BTF file present: `/sys/kernel/btf/vmlinux` (already true previously).
-3. Reconfigure strict build:
-   - `rm -rf build`
-   - `cmake -S . -B build -DWITH_EBPF=ON -DWITH_EBPF_STRICT=ON -DCMAKE_BUILD_TYPE=Release`
-   - `cmake --build build -j` (no fallback message expected)
-4. Run test capture:
-   - `sudo ./build/sys-scan --ioc-exec-trace 5` in one terminal.
-   - During window: run a few processes (`/bin/true`, `ls`) and an outbound connect (`curl https://example.com`).
-5. Verify findings contain types: `exec.trace` (or equivalent) and `net.connect` with metadata (pid, comm, dst_ip, dst_port).
+- **LangGraph as Default:** The LangGraph workflow becomes the sole, non-optional execution path
+- **Security-First:** Multi-layered security architecture with guardrails, validation, and sanitization
+- **Unified API:** Both CLI and GUI become thin clients to the central agent
+- **Architectural Consolidation:** Legacy pipeline deprecated, LangGraph becomes canonical implementation
 
-## Current State Snapshot
+---
 
-- Kernel: 6.14.0-28-generic
-- BTF: present
-- bpftool: wrapper found; kernel-specific binary required (install step pending at time of snapshot)
-- Code: `process_exec.bpf.c` emits EXEC + CONNECT via tracepoints (sched_process_exec & sys_enter_connect) -> ring buffer typed events.
-- User space: `EbpfScanner.cpp` now uses RAII for skeleton & ring buffer; detailed logging on failure paths; still operates with stub behavior if skeleton generation fails (bpftool missing).
+## **Phase 0: Architectural Consolidation (Foundation Sprint)**
 
-## Nice-to-Haves (After Basic Events Work)
+**Goal:** Establish LangGraph as the central intelligence core and consolidate the architecture around this new paradigm.
 
-Completed:
-- [x] RAII + detailed error logging in `EbpfScanner.cpp` (skeleton + ring buffer) – leak paths removed, easier diagnosis on permission/kernel issues.
+### **\[P0\] Make LangGraph the Default Execution Path**
 
-Pending / Proposed:
-- Add IPv6 connect capture (sys_enter_connect handles sockaddr length; add AF_INET6 parsing).
-- Add event version / size field for forward compatibility.
-- Rate limiting / max event cap to avoid high CPU if flood.
-- Unit test: Inject synthetic ring buffer records to validate parsing.
-- Raw object loader fallback (no skeleton) for environments lacking bpftool.
-- Expand risk scoring for suspicious outbound connections (e.g. rare ports / external IP heuristics).
-- Structured metrics: counts for exec events, connect events, poll errors, dropped events (expose via JSON meta).
-- Optional early abort if zero events after N polls (fast fail path).
+**Status:** 🔴 CRITICAL PRIORITY - Architectural foundation
 
-## Raw Object Loader (If Needed Instead of Skeleton)
-Steps (not yet implemented):
-- Compile BPF object unconditionally to `generated/ebpf/process_exec.bpf.o`.
-- Add loader utility to open object with `bpf_object__open_file` / `bpf_object__load` and attach programs by section name.
-- Gate with CMake option `WITH_EBPF_RAW_LOADER` (mutually exclusive with skeleton path).
+- **Issue:** Mixed execution paths create confusion and maintenance burden
+- **Actions:**
+  - **File:** agent/cli.py - Remove `--graph` flag, make LangGraph the sole execution path
+  - **File:** agent/graph.py - Modify build_workflow to default to "enhanced" mode
+  - **File:** Move agent/pipeline.py to agent/legacy/pipeline.py
+  - **Docs:** Update README.md and ARCHITECTURE.md to reflect LangGraph as canonical implementation
+- **Impact:** Eliminates architectural ambiguity, establishes single source of truth
 
-## Troubleshooting Checklist
-- If build still warns "bpftool not found for kernel": ensure `linux-tools-$(uname -r)` installed and PATH includes `/usr/lib/linux-tools-$(uname -r)` or symlink binary to `/usr/local/bin/bpftool`.
-- If skeleton compiles but no events: confirm running as root and tracepoints exist (`bpftool prog show | grep sched_process_exec`).
-- If connect events missing but exec present: validate syscall tracepoint enabled (`ls /sys/kernel/debug/tracing/events/syscalls/sys_enter_connect`). Enable ftrace subsystem if needed.
+### **\[P0\] Implement Multi-Layered Security Architecture**
 
-## Deferred Ideas
-- Capture exec argv / sha256 of first mapped file (needs careful size limit & copy_from_user safety).
-- Add per-event monotonic timestamp for sequencing.
-- Correlate connect events to preceding exec event (short-lived processes) for basic lineage.
+**Status:** 🔴 CRITICAL PRIORITY - Security foundation
 
-## Current Focus: Non-eBPF Improvements
+- **Issue:** Powerful conversational agent requires comprehensive security hardening
+- **Actions:**
+  - **Create GuardrailNode:** New LangGraph node for prompt sanitization and intent classification
+  - **Tool Access Control:** Implement Pydantic validation for all agent/tools.py functions
+  - **Output Sanitization:** Add strict parse-then-validate for all LLM-generated structured data
+  - **Principle of Least Privilege:** Narrowly scope all tool functions
+- **Impact:** Zero-trust security model protecting against prompt injection and privilege escalation
 
-### Phase 2: Refactoring & Cohesion (The Consolidation Quarter)
+### **\[P0\] Develop Unified API Layer**
 
-Goal: Address medium-severity findings by refactoring complex components, modernizing code, and improving the contracts between system layers.
+**Status:** 🔴 CRITICAL PRIORITY - Interface foundation
 
-1. Refactor the Monolithic ModuleScanner
-   - Action: Break down the large ModuleScanner function into smaller, testable components. Create distinct helper classes or functions for CompressionUtils, ElfModuleHeuristics, and SignatureAnalyzer. (Ref: Medium 1, Sec 10.2)
-   - Why: Improves maintainability, testability, and ease of future extension for module analysis.
-2. Modernize C++ Codebase
-   - Action: Replace all hand-rolled IP address and port conversion logic with standard, portable library calls (ntohs, inet_ntop). (Ref: Medium 2)
-   - Action: Consolidate duplicated utility functions like trim into a shared utility library. (Ref: Low/Style)
-   - Why: Increases portability, readability, and reduces maintenance burden.
-3. Strengthen Security Posture & Privilege Handling
-   - Action: Audit `main.cpp` privilege drop lifecycle: initialize resources (eBPF, rules), then drop capabilities, then apply seccomp filters last. Add logging for capability state before and after drop. (Ref: High 8)
-   - Action: Implement enforcement points for PII suppression flags (no_user_meta, etc.) within each scanner and add unit tests to verify redaction. (Ref: High 7)
-   - Why: Hardens scanner and ensures privacy controls function as intended.
-4. Improve Schema and API Contracts
-   - Action: Create `SCHEMA_MIGRATION.md` detailing plan and timeline for moving from v2 to v3 FactPack schema. (Ref: Medium 5)
-   - Action: Add distinct status field (e.g., `baseline_db_missing`) to baseline query output to differentiate first run from genuinely new finding. (Ref: Medium 7)
-   - Why: Provides clarity for developers and API consumers, improving integration reliability.
+- **Issue:** Need single gateway for both CLI and GUI to access intelligence core
+- **Actions:**
+  - **Create API Module:** New agent/api.py for managing LangGraph agent lifecycles
+  - **WebSocket Support:** Implement persistent connections for GUI, single-shot for CLI
+  - **State Management:** Handle stateful agent instances across multiple client connections
+  - **Protocol Definition:** Establish clear message format for agent communication
+- **Impact:** Enables both CLI and GUI as thin clients to the same intelligence core
 
-## Phase 3: Strategic Enhancements & Future-Proofing (The Long-Term Vision)
+---
 
-Goal: Implement architectural improvements and strategic features that enhance performance, extensibility, and overall platform value.
+## **Phase 1: Security Hardening & Core Stabilization**
 
-1. Enhance the Event Pipeline
-   - Action: Implement streaming NDJSON output mode (`--ndjson`) enabling incremental processing from long-running scanners like eBPF. (Ref: Sec 5)
-   - Why: Moves toward near-real-time analysis capability.
-2. Improve Performance and Determinism
-   - Action: Add per-scanner timing metrics to `ScanResult` metadata.
-   - Action: Create a "fast mode" flag (`--fast-scan`) disabling resource-intensive scanners (full module analysis, eBPF) for quick triage. (Ref: Sec 7)
-   - Why: Gives users control over performance/thoroughness trade-offs.
-3. Expand and Document Extensibility
-   - Action: Fill documentation gaps in `README.md` (rule engine schema, risk model, build flags). (Ref: Sec 12)
-   - Action: Investigate pluggable architecture for scanners (e.g., `dlopen`) for dynamic loading, reducing core binary footprint. (Ref: Sec 14)
-   - Why: Lowers contributor barrier and enables flexible deployments.
+**Goal:** Implement comprehensive security measures and eliminate critical bugs that could compromise the intelligence core.
 
-## Implementation Priority and Timeline
+### **Fix the EbpfScanner ODR Violation**
 
-### Phase 1: Critical Security (Weeks 1-2) ✅ COMPLETED
-- ✅ **Fix shell injection vulnerability in IntegrityScanner**: Replaced insecure `popen()` with secure `fork/execvp` implementation
-- ✅ **Verify ModuleScanner security**: Confirmed native liblzma/zlib decompression with bounded size limits (already secure)
-- ✅ **Verify main.cpp GPG signing**: Confirmed secure fork/execvp pattern (already secure)
-- Add input validation framework
-- Add memory sanitizer testing
+**Status:** 🔴 HIGH PRIORITY - Build-breaking bug
 
-### Phase 2: Code Quality (Weeks 3-4)
-- Refactor main.cpp into smaller components
-- Standardize error handling
-- Add comprehensive unit tests
-- Implement common scanner utilities
+- **Issue:** One Definition Rule (ODR) violation prevents core eBPF feature from being used
+- **Action Required:**
+  - EbpfScanner.cpp must `#include "EbpfScanner.h"`
+  - Remove duplicate inline class redefinition in .cpp file
+  - Provide definitions for all methods declared in header
+- **Verification:** Project builds cleanly with WITH_EBPF=ON on GCC and Clang, eBPF scanner produces findings in integration test
 
-### Phase 3: Performance (Weeks 5-6)
-- Implement file caching
-- Add parallel scanner execution
-- Optimize memory usage
-- Add performance monitoring
+### **Fix Hardcoded bpftool Path in CMake**
 
-### Phase 4: Intelligence Layer (Weeks 7-8)
-- Enhance LLM provider reliability
-- Add pipeline checkpointing
-- Implement comprehensive metrics
-- Add alerting system
+**Status:** 🔴 HIGH PRIORITY - Build portability issue
 
-### Phase 5: Documentation (Weeks 9-10)
-- Complete API documentation
-- Create developer onboarding guide
-- Add usage examples
-- Create deployment guides
+- **Issue:** Hardcoded bpftool path prevents portable builds across different systems
+- **Actions:**
+  - **File:** CMakeLists.txt
+  - **Remove:** `set(BPFTOOL "/usr/lib/linux-tools-6.8.0-79/bpftool")`
+  - **Replace with:**
 
-## Validation and Testing Strategy
+    ```cmake
+    find_program(BPFTOOL_EXECUTABLE bpftool)
+    if(NOT BPFTOOL_EXECUTABLE)
+        if(WITH_EBPF_STRICT)
+            message(FATAL_ERROR "bpftool not found in PATH, required for WITH_EBPF_STRICT")
+        else()
+            message(WARNING "bpftool not found in PATH, eBPF scanners will be disabled")
+            set(WITH_EBPF OFF)
+        endif()
+    endif()
+    ```
 
-### Integration Testing
-- Add comprehensive integration tests
-- Create test scenarios for end-to-end, performance, and security
+  - **Update usage:** Replace all `${BPFTOOL}` references with `${BPFTOOL_EXECUTABLE}`
 
-### Performance Benchmarking  
-- Add benchmarking suite for scanner performance and memory usage
+### **Modernize Library Finding in CMake**
 
-### Security Testing
-- Add security testing for input validation and privilege escalation
+**Status:** 🟡 MEDIUM PRIORITY - Build system modernization
+
+- **Issue:** Manual find_library calls are less portable than package-based approach
+- **Actions:**
+  - **File:** CMakeLists.txt
+  - **Replace libseccomp block:**
+
+    ```cmake
+    find_package(Libseccomp QUIET)
+    if(Libseccomp_FOUND)
+        target_link_libraries(sys_scan_core PUBLIC Libseccomp::seccomp)
+        target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_SECCOMP=1)
+    endif()
+    ```
+
+  - **Apply similar pattern to libcap**
+  - **Benefits:** Better portability across Linux distributions
+
+### **Unify the Risk Model**
+
+**Status:** 🟡 MEDIUM PRIORITY - Architectural consistency
+
+- **Issue:** Conceptual clash between C++ base_severity_score and Python agent's holistic risk_score
+- **Decision:** C++ provides ONLY base_severity_score derived from finding severity; Python agent calculates final risk_score
+- **Actions:**
+  - **C++:** Rename `risk_score` field to `base_severity_score` in Finding struct
+  - **Python (models.py):** Update Pydantic Finding model to have `base_severity_score: int` as required field
+  - **Python (models.py):** Initialize `risk_score: int` from `base_severity_score` using Pydantic model_validator
+  - **Python (pipeline.py):** Remove manual logic copying base_severity_score to risk_score
+  - **Docs:** Update model documentation strings to explain the flow
+
+### **Separate Operational Errors from Security Findings**
+
+**Status:** 🟡 MEDIUM PRIORITY - Alert quality issue
+
+- **Issue:** Scanner health issues conflated with security signals, creating alert fatigue
+- **Actions:**
+  - **C++:** In Report.cpp, hardcode base_severity_score to 0 for findings with operational_error=true
+  - **Python:** Filter out operational_error=true findings from risk calculation in pipeline.py and risk.py
+  - **Docs:** Update ARCHITECTURE.md and README.md to clarify operational errors are excluded from risk scoring
+
+---
+
+## **Phase 2: Intelligence Core Enhancement**
+
+**Goal:** Enhance the LangGraph intelligence core with advanced capabilities, security features, and operational excellence.
+
+### **Activate Full LangGraph Workflow**
+
+**Status:** 🟡 MEDIUM PRIORITY - Core functionality
+
+- **Issue:** Current implementation uses scaffold/optional nodes instead of full enhanced workflow
+- **Actions:**
+  - Wire in full operational tail: risk_analyzer, compliance_checker, error_handler, cache_manager, metrics_collector
+  - Enable advanced_router for dynamic analysis paths
+  - Implement "human-in-the-loop" feedback node for high-impact actions
+  - Ensure all nodes are non-optional in the default workflow
+- **Impact:** Every analysis run benefits from complete suite of analytical and operational capabilities
+
+### **Implement Advanced Security Guardrails**
+
+**Status:** 🟡 MEDIUM PRIORITY - Security enhancement
+
+- **Issue:** Need comprehensive protection against prompt injection and malicious inputs
+- **Actions:**
+  - **GuardrailNode Implementation:** Pattern matching and heuristics for meta-instruction detection
+  - **Intent Classification:** Micro-LLM for benign vs malicious query classification
+  - **Content Filtering:** Strip known malicious payloads and signatures
+  - **Tool Validation:** Strict Pydantic models for all tool function arguments
+- **Impact:** Zero-trust protection at every input boundary
+
+### **Enhance Agent Tool Security**
+
+**Status:** 🟡 MEDIUM PRIORITY - Security enhancement
+
+- **Issue:** Agent tools represent potential privilege escalation vectors
+- **Actions:**
+  - **Pydantic Validation:** Every tool function gets strict input validation models
+  - **Scoped Access:** Tools have minimal necessary privileges (no filesystem access for query tools)
+  - **Role-Based Access:** Future support for different user permission levels
+  - **Audit Logging:** Track all tool usage for security monitoring
+- **Impact:** Prevents malicious tool execution and privilege escalation
+
+### **Implement LLM Output Sanitization**
+
+**Status:** 🟡 MEDIUM PRIORITY - Security enhancement
+
+- **Issue:** LLM outputs must be treated as untrusted until validated
+- **Actions:**
+  - **Parse-Then-Validate:** Strict JSON parsing followed by Pydantic model validation
+  - **Content Sanitization:** Strip harmful HTML/script tags from natural language outputs
+  - **Structured Data Validation:** All structured outputs validated against schemas
+  - **Fallback Handling:** Graceful degradation when validation fails
+- **Impact:** Prevents injection attacks and malformed data propagation
+
+---
+
+## **Phase 3: Interface Development & User Experience**
+
+**Goal:** Develop unified interfaces and enhance user experience while maintaining security and intelligence core integrity.
+
+### **Refactor C++ CLI to Use Subcommands**
+
+**Status:** � MEDIUM PRIORITY - User experience improvement
+
+- **Issue:** Monolithic CLI interface is confusing and hard to extend
+- **Actions:**
+  - **Files:** core/ArgumentParser.cpp and main.cpp
+  - **main.cpp:** Check argv[1] for command (e.g., "run", "process", "network")
+  - **main.cpp:** Pass remaining args (argc-1, argv+1) to specialized parsing functions
+  - **ArgumentParser:** Create parse_run_options, parse_process_options, etc.
+  - **ArgumentParser:** Update print_help to show new subcommand structure
+  - **Benefits:** More intuitive interface and better extensibility
+
+### **Establish a Structured Warning System**
+
+**Status:** � MEDIUM PRIORITY - Monitoring capability
+
+- **Issue:** Warnings emitted as simple strings, not machine-readable
+- **Actions:**
+  - **C++ (Report.h):** Change add_warning signature to accept WarnCode enum and detail string
+  - **C++ (Report.h):** Update warnings_ member to store vector of Warning struct (scanner, code, detail)
+  - **C++ (JSONWriter.cpp):** Modify collection_warnings serialization to build proper JSON objects
+  - **Python:** Update load_report function to parse new structure
+  - **Python:** Enhance cli.py to display warnings in color-coded table
+
+### **Make HTML Report Interactive**
+
+**Status:** 🟡 MEDIUM PRIORITY - User experience enhancement
+
+- **Issue:** Static HTML reports lack interactivity for large datasets
+- **Actions:**
+  - **File:** agent/report_html.py
+  - **Add client-side JavaScript:**
+    - `filterFindings()` function for text search
+    - `filterBySeverity(sev)` function for severity filtering
+  - **Add HTML elements:**
+    - Search input: `<input type="text" onkeyup="filterFindings(this.value)" placeholder="Search findings...">`
+    - Severity buttons: `<button onclick="filterBySeverity('high')">High</button>`
+  - **Benefits:** Improved usability for large security reports
+
+### **Harden the C++ Rule Engine**
+
+**Status:** � MEDIUM PRIORITY - Robustness issue
+
+- **Issue:** Unhandled exceptions in rule parsing could crash entire scanner
+- **Actions:**
+  - **C++:** Enhance try/catch in RuleEngine.cpp for std::regex compilation
+  - **C++:** Log rule ID, filename, and specific regex pattern on failure
+  - **Docs:** Document MAX_REGEX_LENGTH and MAX_CONDITIONS_PER_RULE constants in README.md
+  - **Docs:** Add regex best practices and performance implications
+
+---
+
+## **Phase 4: Advanced Features & Ecosystem**
+
+**Goal:** Implement cutting-edge features and build out the ecosystem around the intelligence core.
+
+### **Refactor ModuleScanner**
+
+**Status:** 🟡 MEDIUM PRIORITY - Code maintainability
+
+- **Issue:** Monolithic ModuleScanner function handles decompression, signature checks, and heuristic analysis
+- **Actions:**
+  - Break out responsibilities into helper classes: ModuleDecompressor, ElfParser, SignatureVerifier
+  - Create namespace within src/scanners/ for these components
+  - Make ModuleScanner a coordinator using these components
+  - Enables easier testing, debugging, and future parallelization
+
+### **Native Decompression in ModuleScanner**
+
+**Status:** 🟡 MEDIUM PRIORITY - Security and performance
+
+- **Actions:**
+  - Leverage SYS_SCAN_HAVE_LZMA and SYS_SCAN_HAVE_ZLIB flags
+  - Integrate liblzma and zlib directly into ModuleScanner for .ko.xz and .ko.gz files
+  - Remove shell-injection risks and improve performance over external processes
+
+### **Expand Compliance & Reporting**
+
+**Status:** 🟢 LOW PRIORITY - Enterprise value-add
+
+- **Actions:**
+  - Build out compliance control knowledge base mapping to CIS Benchmarks and SOC 2
+  - Enhance report_html.py with dynamic single-page application features:
+    - Text search bar
+    - Clickable severity badges for filtering
+    - Collapsible sections for metadata
+
+### **Formalize the v2 → v3 Schema Migration**
+
+**Status:** 🟡 MEDIUM PRIORITY - Backward compatibility
+
+- **Actions:**
+  - Implement agent/migration_v3.py module with v2→v3 conversion function
+  - Create comprehensive test suite for migration script
+  - Update agent/cli.py to trigger conversion before writing output JSON
+
+---
+
+## **Implementation Status & Tracking**
+
+### **Recently Completed ✅**
+
+- ✅ **PII Suppression Enforcement**: Implemented across ProcessScanner, NetworkScanner, and IOCScanner
+- ✅ **Privilege Drop Audit**: Verified main.cpp privilege drop lifecycle with proper logging
+- ✅ **eBPF Basic Events**: Working in current environment with proper metadata capture
+
+### **Current Critical Path**
+
+- 🔴 **P0 LangGraph Default**: Make LangGraph the sole execution path
+- � **P0 Security Architecture**: Implement multi-layered security guardrails
+- � **P0 Unified API**: Develop single gateway for CLI/GUI access
+- 🔴 **P0 eBPF ODR Fix**: Resolve build-breaking bug
+
+### **Validation Strategy**
+
+- **Security Testing**: Comprehensive validation of guardrails, tool access control, and output sanitization
+- **Integration Testing**: End-to-end testing of unified API and LangGraph workflows
+- **Performance Benchmarking**: Intelligence core performance and resource usage metrics
+- **User Experience Testing**: CLI and GUI interface validation against unified API
+
+---
+
+## **Development Guidelines**
+
+### **Security-First Development**
+
+- **Zero-Trust Model:** Treat every data boundary as a potential threat vector
+- **Input Validation:** Pydantic models for all external inputs and LLM-generated content
+- **Principle of Least Privilege:** Minimal necessary access for all components
+- **Audit Logging:** Track all security-relevant operations
+
+### **Intelligence Core Standards**
+
+- **LangGraph Canonical:** All new analytical capabilities added to LangGraph first
+- **Unified API:** Both CLI and GUI access intelligence core through same API
+- **Stateful Design:** Support for persistent, conversational analysis sessions
+- **Asynchronous Processing:** Full operational tail (risk analysis, compliance, caching, metrics)
+
+### **Coding Standards**
+
+- Follow Google C++ Style Guide
+- Use modern CMake find_package modules
+- Implement RAII patterns for resource management
+- Add comprehensive error handling and logging
+
+---
+
+*This roadmap represents the transformation from a security scanner to a unified intelligence platform. The LangGraph-powered agent becomes the central nervous system, with security hardening and unified interfaces enabling both powerful analysis and safe, intuitive user experiences.*
 

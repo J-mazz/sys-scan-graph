@@ -70,18 +70,24 @@ int main(int argc, char** argv) {
 
     // Drop privileges if requested
     if (cfg.drop_priv) {
+        Logger::instance().info("Privilege drop requested - initializing resources before dropping capabilities");
         drop_capabilities(cfg.keep_cap_dac);
+        Logger::instance().info("Capabilities dropped, proceeding with restricted privileges");
     }
 
     // Apply seccomp profile
     if (cfg.seccomp) {
+        Logger::instance().info("Seccomp profile requested - applying syscall restrictions");
         if (!apply_seccomp_profile()) {
-            std::cerr << "Failed to apply seccomp profile";
+            Logger::instance().error("Failed to apply seccomp profile");
             if (cfg.seccomp_strict) {
+                Logger::instance().error("Seccomp strict mode enabled, exiting");
                 return 4;
             } else {
-                std::cerr << " (continuing)\n";
+                Logger::instance().warn("Seccomp failed but continuing in non-strict mode");
             }
+        } else {
+            Logger::instance().info("Seccomp profile applied successfully");
         }
     }
 

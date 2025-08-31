@@ -6,8 +6,8 @@
 #ifdef SYS_SCAN_HAVE_EBPF
 #include "process_exec.skel.h"
 #include <bpf/libbpf.h>
-#include <cstring>
-#include <cerrno>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #endif
 #include <chrono>
 #include <thread>
@@ -108,9 +108,10 @@ void EbpfScanner::scan(Report& report) {
     for(const auto& e : agg.execs){
         Finding f; f.id = "exec.trace"; f.severity = Severity::Info; f.title = std::string("exec: ") + e.comm + " pid=" + std::to_string(e.pid); f.description = "Observed exec event"; f.metadata["pid"] = std::to_string(e.pid); f.metadata["comm"] = e.comm; f.metadata["source"] = "ebpf"; f.metadata["collector"] = "exec"; report.add_finding(name(), std::move(f)); }
     for(const auto& c : agg.conns){
-        // Convert network order to dotted quad quickly (user space). We'll reconstruct IPv4.
-        unsigned int ip = c.daddr; unsigned char b1= ip & 0xFF, b2=(ip>>8)&0xFF, b3=(ip>>16)&0xFF, b4=(ip>>24)&0xFF; char ipbuf[32]; snprintf(ipbuf,sizeof(ipbuf), "%u.%u.%u.%u", b1,b2,b3,b4);
-        unsigned short port_n = (c.dport>>8) | (c.dport<<8); // ntohs
+        // Convert network order to dotted quad using standard library
+        char ipbuf[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &c.daddr, ipbuf, sizeof(ipbuf));
+        unsigned short port_n = ntohs(c.dport);
         Finding f; f.id = "net.connect"; f.severity = Severity::Info; f.title = std::string("connect: ") + c.comm + " pid=" + std::to_string(c.pid) + " dst=" + ipbuf + ":" + std::to_string(port_n); f.description = "Observed outbound connection attempt"; f.metadata["pid"] = std::to_string(c.pid); f.metadata["comm"] = c.comm; f.metadata["dst_ip"] = ipbuf; f.metadata["dst_port"] = std::to_string(port_n); f.metadata["source"] = "ebpf"; f.metadata["collector"] = "tcp_v4_connect"; report.add_finding(name(), std::move(f)); }
 #endif
 }

@@ -35,4 +35,13 @@ std::string trim(const std::string& s){
     return std::string(b,e);
 }
 
+std::string read_file_trim(const std::string& path) {
+    std::ifstream f(path);
+    if (!f) return "";
+    std::string s;
+    std::getline(f, s);
+    while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+    return s;
+}
+
 }} // namespaces

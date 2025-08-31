@@ -98,7 +98,9 @@ static void parse_tcp(const std::string& path, Report& report, const std::string
     if(!state_allowed(state_str)) continue;
     Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" "+state_str+" "+std::to_string(lport); f.severity=Severity::Info; f.description="TCP socket";
         f.metadata["protocol"] = "tcp";
-        f.metadata["state"] = tcp_state(st); f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["rport"] = std::to_string(rport); f.metadata["inode"] = inode_s;
+        f.metadata["state"] = tcp_state(st); 
+        if(!config().no_user_meta) f.metadata["uid"] = uid_s; 
+        f.metadata["lport"] = std::to_string(lport); f.metadata["rport"] = std::to_string(rport); f.metadata["inode"] = inode_s;
     if(path.find("tcp6")!=std::string::npos){ f.metadata["lip"] = hex_ip6_to_str(lip_hex); f.metadata["rip"] = hex_ip6_to_str(rip_hex); }
     else { f.metadata["lip"] = hex_ip_to_v4(lip_hex); f.metadata["rip"] = hex_ip_to_v4(rip_hex); }
     auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = std::get<0>(it->second); f.metadata["exe"] = std::get<1>(it->second); if(!std::get<2>(it->second).empty()) f.metadata["container_id"] = std::get<2>(it->second); }
@@ -143,7 +145,9 @@ static void parse_udp(const std::string& path, Report& report, const std::string
     if(tok.size() < 10){ if(config().network_debug){ Finding dbg; dbg.id=proto+":debug:"+std::to_string(line_no); dbg.title="netdebug raw udp line"; dbg.severity=Severity::Info; dbg.description="Unparsed UDP line"; dbg.metadata["raw"] = line; report.add_finding(proto, std::move(dbg)); } continue; }
         const std::string& local = tok[1]; const std::string& inode_s = tok[9]; const std::string& uid_s = tok[7];
         auto pos = local.find(':'); if(pos==std::string::npos) continue; auto lip_hex = local.substr(0,pos); auto lport_hex = local.substr(pos+1); unsigned lport=0; std::stringstream ph; ph<<std::hex<<lport_hex; ph>>lport; if(lport==0) continue;
-    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" port "+std::to_string(lport); f.severity=Severity::Info; f.description="UDP socket"; f.metadata["uid"] = uid_s; f.metadata["lport"] = std::to_string(lport); f.metadata["inode"] = inode_s; f.metadata["protocol"] = "udp";
+    Finding f; f.id = proto+":"+std::to_string(lport)+":"+inode_s; f.title = proto+" port "+std::to_string(lport); f.severity=Severity::Info; f.description="UDP socket"; 
+    if(!config().no_user_meta) f.metadata["uid"] = uid_s; 
+    f.metadata["lport"] = std::to_string(lport); f.metadata["inode"] = inode_s; f.metadata["protocol"] = "udp";
         if(path.find("udp6")!=std::string::npos) f.metadata["lip"] = hex_ip6_to_str(lip_hex); else f.metadata["lip"] = hex_ip_to_v4(lip_hex);
     auto it = inode_map.find(inode_s); if(it!=inode_map.end()){ f.metadata["pid"] = std::get<0>(it->second); f.metadata["exe"] = std::get<1>(it->second); if(!std::get<2>(it->second).empty()) f.metadata["container_id"] = std::get<2>(it->second); }
     if(config().containers && !config().container_id_filter.empty()) { if(f.metadata["container_id"] != config().container_id_filter) continue; }
