@@ -1,11 +1,16 @@
 .venv/
 agent/.venv/
 __pycache__/
+agent/__pycache__/
+agent/executors/__pycache__/
+.pytest_cache/
+agent/.pytest_cache/
 *.pyc
 build/
 cmake-build-debug/
 *.sqlite*
 agent_baseline.db
+*.db
 # Build directories
 /build/
 /build-*/
@@ -18,6 +23,13 @@ CTestTestfile.cmake
 Makefile
 install_manifest.txt
 Testing/
+compile_commands.json
+*.ninja
+.ninja_*
+build.ninja
+.ninja_log
+.cmake/
+_deps/
 
 # Object & binary artifacts
 *.o
@@ -33,12 +45,10 @@ Testing/
 *.out
 *.app
 
-# Dependency / compilation metadata
-*.d
-*.gcno
-*.gcda
-*.profraw
-*.profdata
+# Generated files
+generated/
+BuildInfo.h
+*.skel.h
 
 # Editor / OS noise
 *.swp
