@@ -6,20 +6,21 @@
 </div>
 
 ## System Security Scanner & Intelligence Graph
+**Sys-Scan-Graph**: is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
+
+It combines a high-performance C++ scanning engine with a Python-based intelligence layer to deliver deterministic, reproducible results. The core engine gathers data and outputs it in multiple formats (JSON, NDJSON, SARIF, HTML). This report is then ingested by a robust LangGraph agent that analyzes, organizes, and enriches the findings, providing deep insights with unprecedented speed.
+
+    Core Engine: Blazing-fast and deterministic scanning built in C++.
+
+    Intelligence Layer: Advanced analysis and enrichment powered by Python and LangGraph.
+
+    Unified Reporting: Get a single, clear report in the format you need.
+
 
 **Repository Origin**: This is a proprietary fork of the open-source [`J-mazz/sys-scan`](https://github.com/J-mazz/sys-scan) repository. The core C++20 scanner is based on the MIT-licensed original, but this fork includes proprietary enhancements and the Intelligence Layer.
 
 Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine.
 
----
-
-## 1. Quick Start (Core)
-```bash
-git clone https://github.com/Mazzlabs/sys-scan-graph.git
-cd sys-scan-graph
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-./build/sys-scan --canonical --modules-summary --min-severity info > report.json
 ```
 
 **Recent Validation (2025)**: All CI/CD workflows are operational with 100% pass rates:
@@ -31,8 +32,6 @@ cmake --build build -j$(nproc)
 - ✅ Full system scan with 145+ findings successfully processed
 - ✅ LangGraph analysis pipeline working with enriched reports and HTML output
 
-Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine. The open‑core scanner delivers trustworthy, reproducible telemetry; an optional proprietary Intelligence Layer (this fork) transforms that raw signal into correlated insights, baselines, rarity analytics, compliance gap normalization, ATT&CK coverage summaries, and executive reporting.
-![CI](https://github.com/Mazzlabs/sys-scan-graph/actions/workflows/ci.yml/badge.svg)
 
 Key design pillars:
 * High‑signal, low‑noise findings (aggregation & baseline downgrades)
