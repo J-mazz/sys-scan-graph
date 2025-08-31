@@ -19,19 +19,6 @@ It combines a high-performance C++ scanning engine with a Python-based intellige
 
 **Repository Origin**: This is a proprietary fork of the open-source [`J-mazz/sys-scan`](https://github.com/J-mazz/sys-scan) repository. The core C++20 scanner is based on the MIT-licensed original, but this fork includes proprietary enhancements and the Intelligence Layer.
 
-Professional host security & hygiene assessment built on a lean, deterministic C++20 scanning engine.
-
-```
-
-**Recent Validation (2025)**: All CI/CD workflows are operational with 100% pass rates:
-- ✅ Build and test workflows (Release/Debug configurations)
-- ✅ CodeQL security analysis workflow
-- ✅ Release validation with SBOM generation
-- ✅ Python tests (60 passed, 3 skipped)
-- ✅ C++ tests (12/12 successful)
-- ✅ Full system scan with 145+ findings successfully processed
-- ✅ LangGraph analysis pipeline working with enriched reports and HTML output
-
 
 Key design pillars:
 * High‑signal, low‑noise findings (aggregation & baseline downgrades)
@@ -42,6 +29,7 @@ Key design pillars:
 It targets Debian/Ubuntu (but aims to stay broadly portable) and is designed to slot cleanly into CI pipelines, fleet hygiene jobs, or local investigative use. Contributions that improve signal quality, determinism, or performance are welcome.
 
 ---
+
 ## Table of Contents
 1. Quick Start
 2. Feature Highlights
@@ -72,6 +60,7 @@ It targets Debian/Ubuntu (but aims to stay broadly portable) and is designed to 
 
 ---
 ## 1. Quick Start (Core)
+
 ```bash
 git clone https://github.com/Mazzlabs/sys-scan-graph.git
 cd sys-scan-graph
