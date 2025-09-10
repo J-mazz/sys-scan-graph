@@ -6,7 +6,7 @@ used by the legacy pipeline.
 """
 
 # Import from the main risk module
-from ..risk import compute_risk, load_persistent_weights
+from ..risk import compute_risk, load_persistent_weights, CAPS
 
 # Re-export for legacy compatibility
-__all__ = ['compute_risk', 'load_persistent_weights']
+__all__ = ['compute_risk', 'load_persistent_weights', 'CAPS']

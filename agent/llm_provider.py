@@ -187,20 +187,13 @@ class NullLLMProvider:
             'avg_completion_tokens': round(avg_ct, 2),
             'budget_alert': drift_flag
         }
-        # Explanation provenance: map which content pieces reference which IDs
-        provenance = {
-            'executive_summary': [tf.get('id') for tf in red_red.top_findings[:5]],
-            'triage_summary.top_findings': [tf.get('id') for tf in red_red.top_findings[:5]],
-            'action_narrative': [a.correlation_refs for a in actions if a.correlation_refs]
-        }
         summaries = Summaries(
             executive_summary=executive,
             analyst=analyst,
             consistency_findings=[i.model_dump() for i in consistency_obj.findings],
             triage_summary={"top_findings": [tf.model_dump() for tf in triage_obj.top_findings], "correlation_count": triage_obj.correlation_count},
             action_narrative=action_obj.narrative,
-            metrics=metrics,
-            explanation_provenance=provenance
+            metrics=metrics
         )
 
         metadata = ProviderMetadata(

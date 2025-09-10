@@ -21,6 +21,7 @@ from ..graph_nodes_scaffold import (
     summarize_host_state as scaffold_summarize,
     suggest_rules as scaffold_suggest_rules,
     risk_analyzer as scaffold_risk_analyzer,
+    compliance_checker as scaffold_compliance_checker,
 )
 
 from ..graph_nodes_enhanced import (
@@ -28,9 +29,17 @@ from ..graph_nodes_enhanced import (
     enhanced_summarize_host_state as enhanced_summarize,
     enhanced_suggest_rules as enhanced_suggest_rules,
     risk_analyzer as enhanced_risk_analyzer,
+    compliance_checker as enhanced_compliance_checker,
 )
 
 from ..graph_state import normalize_graph_state
+from ..util_normalization import (
+    normalize_rule_suggestions,
+    unify_risk_assessment,
+    unify_compliance_check,
+    ensure_monotonic_timing,
+    add_metrics_version,
+)
 
 
 class TestWorkflowEquivalence:
@@ -130,6 +139,7 @@ class TestWorkflowEquivalence:
         state = scaffold_summarize(state)
         state = scaffold_suggest_rules(state)
         state = await scaffold_risk_analyzer(state)
+        state = await scaffold_compliance_checker(state)
 
         return state
 
@@ -146,6 +156,7 @@ class TestWorkflowEquivalence:
         graph_state = await enhanced_summarize(graph_state)
         graph_state = await enhanced_suggest_rules(graph_state)
         graph_state = await enhanced_risk_analyzer(graph_state)
+        graph_state = await enhanced_compliance_checker(graph_state)
 
         return graph_state
 
@@ -277,6 +288,223 @@ class TestWorkflowEquivalence:
 
         assert len(scaffold_good) > 0, "Scaffold didn't process good finding"
         assert len(enhanced_good) > 0, "Enhanced didn't process good finding"
+
+    @pytest.mark.asyncio
+    async def test_risk_assessment_canonicalization(self, base_state):
+        """Test that risk assessment canonicalization produces unified schema."""
+        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
+        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+
+        scaffold_norm = self.normalize_for_comparison(scaffold_state)
+        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+
+        # Test unified risk assessment schema
+        scaffold_ra = scaffold_norm.get('risk_assessment', {})
+        enhanced_ra = enhanced_norm.get('risk_assessment', {})
+
+        # Required unified fields
+        required_fields = [
+            'overall_risk_level', 'overall_risk', 'risk_factors',
+            'recommendations', 'confidence_score', 'counts',
+            'total_risk_score', 'average_risk_score', 'finding_count',
+            'top_findings'
+        ]
+
+        for field in required_fields:
+            assert field in scaffold_ra, f"Scaffold risk_assessment missing {field}"
+            assert field in enhanced_ra, f"Enhanced risk_assessment missing {field}"
+
+        # Test counts structure (should have all severity levels)
+        scaffold_counts = scaffold_ra['counts']
+        enhanced_counts = enhanced_ra['counts']
+
+        expected_keys = {'critical', 'high', 'medium', 'low', 'info', 'unknown'}
+        assert set(scaffold_counts.keys()) == expected_keys, f"Scaffold counts missing keys: {expected_keys - set(scaffold_counts.keys())}"
+        assert set(enhanced_counts.keys()) == expected_keys, f"Enhanced counts missing keys: {expected_keys - set(enhanced_counts.keys())}"
+
+        # All counts should be non-negative integers
+        for key in expected_keys:
+            assert isinstance(scaffold_counts[key], int) and scaffold_counts[key] >= 0, f"Scaffold {key} count invalid"
+            assert isinstance(enhanced_counts[key], int) and enhanced_counts[key] >= 0, f"Enhanced {key} count invalid"
+
+        # Test that overall_risk and overall_risk_level are unified
+        assert scaffold_ra['overall_risk'] == scaffold_ra['overall_risk_level'], "Scaffold risk fields not unified"
+        assert enhanced_ra['overall_risk'] == enhanced_ra['overall_risk_level'], "Enhanced risk fields not unified"
+
+    @pytest.mark.asyncio
+    async def test_compliance_check_canonicalization(self, base_state):
+        """Test that compliance check canonicalization produces unified schema."""
+        # Add compliance-related findings to test compliance canonicalization
+        compliance_state = base_state.copy()
+        compliance_state['raw_findings'].extend([
+            {
+                "id": "c1",
+                "title": "PCI DSS violation - unencrypted data",
+                "severity": "high",
+                "risk_score": 85,
+                "metadata": {"compliance_standard": "PCI DSS", "requirement": "3.4"},
+                "tags": ["compliance", "pci_dss"],
+            },
+            {
+                "id": "c2",
+                "title": "HIPAA violation - missing audit logs",
+                "severity": "critical",
+                "risk_score": 95,
+                "metadata": {"compliance_standard": "HIPAA", "requirement": "164.312"},
+                "tags": ["compliance", "hipaa"],
+            }
+        ])
+
+        # Run workflows with compliance data
+        scaffold_state = await self.run_scaffold_workflow(compliance_state.copy())
+        enhanced_state = await self.run_enhanced_workflow(compliance_state.copy())
+
+        scaffold_norm = self.normalize_for_comparison(scaffold_state)
+        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+
+        # Test unified compliance check schema
+        scaffold_cc = scaffold_norm.get('compliance_check', {})
+        enhanced_cc = enhanced_norm.get('compliance_check', {})
+
+        # Required unified fields
+        assert 'standards' in scaffold_cc, "Scaffold compliance_check missing standards"
+        assert 'total_compliance_findings' in scaffold_cc, "Scaffold compliance_check missing total"
+        assert 'standards' in enhanced_cc, "Enhanced compliance_check missing standards"
+        assert 'total_compliance_findings' in enhanced_cc, "Enhanced compliance_check missing total"
+
+        # Test standards structure
+        scaffold_standards = scaffold_cc['standards']
+        enhanced_standards = enhanced_cc['standards']
+
+        # Should have entries for PCI DSS and HIPAA
+        assert 'PCI DSS' in scaffold_standards or 'pci_dss' in scaffold_standards, "Scaffold missing PCI DSS"
+        assert 'HIPAA' in scaffold_standards or 'hipaa' in scaffold_standards, "Scaffold missing HIPAA"
+        assert 'PCI DSS' in enhanced_standards or 'pci_dss' in enhanced_standards, "Enhanced missing PCI DSS"
+        assert 'HIPAA' in enhanced_standards or 'hipaa' in enhanced_standards, "Enhanced missing HIPAA"
+
+        # Test total compliance findings calculation
+        scaffold_total = scaffold_cc['total_compliance_findings']
+        enhanced_total = enhanced_cc['total_compliance_findings']
+        assert scaffold_total >= 2, "Scaffold compliance total incorrect"
+        assert enhanced_total >= 2, "Enhanced compliance total incorrect"
+
+    @pytest.mark.asyncio
+    async def test_normalization_function_equivalence(self, base_state):
+        """Test that normalization functions produce equivalent results."""
+        # Test normalize_rule_suggestions
+        test_state = base_state.copy()
+        test_state['rule_suggestions'] = [{'id': 'r1', 'confidence': 0.8}]
+        test_state['suggested_rules'] = [{'id': 'r2', 'confidence': 0.9}]
+
+        scaffold_normalized = normalize_rule_suggestions(test_state.copy())
+        enhanced_normalized = normalize_rule_suggestions(test_state.copy())
+
+        assert scaffold_normalized == enhanced_normalized, "Rule suggestions normalization not equivalent"
+
+        # Test unify_risk_assessment
+        risk_state = base_state.copy()
+        risk_state['risk_assessment'] = {
+            'overall_risk_level': 'high',
+            'counts': {'critical': 1, 'high': 2}
+        }
+
+        scaffold_risk = unify_risk_assessment(risk_state.copy())
+        enhanced_risk = unify_risk_assessment(risk_state.copy())
+
+        assert scaffold_risk == enhanced_risk, "Risk assessment unification not equivalent"
+
+        # Test unify_compliance_check
+        compliance_state = base_state.copy()
+        compliance_state['compliance_check'] = {
+            'standards': {
+                'PCI DSS': {'finding_ids': ['f1', 'f2'], 'count': 2}
+            }
+        }
+
+        scaffold_compliance = unify_compliance_check(compliance_state.copy())
+        enhanced_compliance = unify_compliance_check(compliance_state.copy())
+
+        assert scaffold_compliance == enhanced_compliance, "Compliance check unification not equivalent"
+
+    @pytest.mark.asyncio
+    async def test_metrics_versioning_and_timing(self, base_state):
+        """Test that metrics versioning and monotonic timing work correctly."""
+        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
+        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+
+        scaffold_norm = self.normalize_for_comparison(scaffold_state)
+        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+
+        # Test metrics versioning
+        scaffold_metrics = scaffold_norm.get('metrics', {})
+        enhanced_metrics = enhanced_norm.get('metrics', {})
+
+        assert 'version' in scaffold_metrics, "Scaffold metrics missing version"
+        assert 'version' in enhanced_metrics, "Enhanced metrics missing version"
+        assert scaffold_metrics['version'] == enhanced_metrics['version'], "Metrics versions don't match"
+
+        # Test monotonic timing (should be present but not compared for exact values)
+        scaffold_timing = scaffold_state.get('monotonic_start')
+        enhanced_timing = dict(enhanced_state).get('monotonic_start')
+
+        assert scaffold_timing is not None, "Scaffold missing monotonic timing"
+        assert enhanced_timing is not None, "Enhanced missing monotonic timing"
+
+        # Both should be numeric (timestamp values)
+        assert isinstance(scaffold_timing, (int, float)), "Scaffold monotonic timing not numeric"
+        assert isinstance(enhanced_timing, (int, float)), "Enhanced monotonic timing not numeric"
+
+    @pytest.mark.asyncio
+    async def test_schema_validation_with_unified_fields(self, base_state):
+        """Test that schema validation works with unified fields."""
+        from ..graph_state import validate_graph_state
+
+        # Test with unified risk assessment
+        unified_state = base_state.copy()
+        unified_state['risk_assessment'] = {
+            'overall_risk_level': 'medium',
+            'overall_risk': 'medium',  # Unified field
+            'risk_factors': ['test_factor'],
+            'recommendations': ['test_recommendation'],
+            'confidence_score': 0.85,
+            'counts': {'critical': 0, 'high': 1, 'medium': 2, 'low': 0, 'info': 0, 'unknown': 0},
+            'total_risk_score': 150,
+            'average_risk_score': 50.0,
+            'finding_count': 3,
+            'top_findings': [{'id': 'f1', 'title': 'Test', 'risk_score': 80}]
+        }
+
+        # Test with unified compliance check
+        unified_state['compliance_check'] = {
+            'standards': {
+                'PCI DSS': {'finding_ids': ['f1'], 'count': 1},
+                'HIPAA': {'finding_ids': ['f2', 'f3'], 'count': 2}
+            },
+            'total_compliance_findings': 3
+        }
+
+        # Test with unified rule suggestions
+        unified_state['suggested_rules'] = [{'id': 'r1', 'confidence': 0.9}]
+        unified_state['rule_suggestions'] = [{'id': 'r1', 'confidence': 0.9}]  # Should be unified
+
+        # Apply normalization
+        normalized_state = normalize_rule_suggestions(unified_state)
+        normalized_state = unify_risk_assessment(normalized_state)
+        normalized_state = unify_compliance_check(normalized_state)
+        normalized_state = ensure_monotonic_timing(normalized_state)
+        normalized_state = add_metrics_version(normalized_state)
+
+        # Should pass validation
+        assert validate_graph_state(normalized_state), "Unified schema validation failed"
+
+        # Verify unified fields
+        ra = normalized_state['risk_assessment']
+        assert ra['overall_risk'] == ra['overall_risk_level'], "Risk fields not unified after normalization"
+
+        cc = normalized_state['compliance_check']
+        pci_count = cc['standards'].get('PCI DSS', {}).get('count', 0)
+        hipaa_count = cc['standards'].get('HIPAA', {}).get('count', 0)
+        assert cc['total_compliance_findings'] == pci_count + hipaa_count, "Compliance total not calculated correctly"
 
 
 class TestContractVersioning:

@@ -37,6 +37,14 @@ from .knowledge import apply_external_knowledge  # External knowledge enrichment
 from .reduction import reduce_all  # Reduction / summarization helpers
 from .rule_gap_miner import mine_gap_candidates  # Rule gap mining utility
 from .graph_state import normalize_graph_state  # GraphState normalization
+from .util_hash import stable_hash  # Shared stable hash utility
+from .util_normalization import (  # Shared normalization utilities
+    normalize_rule_suggestions,
+    unify_risk_assessment,
+    unify_compliance_check,
+    ensure_monotonic_timing,
+    add_metrics_version,
+)
 
 # Pydantic model imports (data structures used across node logic)
 from .models import (
@@ -304,32 +312,6 @@ def _batch_get_top_findings_by_risk(fields: Dict[str, List[Any]], top_n: int = 3
 
     return top_findings
 
-def stable_hash(obj: Any, prefix: str = "") -> str:
-    """Generate a stable hash for any object using canonical JSON.
-
-    This provides consistent hashing across Python sessions and environments
-    by using sorted keys and deterministic JSON encoding.
-
-    Args:
-        obj: The object to hash (must be JSON serializable)
-        prefix: Optional prefix for the hash key
-
-    Returns:
-        A string hash suitable for caching keys
-    """
-    try:
-        import hashlib
-        # Convert to canonical JSON with sorted keys and compact separators
-        canonical = json.dumps(obj, sort_keys=True, separators=(',', ':'))
-        # Use SHA256 for collision resistance
-        h = hashlib.sha256(canonical.encode()).hexdigest()
-        if prefix:
-            return f"{prefix}:{h}"
-        return h
-    except Exception:
-        # Fallback to simple hash if JSON serialization fails
-        return f"fallback:{hash(str(obj))}"
-
 __all__ = [
     "GraphState",
     "get_llm_provider",
@@ -386,6 +368,9 @@ def enrich_findings(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         findings = _findings_from_graph(state)  # type: ignore
@@ -434,6 +419,9 @@ def summarize_host_state(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     # Iteration guard with cached env var
     max_iter = int(_get_env_var('AGENT_MAX_SUMMARY_ITERS', '3'))
@@ -473,6 +461,9 @@ def suggest_rules(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         findings = _extract_findings_from_state(state, 'enriched_findings')
@@ -503,6 +494,9 @@ def correlate_findings(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         findings_dicts = _extract_findings_from_state(state, 'enriched_findings')
@@ -754,6 +748,11 @@ async def enhanced_suggest_rules(state: StateType) -> StateType:
         # Store suggestions directly in state
         state['suggested_rules'] = suggestions
 
+        # Apply unified normalization
+        state = normalize_rule_suggestions(state)
+        state = ensure_monotonic_timing(state)
+        state = add_metrics_version(state)
+
         # Metrics with helper
         _update_metrics_counter(state, 'rule_suggest_calls')
         metrics = state.setdefault('metrics', {})
@@ -773,6 +772,9 @@ def advanced_router(state: StateType) -> str:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         # 1. Human feedback gate
@@ -820,6 +822,9 @@ def should_suggest_rules(state: StateType) -> str:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         enriched = state.get('enriched_findings') or []
@@ -853,6 +858,9 @@ def choose_post_summarize(state: StateType) -> str:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         if not state.get('baseline_cycle_done'):
@@ -886,6 +894,9 @@ async def tool_coordinator(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     start = time.monotonic()
     try:
@@ -947,6 +958,9 @@ def plan_baseline_queries(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         if AIMessage is None:  # dependency not available
@@ -1016,6 +1030,9 @@ def integrate_baseline_results(state: StateType) -> StateType:
     """
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
+    
+    # Ensure monotonic timing is initialized for accurate duration calculations
+    state = ensure_monotonic_timing(state)
 
     try:
         if ToolMessage is None:
@@ -1103,6 +1120,12 @@ async def risk_analyzer(state: StateType) -> StateType:
             'confidence_score': 0.95  # High confidence for quantitative analysis
         }
         state['risk_assessment'] = assessment
+
+        # Apply unified normalization
+        state = unify_risk_assessment(state)
+        state = ensure_monotonic_timing(state)
+        state = add_metrics_version(state)
+
         _update_metrics_counter(state, 'risk_analyzer_calls')
     except Exception as e:  # pragma: no cover
         logger.exception('risk_analyzer failed: %s', e)
@@ -1153,6 +1176,12 @@ async def compliance_checker(state: StateType) -> StateType:
             'standards': std_map,
             'total_compliance_findings': total,
         }
+
+        # Apply unified normalization
+        state = unify_compliance_check(state)
+        state = ensure_monotonic_timing(state)
+        state = add_metrics_version(state)
+
         _update_metrics_counter(state, 'compliance_checker_calls')
     except Exception as e:  # pragma: no cover
         logger.exception('compliance_checker failed: %s', e)

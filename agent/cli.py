@@ -3,8 +3,6 @@ import json
 from pathlib import Path
 import typer
 from rich import print
-from .legacy.pipeline import run_pipeline
-from .graph_pipeline import run_graph
 from .rules import load_rules_dir, lint_rules, dry_run_apply
 from .baseline import BaselineStore
 from .integrity import generate_keypair, sign_file, verify_file
@@ -23,6 +21,85 @@ from .report_html import write_html
 from .report_diff import write_diff
 import os
 import urllib.request
+# Import scaffold workflow functions for metrics
+from .graph_nodes_scaffold import (
+    enrich_findings, correlate_findings, summarize_host_state as scaffold_summarize,
+    suggest_rules as scaffold_suggest_rules, risk_analyzer, compliance_checker,
+    metrics_collector
+)
+from .graph_state import normalize_graph_state
+from .graph_state import GraphState
+
+def run_scaffold_workflow(report_path: Path) -> tuple:
+    """Run the scaffold workflow and return enriched output and final state with metrics."""
+    # Load the report data
+    import json
+    raw_data = json.loads(report_path.read_text())
+    
+    # Initialize state
+    initial_state = {
+        'raw_findings': raw_data.get('results', [{}])[0].get('findings', []) if raw_data.get('results') else [],
+        'enriched_findings': [],
+        'correlated_findings': [],
+        'suggested_rules': [],
+        'summary': {},
+        'warnings': [],
+        'correlations': [],
+        'messages': [],
+        'baseline_results': {},
+        'baseline_cycle_done': False,
+        'iteration_count': 0,
+        'metrics': {},
+        'cache_keys': [],
+        'enrich_cache': {},
+        'streaming_enabled': False,
+        'human_feedback_pending': False,
+        'pending_tool_calls': [],
+        'risk_assessment': {},
+        'compliance_check': {},
+        'errors': [],
+        'degraded_mode': False,
+        'human_feedback_processed': False,
+        'final_metrics': {},
+        'cache': {},
+        'llm_provider_mode': 'normal'
+    }
+    
+    # Normalize initial state
+    state = normalize_graph_state(initial_state)
+    
+    # Run scaffold workflow
+    try:
+        state = enrich_findings(state)
+        state = correlate_findings(state)
+        state = scaffold_summarize(state)
+        state = scaffold_suggest_rules(state)
+        # Run async nodes
+        import asyncio
+        async def run_async_nodes():
+            s = await risk_analyzer(state)
+            s = await compliance_checker(s)
+            s = await metrics_collector(s)
+            return s
+        
+        # Run async workflow
+        final_state = asyncio.run(run_async_nodes())
+        
+        # Create enriched output (simplified version)
+        from .models import EnrichedOutput, Reductions, Summaries
+        enriched = EnrichedOutput(
+            correlations=final_state.get('correlations', []),
+            reductions=Reductions(),
+            summaries=Summaries(),
+            actions=[],
+            enriched_findings=final_state.get('enriched_findings', [])
+        )
+        
+        return enriched, final_state
+        
+    except Exception as e:
+        print(f"[red]Scaffold workflow failed: {e}[/red]")
+        raise
 
 app = typer.Typer(help="sys-scan intelligence layer (agent MVP)")
 
@@ -38,51 +115,39 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
     cfg = load_config()
     if dry_run:
         sandbox_config(dry_run=True)
-    enriched = run_graph(report, str(checkpoint_dir) if checkpoint_dir else None, str(schema) if schema else None, str(index_dir) if index_dir else None)
+    enriched, final_state = run_scaffold_workflow(report)
     out.write_text(enriched.model_dump_json(indent=2))
-    print(f"[green]Wrote enriched output -> {out} (LangGraph mode)")
+    print(f"[green]Wrote enriched output -> {out} (Scaffold mode)")
 
     # Export metrics if requested
     if metrics_out:
         try:
             from .metrics_exporter import export_all_formats, print_metrics_summary
 
-            # Get the final state from the graph execution
-            # For now, we'll create a mock state with metrics (this would be improved with actual state access)
-            mock_state = {
-                'metrics': {
-                    'node_calls': {'enrich': 1, 'correlate': 1, 'summarize': 1, 'suggest_rules': 1},
-                    'node_durations': {
-                        'enrich': [0.5],
-                        'correlate': [0.3],
-                        'summarize': [1.2],
-                        'suggest_rules': [0.8]
-                    },
-                    'cache_hit_rate': 0.0
-                }
-            }
+            # Use real metrics from the scaffold workflow
+            metrics_state = final_state.get('final_metrics', {})
 
             # Determine export format from file extension
             if str(metrics_out).endswith('.json'):
                 from .metrics_exporter import write_metrics_json
-                write_metrics_json(mock_state, str(metrics_out))
+                write_metrics_json(metrics_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to JSON -> {metrics_out}")
             elif str(metrics_out).endswith('.csv'):
                 from .metrics_exporter import export_metrics_csv
-                export_metrics_csv(mock_state, str(metrics_out))
+                export_metrics_csv(metrics_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to CSV -> {metrics_out}")
             elif str(metrics_out).endswith('.prom'):
                 from .metrics_exporter import export_prometheus
-                export_prometheus(mock_state, str(metrics_out))
+                export_prometheus(metrics_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to Prometheus -> {metrics_out}")
             else:
                 # Default to JSON if no extension or unknown
                 from .metrics_exporter import write_metrics_json
-                write_metrics_json(mock_state, str(metrics_out))
+                write_metrics_json(metrics_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to JSON -> {metrics_out}")
 
             # Always print summary to console
-            print_metrics_summary(mock_state)
+            print_metrics_summary(metrics_state)
 
         except Exception as e:
             print(f"[red]Metrics export failed: {e}")
@@ -130,7 +195,7 @@ def validate_report(report: Path = typer.Option(..., exists=True, help="Path to 
     except ValidationError as e:
         print(f"[red]Schema validation error: {e.message}[/red]")
         raise typer.Exit(code=3)
-    enriched = run_graph(report)
+    enriched, _ = run_scaffold_workflow(report)
     elapsed_ms = int((time.time() - start)*1000)
     print(f"[green]Validation OK[/green] elapsed_ms={elapsed_ms} findings={data.get('summary',{}).get('finding_count_total')} correlations={len(enriched.correlations)}")
     if elapsed_ms > max_ms:
@@ -160,7 +225,7 @@ def validate_batch(dir: Path = typer.Option(..., exists=True, help="Directory co
         except ValidationError as e:
             print(f"[red]{p.name}: schema_error {e.message}")
             raise typer.Exit(code=7)
-        run_graph(p)
+        run_scaffold_workflow(p)
         ms = int((time.time()-start)*1000)
         worst = max(worst, ms)
         print(f"[green]{p.name} OK[/green] {ms}ms")
@@ -213,7 +278,7 @@ def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw v2 rep
                   decision: str = typer.Option(..., help="tp|fp|ignore"),
                   db: Path = typer.Option(Path("agent_baseline.db"))):
     # Re-run pipeline to ensure we have composite hash mapping
-    enriched = run_pipeline(report)
+    enriched, _ = run_scaffold_workflow(report)
     # Need to reconstruct finding composite hash using scanner
     raw = json.loads(report.read_text())
     host_id = raw.get('meta',{}).get('host_id') or enriched.enriched_findings[0].metadata.get('host_id','unknown_host') if enriched.enriched_findings else 'unknown_host'

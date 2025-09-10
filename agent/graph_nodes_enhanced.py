@@ -32,6 +32,14 @@ from .rules import Correlator, DEFAULT_RULES
 from .rule_gap_miner import mine_gap_candidates
 from .graph_state import normalize_graph_state
 from .metrics_node import time_node
+from .util_hash import stable_hash  # Shared stable hash utility
+from .util_normalization import (  # Shared normalization utilities
+    normalize_rule_suggestions,
+    unify_risk_assessment,
+    unify_compliance_check,
+    ensure_monotonic_timing,
+    add_metrics_version,
+)
 
 # Enhanced LLM provider with multi-provider support
 try:
@@ -40,32 +48,6 @@ except ImportError:
     get_enhanced_llm_provider = get_llm_provider
 
 logger = logging.getLogger(__name__)
-
-def stable_hash(obj: Any, prefix: str = "") -> str:
-    """Generate a stable hash for any object using canonical JSON.
-
-    This provides consistent hashing across Python sessions and environments
-    by using sorted keys and deterministic JSON encoding.
-
-    Args:
-        obj: The object to hash (must be JSON serializable)
-        prefix: Optional prefix for the hash key
-
-    Returns:
-        A string hash suitable for caching keys
-    """
-    try:
-        import hashlib
-        # Convert to canonical JSON with sorted keys and compact separators
-        canonical = json.dumps(obj, sort_keys=True, separators=(',', ':'))
-        # Use SHA256 for collision resistance
-        h = hashlib.sha256(canonical.encode()).hexdigest()
-        if prefix:
-            return f"{prefix}:{h}"
-        return h
-    except Exception:
-        # Fallback to simple hash if JSON serialization fails
-        return f"fallback:{hash(str(obj))}"
 
 def _append_warning(state: GraphState, module: str, stage: str, error: str, hint: str | None = None):
     """Enhanced warning appender with structured error tracking."""
@@ -94,7 +76,8 @@ def _findings_from_graph(state: GraphState) -> List[Finding]:
                 title=finding.get('title','(no title)'),
                 severity=finding.get('severity','info'),
                 risk_score=int(finding.get('risk_score', finding.get('risk_total', 0)) or 0),
-                metadata=finding.get('metadata', {})
+                metadata=finding.get('metadata', {}),
+                tags=finding.get('tags', [])
             ))
         except Exception:
             continue
@@ -201,10 +184,12 @@ async def enhanced_summarize_host_state(state: GraphState) -> GraphState:
                 summary, metadata = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
 
             # Store summary in state
-            if hasattr(summary, 'model_dump'):
-                state['summary'] = getattr(summary, 'model_dump')()
-            else:
+            if hasattr(summary, 'model_dump') and callable(getattr(summary, 'model_dump')):
+                state['summary'] = summary.model_dump()
+            elif isinstance(summary, dict):
                 state['summary'] = summary
+            else:
+                state['summary'] = dict(summary) if summary else {}
 
             # Update token usage in metrics
             metrics = state.setdefault('metrics', {})
@@ -280,6 +265,17 @@ async def enhanced_suggest_rules(state: GraphState) -> GraphState:
                 logger.warning(f"LLM rule refinement failed: {e}")
 
             state['suggested_rules'] = suggestions
+
+            # Apply unified normalization (work with dict copy)
+            state_dict = dict(state)
+            state_dict = normalize_rule_suggestions(state_dict)
+            state_dict = ensure_monotonic_timing(state_dict)
+            state_dict = add_metrics_version(state_dict)
+
+            # Update state with normalized values
+            for key, value in state_dict.items():
+                if key in state or key in ['suggested_rules', 'monotonic_start', 'metrics']:
+                    state[key] = value
 
             # Update metrics
             state.setdefault('metrics', {})['rules_suggested'] = len(suggestions)
@@ -491,6 +487,17 @@ async def risk_analyzer(state: GraphState) -> GraphState:
 
             state['risk_assessment'] = risk_assessment
 
+            # Apply unified normalization
+            state_dict = dict(state)
+            state_dict = unify_risk_assessment(state_dict)
+            state_dict = ensure_monotonic_timing(state_dict)
+            state_dict = add_metrics_version(state_dict)
+
+            # Update state with normalized values
+            for key, value in state_dict.items():
+                if key in state or key in ['risk_assessment', 'monotonic_start', 'metrics']:
+                    state[key] = value
+
         except Exception as e:
             logger.error(f"Risk analysis failed: {e}")
 
@@ -511,12 +518,37 @@ async def compliance_checker(state: GraphState) -> GraphState:
 
             # Check for compliance-related findings
             for finding in findings:
-                category = finding.get('category', '')
-                if 'pci' in category.lower():
+                category = finding.get('category', '').lower()
+                tags = finding.get('tags', [])
+                metadata = finding.get('metadata', {})
+                
+                # Check category, tags, and metadata for compliance indicators
+                compliance_standard = metadata.get('compliance_standard', '').lower()
+                
+                if ('pci' in category or 
+                    any('pci' in tag.lower() for tag in tags) or 
+                    'pci' in compliance_standard):
                     compliance_check['pci_dss']['compliant'] = False
                     compliance_check['pci_dss']['violations'].append(finding.get('id'))
+                
+                if ('hipaa' in category or 
+                    any('hipaa' in tag.lower() for tag in tags) or 
+                    'hipaa' in compliance_standard):
+                    compliance_check['hipaa']['compliant'] = False
+                    compliance_check['hipaa']['violations'].append(finding.get('id'))
 
             state['compliance_check'] = compliance_check
+
+            # Apply unified normalization
+            state_dict = dict(state)
+            state_dict = unify_compliance_check(state_dict)
+            state_dict = ensure_monotonic_timing(state_dict)
+            state_dict = add_metrics_version(state_dict)
+
+            # Update state with normalized values
+            for key, value in state_dict.items():
+                if key in state or key in ['compliance_check', 'monotonic_start', 'metrics']:
+                    state[key] = value
 
         except Exception as e:
             logger.error(f"Compliance check failed: {e}")
