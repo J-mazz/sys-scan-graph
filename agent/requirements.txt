@@ -9,4 +9,5 @@ langgraph>=0.1.0,<0.2
 orjson>=3.9,<4
 jsonschema>=4.21,<5
 pytest>=8.0,<9
+pytest-asyncio>=0.23,<0.24
 PyNaCl>=1.5,<2

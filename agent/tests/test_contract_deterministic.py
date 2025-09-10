@@ -34,7 +34,7 @@ class TestRouterDeterministicBehavior:
 
         result = advanced_router(state)  # type: ignore
         # High severity should trigger appropriate routing
-        assert result in ["summarize", "baseline", "risk_analysis", "compliance"]
+        assert result in ["summarize", "baseline", "risk", "compliance"]
 
     def test_router_baseline_missing(self):
         """Test router handles missing baseline data."""
@@ -60,7 +60,7 @@ class TestRouterDeterministicBehavior:
 
         result = advanced_router(state)  # type: ignore
         # Should prioritize compliance routing
-        assert result in ["compliance", "summarize", "risk_analysis"]
+        assert result in ["compliance", "summarize", "risk"]
 
     def test_router_human_feedback_pending(self):
         """Test router handles pending human feedback."""
@@ -87,7 +87,7 @@ class TestRouterDeterministicBehavior:
 
         result = advanced_router(state)  # type: ignore
         # Should route for external data processing
-        assert result in ["risk_analysis", "summarize"]
+        assert result in ["risk", "summarize"]
 
 
 class TestNormalizationContractCompliance:

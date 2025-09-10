@@ -41,6 +41,32 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+def stable_hash(obj: Any, prefix: str = "") -> str:
+    """Generate a stable hash for any object using canonical JSON.
+
+    This provides consistent hashing across Python sessions and environments
+    by using sorted keys and deterministic JSON encoding.
+
+    Args:
+        obj: The object to hash (must be JSON serializable)
+        prefix: Optional prefix for the hash key
+
+    Returns:
+        A string hash suitable for caching keys
+    """
+    try:
+        import hashlib
+        # Convert to canonical JSON with sorted keys and compact separators
+        canonical = json.dumps(obj, sort_keys=True, separators=(',', ':'))
+        # Use SHA256 for collision resistance
+        h = hashlib.sha256(canonical.encode()).hexdigest()
+        if prefix:
+            return f"{prefix}:{h}"
+        return h
+    except Exception:
+        # Fallback to simple hash if JSON serialization fails
+        return f"fallback:{hash(str(obj))}"
+
 def _append_warning(state: GraphState, module: str, stage: str, error: str, hint: str | None = None):
     """Enhanced warning appender with structured error tracking."""
     wl = state.setdefault('warnings', [])
@@ -78,13 +104,16 @@ async def enhanced_enrich_findings(state: GraphState) -> GraphState:
     """Enhanced enrichment with caching, metrics, and error recovery."""
     with time_node(state, 'enhanced_enrich_findings') as timed_state:
         state = normalize_graph_state(timed_state)  # type: ignore
-        start_time = time.time()
+        start_time = time.monotonic()
         state['current_stage'] = 'enrich'
-        state['start_time'] = state.get('start_time', datetime.now().isoformat())
+        # Store ISO time for state compatibility, monotonic time for accurate calculations
+        if 'start_time' not in state:
+            state['start_time'] = datetime.now().isoformat()
+        state.setdefault('metrics', {})['start_time_monotonic'] = start_time
 
         try:
             # Check cache first
-            cache_key = f"enrich_{hash(str(state.get('raw_findings', [])))}"
+            cache_key = stable_hash(state.get('raw_findings', []), "enrich")
             if cache_key in state.get('cache_hits', []):
                 logger.info("Using cached enrichment results")
                 return state
@@ -169,14 +198,13 @@ async def enhanced_summarize_host_state(state: GraphState) -> GraphState:
                 summary = await streaming_summarizer(state, reductions, corr_objs, baseline_context)
             else:
                 # Use standard summarization
-                summary = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
+                summary, metadata = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
 
             # Store summary in state
             if hasattr(summary, 'model_dump'):
                 state['summary'] = getattr(summary, 'model_dump')()
             else:
                 state['summary'] = summary
-            state['iteration_count'] = iters + 1
 
             # Update token usage in metrics
             metrics = state.setdefault('metrics', {})
@@ -246,7 +274,8 @@ async def enhanced_suggest_rules(state: GraphState) -> GraphState:
             try:
                 provider = get_enhanced_llm_provider()
                 if hasattr(provider, 'refine_rules'):
-                    suggestions = provider.refine_rules(suggestions)
+                    refined_suggestions, metadata = provider.refine_rules(suggestions)
+                    suggestions = refined_suggestions
             except Exception as e:
                 logger.warning(f"LLM rule refinement failed: {e}")
 
@@ -293,7 +322,7 @@ def advanced_router(state: GraphState) -> str:
             elif missing_baseline and high_severity_count > 0:
                 return "baseline"
             elif needs_external:
-                return "risk_analysis"
+                return "risk"
             elif high_severity_count > 2:
                 return "summarize"
             else:
@@ -362,20 +391,20 @@ async def streaming_summarizer(state: GraphState, reductions, correlations, base
 
         # Simulate streaming by yielding intermediate results
         # In a real implementation, this would use async generators
-        summary = provider.summarize(reductions, correlations, actions=[], baseline_context=baseline_context)
+        summary, metadata = provider.summarize(reductions, correlations, actions=[], baseline_context=baseline_context)
 
-        # Add streaming metadata
-        if isinstance(summary, dict):
-            summary['streaming_complete'] = True
-        else:
-            summary.streaming_complete = True
+        # Convert to dict and add streaming metadata
+        summary_dict = summary.model_dump() if hasattr(summary, 'model_dump') else dict(summary)
+        summary_dict['streaming_complete'] = True
 
-        return summary
+        return summary_dict
 
     except Exception as e:
         logger.error(f"Streaming summarization failed: {e}")
         # Fallback to regular summarization
-        return provider.summarize(reductions, correlations, actions=[], baseline_context=baseline_context)
+        summary, metadata = provider.summarize(reductions, correlations, actions=[], baseline_context=baseline_context)
+        summary_dict = summary.model_dump() if hasattr(summary, 'model_dump') else dict(summary)
+        return summary_dict
 
 async def tool_coordinator(state: GraphState) -> GraphState:
     """Coordinate tool execution and result integration."""
@@ -418,19 +447,47 @@ async def risk_analyzer(state: GraphState) -> GraphState:
         try:
             findings = state.get('enriched_findings') or []
 
-            # Enhanced risk scoring
+            # Enhanced risk scoring with unified schema
             risk_assessment = {
                 'overall_risk_level': 'low',
+                'overall_risk': 'info',  # Unified field name
                 'risk_factors': [],
                 'recommendations': [],
-                'confidence_score': 0.0
+                'confidence_score': 0.0,
+                'counts': {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0, 'unknown': 0},
+                'total_risk_score': 0,
+                'average_risk_score': 0.0,
+                'finding_count': len(findings),
+                'top_findings': []
             }
 
-            # Analyze patterns
+            # Analyze patterns and populate unified fields
             high_risk_count = sum(1 for finding in findings if finding.get('risk_score', 0) > 70)
+            total_risk_score = sum(finding.get('risk_score', 0) for finding in findings)
+            average_risk_score = total_risk_score / len(findings) if findings else 0.0
+
+            # Count severity levels
+            for finding in findings:
+                severity = finding.get('severity', 'unknown').lower()
+                if severity in risk_assessment['counts']:
+                    risk_assessment['counts'][severity] += 1
+
+            # Set unified risk levels
             if high_risk_count > 3:
                 risk_assessment['overall_risk_level'] = 'high'
+                risk_assessment['overall_risk'] = 'high'
                 risk_assessment['risk_factors'].append('multiple_high_risk_findings')
+
+            # Populate unified quantitative fields
+            risk_assessment['total_risk_score'] = total_risk_score
+            risk_assessment['average_risk_score'] = average_risk_score
+
+            # Get top findings by risk score
+            sorted_findings = sorted(findings, key=lambda f: f.get('risk_score', 0), reverse=True)
+            risk_assessment['top_findings'] = [
+                {'id': f.get('id'), 'title': f.get('title'), 'risk_score': f.get('risk_score', 0)}
+                for f in sorted_findings[:3]
+            ]
 
             state['risk_assessment'] = risk_assessment
 
@@ -483,7 +540,7 @@ async def cache_manager(state: GraphState) -> GraphState:
 
             # Cache key based on findings hash
             findings = state.get('raw_findings', [])
-            cache_key = hash(str(findings))
+            cache_key = stable_hash(findings, "cache_manager")
 
             if cache_key in cache_manager._cache:
                 state['cache_hits'].append(str(cache_key))
@@ -511,7 +568,8 @@ async def metrics_collector(state: GraphState) -> GraphState:
             metrics = state.get('metrics', {})
 
             # Add final metrics
-            metrics['total_duration'] = time.time() - datetime.fromisoformat(state.get('start_time', datetime.now().isoformat())).timestamp()
+            start_time_monotonic = metrics.get('start_time_monotonic', time.monotonic())
+            metrics['total_duration'] = time.monotonic() - start_time_monotonic
             metrics['findings_processed'] = len(state.get('enriched_findings') or [])
             metrics['correlations_found'] = len(state.get('correlations') or [])
             metrics['rules_suggested'] = len(state.get('suggested_rules') or [])
