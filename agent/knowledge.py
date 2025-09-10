@@ -97,7 +97,7 @@ def enrich_finding(finding, scanner: str, distro: str):
                         break
 
 def _verify_signature(fname: str, state):
-    """Emit SignatureMissing warning into AgentState if signatures are required and file lacks .sig."""
+    """Verify GPG signature of knowledge file using gpg --verify."""
     try:
         if not getattr(state, 'agent_warnings', None):
             # Ensure list exists
@@ -105,21 +105,96 @@ def _verify_signature(fname: str, state):
                 state.agent_warnings = []  # type: ignore[attr-defined]
             except Exception:
                 return
-        if os.getenv('AGENT_KB_REQUIRE_SIGNATURES','0') != '1':
+
+        require_sigs = os.getenv('AGENT_KB_REQUIRE_SIGNATURES', '0') == '1'
+        pubkey_path = os.getenv('AGENT_KB_PUBKEY')
+
+        if not require_sigs:
             return
-        if not os.getenv('AGENT_KB_PUBKEY'):
+
+        if not pubkey_path or not Path(pubkey_path).exists():
+            if require_sigs:
+                state.agent_warnings.append({  # type: ignore[attr-defined]
+                    'file': fname,
+                    'error_type': 'SignatureVerificationFailed',
+                    'error': 'AGENT_KB_PUBKEY not set or file does not exist'
+                })
             return
+
         path = KNOWLEDGE_DIR / fname
         if not path.exists():
             return
+
         sig_path = path.with_suffix(path.suffix + '.sig')
         if not sig_path.exists():
+            if require_sigs:
+                state.agent_warnings.append({  # type: ignore[attr-defined]
+                    'file': fname,
+                    'error_type': 'SignatureMissing'
+                })
+            return
+
+        # Perform actual GPG verification
+        import subprocess
+        try:
+            # Import the public key if not already imported
+            import_result = subprocess.run(
+                ['gpg', '--import', pubkey_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            # Verify the signature
+            verify_result = subprocess.run(
+                ['gpg', '--verify', str(sig_path), str(path)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if verify_result.returncode == 0:
+                # Signature verification successful
+                return
+            else:
+                # Signature verification failed
+                error_msg = verify_result.stderr.strip() or 'Unknown GPG verification error'
+                state.agent_warnings.append({  # type: ignore[attr-defined]
+                    'file': fname,
+                    'error_type': 'SignatureVerificationFailed',
+                    'error': error_msg
+                })
+
+        except subprocess.TimeoutExpired:
             state.agent_warnings.append({  # type: ignore[attr-defined]
                 'file': fname,
-                'error_type': 'SignatureMissing'
+                'error_type': 'SignatureVerificationTimeout',
+                'error': 'GPG verification timed out after 30 seconds'
             })
-    except Exception:
-        pass
+        except FileNotFoundError:
+            state.agent_warnings.append({  # type: ignore[attr-defined]
+                'file': fname,
+                'error_type': 'GPGNotFound',
+                'error': 'gpg command not found in PATH'
+            })
+        except Exception as e:
+            state.agent_warnings.append({  # type: ignore[attr-defined]
+                'file': fname,
+                'error_type': 'SignatureVerificationError',
+                'error': f'Unexpected error during GPG verification: {str(e)}'
+            })
+
+    except Exception as e:
+        # Fallback error handling
+        try:
+            if hasattr(state, 'agent_warnings'):
+                state.agent_warnings.append({  # type: ignore[attr-defined]
+                    'file': fname,
+                    'error_type': 'SignatureVerificationSetupError',
+                    'error': str(e)
+                })
+        except Exception:
+            pass
 
 
 def apply_external_knowledge(state):

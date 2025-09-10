@@ -24,7 +24,7 @@ def test_router_external_requirement():
     state = {"enriched_findings": [
         {"id":"x","severity":"low","metadata":{"requires_external": True}}
     ], "baseline_results": {"dummy":"val"}}
-    assert advanced_router(state) == 'risk_analysis'
+    assert advanced_router(state) == 'risk'
 
 
 def test_router_default_summarize():

@@ -304,6 +304,32 @@ def _batch_get_top_findings_by_risk(fields: Dict[str, List[Any]], top_n: int = 3
 
     return top_findings
 
+def stable_hash(obj: Any, prefix: str = "") -> str:
+    """Generate a stable hash for any object using canonical JSON.
+
+    This provides consistent hashing across Python sessions and environments
+    by using sorted keys and deterministic JSON encoding.
+
+    Args:
+        obj: The object to hash (must be JSON serializable)
+        prefix: Optional prefix for the hash key
+
+    Returns:
+        A string hash suitable for caching keys
+    """
+    try:
+        import hashlib
+        # Convert to canonical JSON with sorted keys and compact separators
+        canonical = json.dumps(obj, sort_keys=True, separators=(',', ':'))
+        # Use SHA256 for collision resistance
+        h = hashlib.sha256(canonical.encode()).hexdigest()
+        if prefix:
+            return f"{prefix}:{h}"
+        return h
+    except Exception:
+        # Fallback to simple hash if JSON serialization fails
+        return f"fallback:{hash(str(obj))}"
+
 __all__ = [
     "GraphState",
     "get_llm_provider",
@@ -431,7 +457,7 @@ def summarize_host_state(state: StateType) -> StateType:
             except Exception:  # pragma: no cover
                 continue
         baseline_context = state.get('baseline_results') or {}
-        summaries = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
+        summaries, metadata = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
         state['summary'] = summaries.model_dump()
         state['iteration_count'] = iters + 1
     except Exception as e:  # pragma: no cover
@@ -530,10 +556,7 @@ async def enhanced_enrich_findings(state: StateType) -> StateType:
 
     # Build deterministic cache key (sha256 of canonical JSON of raw findings)
     try:
-        import hashlib
-        canonical = json.dumps(raw_list, sort_keys=True, separators=(",", ":"))
-        h = hashlib.sha256(canonical.encode()).hexdigest()
-        cache_key = f"enrich:{h}"
+        cache_key = stable_hash(raw_list, "enrich")
     except Exception:  # pragma: no cover - extremely unlikely
         cache_key = "enrich:invalid_key"
 
@@ -606,14 +629,14 @@ def get_enhanced_llm_provider():
     return primary
 
 
-def streaming_summarizer(provider, reductions, correlations, actions, baseline_context):
+async def streaming_summarizer(provider, reductions, correlations, actions, baseline_context):
     """Deterministic streaming facade.
 
     For now this simply delegates to provider.summarize once (no incremental
     token emission) to maintain determinism. Later this could yield partial
     chunks and assemble them into a final Summaries object.
     """
-    return provider.summarize(reductions, correlations, actions, baseline_context=baseline_context)
+    return await provider.summarize(reductions, correlations, actions, baseline_context=baseline_context)
 
 
 async def enhanced_summarize_host_state(state: StateType) -> StateType:
@@ -649,9 +672,9 @@ async def enhanced_summarize_host_state(state: StateType) -> StateType:
         baseline_context = state.get('baseline_results') or {}
         streaming = bool(state.get('streaming_enabled'))
         if streaming:
-            summaries = streaming_summarizer(provider, reductions, corr_objs, actions=[], baseline_context=baseline_context)
+            summaries, metadata = await streaming_summarizer(provider, reductions, corr_objs, actions=[], baseline_context=baseline_context)
         else:
-            summaries = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
+            summaries, metadata = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
 
         state['summary'] = summaries.model_dump()
         state['iteration_count'] = iters + 1
@@ -729,7 +752,7 @@ async def enhanced_suggest_rules(state: StateType) -> StateType:
             suggestions = []
         
         # Store suggestions directly in state
-        state['rule_suggestions'] = suggestions
+        state['suggested_rules'] = suggestions
 
         # Metrics with helper
         _update_metrics_counter(state, 'rule_suggest_calls')
@@ -782,7 +805,7 @@ def advanced_router(state: StateType) -> str:
         # 4. External data requirement (batch check)
         external_indices = _batch_check_external_requirements(fields)
         if external_indices:
-            return 'risk_analysis'
+            return 'risk'
 
         # 5. Default path
         return 'summarize'
@@ -1048,8 +1071,12 @@ async def risk_analyzer(state: StateType) -> StateType:
                 'total_risk_score': 0,
                 'average_risk_score': 0.0,
                 'overall_risk': 'info',
+                'overall_risk_level': 'low',  # Unified field name
                 'top_findings': [],
                 'finding_count': 0,
+                'risk_factors': [],  # Unified qualitative analysis
+                'recommendations': [],  # Unified recommendations
+                'confidence_score': 1.0  # High confidence for empty state
             }
             _update_metrics_counter(state, 'risk_analyzer_calls')
             return state
@@ -1068,8 +1095,12 @@ async def risk_analyzer(state: StateType) -> StateType:
             'total_risk_score': risk_metrics['total_risk'],
             'average_risk_score': risk_metrics['avg_risk'],
             'overall_risk': risk_metrics['qualitative_risk'],
+            'overall_risk_level': risk_metrics['qualitative_risk'],  # Unified field name
             'top_findings': top_findings,
             'finding_count': len(findings),
+            'risk_factors': [],  # Can be populated by enhanced analysis
+            'recommendations': [],  # Can be populated by enhanced analysis
+            'confidence_score': 0.95  # High confidence for quantitative analysis
         }
         state['risk_assessment'] = assessment
         _update_metrics_counter(state, 'risk_analyzer_calls')
@@ -1220,9 +1251,7 @@ async def cache_manager(state: StateType) -> StateType:
         enriched = state.get('enriched_findings')
         if enriched is not None:
             try:
-                import hashlib, json as _json
-                canonical = _json.dumps(enriched, sort_keys=True, separators=(',',':'))
-                ek = f"enrich:{hashlib.sha256(canonical.encode()).hexdigest()}"
+                ek = stable_hash(enriched, "enrich")
                 if ek not in cache_store:
                     cache_store[ek] = enriched
             except Exception:  # pragma: no cover

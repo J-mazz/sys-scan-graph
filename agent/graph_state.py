@@ -1,9 +1,14 @@
+from __future__ import annotations
+
+# Schema version for contract versioning
+GRAPH_STATE_SCHEMA_VERSION = "1.0.0"
+GRAPH_STATE_SCHEMA_LAST_UPDATED = "2025-01-09"
+
 """GraphState normalization and validation utilities.
 
 This module provides a canonical GraphState schema and normalization utilities
 to ensure deterministic behavior across all LangGraph nodes.
 """
-from __future__ import annotations
 
 from typing import Dict, List, Any, Optional, TypedDict, Union
 from pydantic import BaseModel, Field
@@ -18,9 +23,15 @@ except ImportError:
 
 
 class GraphStateSchema(BaseModel):
-    """Canonical Pydantic schema for GraphState validation and normalization."""
+    """Canonical Pydantic schema for GraphState validation and normalization.
 
-        # Core findings data
+    Version: 1.0.0
+    Last Updated: 2025-01-09
+    Changes:
+    - v1.0.0: Initial unified schema with risk_assessment standardization
+    """
+
+    # Core findings data
     raw_findings: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     enriched_findings: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     correlated_findings: Optional[List[Dict[str, Any]]] = None

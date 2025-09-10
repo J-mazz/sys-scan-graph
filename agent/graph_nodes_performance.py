@@ -39,6 +39,33 @@ from .graph_state import normalize_graph_state
 
 logger = logging.getLogger(__name__)
 
+def stable_hash(obj: Any, prefix: str = "") -> str:
+    """Generate a stable hash for any object using canonical JSON.
+
+    This provides consistent hashing across Python sessions and environments
+    by using sorted keys and deterministic JSON encoding.
+
+    Args:
+        obj: The object to hash (must be JSON serializable)
+        prefix: Optional prefix for the hash key
+
+    Returns:
+        A string hash suitable for caching keys
+    """
+    try:
+        import hashlib
+        import json
+        # Convert to canonical JSON with sorted keys and compact separators
+        canonical = json.dumps(obj, sort_keys=True, separators=(',', ':'))
+        # Use SHA256 for collision resistance
+        h = hashlib.sha256(canonical.encode()).hexdigest()
+        if prefix:
+            return f"{prefix}:{h}"
+        return h
+    except Exception:
+        # Fallback to simple hash if JSON serialization fails
+        return f"fallback:{hash(str(obj))}"
+
 # Performance configuration
 @dataclass
 class PerformanceConfig:
@@ -276,13 +303,16 @@ async def enrich_findings_batch(state: GraphState) -> GraphState:
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)  # type: ignore
 
-    start_time = time.time()
+    start_time = time.monotonic()
     state['current_stage'] = 'enrich'
-    state['start_time'] = state.get('start_time', datetime.now().isoformat())
+    # Store ISO time for state compatibility, monotonic time for accurate calculations
+    if 'start_time' not in state:
+        state['start_time'] = datetime.now().isoformat()
+    state.setdefault('metrics', {})['start_time_monotonic'] = start_time
 
     try:
         # Check cache first
-        cache_key = f"enrich_batch_{hash(str(state.get('raw_findings', [])))}"
+        cache_key = stable_hash(state.get('raw_findings', []), "enrich_batch")
         cached_result = advanced_cache.get(cache_key)
         if cached_result:
             logger.info("Using cached enrichment results")
