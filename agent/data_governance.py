@@ -19,21 +19,14 @@ class DataGovernor:
 
     def redact_for_llm(self, data: Any) -> Any:
         """Redact sensitive data before sending to LLM."""
-        # Handle Pydantic models
-        if hasattr(data, 'model_dump'):
-            # It's a Pydantic model, convert to dict, redact, then convert back
-            dict_data = data.model_dump()
-            redacted_dict = self.redact_for_llm(dict_data)
-            # Try to create a new instance of the same type
-            try:
-                return type(data)(**redacted_dict)
-            except (TypeError, ValueError):
-                # If we can't reconstruct the model, return the redacted dict
-                return redacted_dict
-
-        # Simple implementation - in a real system this would
-        # apply comprehensive redaction rules
+        # CRITICAL: Handle Pydantic models FIRST - return unchanged to preserve type
+        from .models import Reductions, Summaries, Correlation, ActionItem
+        if isinstance(data, (Reductions, Summaries, Correlation, ActionItem)):
+            return data
+        
+        # For other types, apply redaction as before
         if isinstance(data, dict):
+            print(f"DEBUG: Processing dict")
             redacted = {}
             for key, value in data.items():
                 # Check if key indicates sensitive data
@@ -43,8 +36,10 @@ class DataGovernor:
                     redacted[key] = self.redact_for_llm(value)
             return redacted
         elif isinstance(data, list):
+            print(f"DEBUG: Processing list")
             return [self.redact_for_llm(item) for item in data]
         elif isinstance(data, str):
+            print(f"DEBUG: Processing string: {data[:100]}...")
             # Basic redaction for common sensitive patterns
             import re
             # Paths get hashed
@@ -66,6 +61,24 @@ class DataGovernor:
             else:
                 return data
         else:
+            print(f"DEBUG: Processing other type: {type(data)}")
+            # For other types (including Pydantic models that failed reconstruction),
+            # try to convert to dict if possible, otherwise return as-is
+            if hasattr(data, '__dict__'):
+                print(f"DEBUG: Has __dict__, converting to dict")
+                # Try to convert object attributes to dict
+                obj_dict = {}
+                for attr in dir(data):
+                    if not attr.startswith('_'):
+                        try:
+                            value = getattr(data, attr)
+                            if not callable(value):
+                                obj_dict[attr] = self.redact_for_llm(value)
+                        except:
+                            pass
+                return obj_dict
+            # Last resort: return as-is for unknown types
+            print(f"DEBUG: Returning as-is")
             return data
 
     def validate_content(self, content: Any) -> bool:

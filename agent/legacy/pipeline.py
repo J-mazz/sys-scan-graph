@@ -612,7 +612,13 @@ def summarize(state: AgentState) -> AgentState:
     red_actions = [governor.redact_for_llm(a) for a in state.actions]
     mc = get_metrics_collector()
     with mc.time_stage('summarize.llm'):
-        state.summaries = client.summarize(red_reductions, red_correlations, red_actions, skip=skip, previous=prev, skip_reason="low_risk_no_change" if skip else None, baseline_context=None)
+        summaries_result = client.summarize(red_reductions, red_correlations, red_actions, skip=skip, previous=prev, skip_reason="low_risk_no_change" if skip else None, baseline_context=None)
+        # Handle both tuple and direct return for backward compatibility
+        if isinstance(summaries_result, tuple):
+            state.summaries, provider_metadata = summaries_result
+        else:
+            state.summaries = summaries_result
+            provider_metadata = None
     # Attach token accounting snapshot for future cost modeling
     try:
         # Token accounting model removed / deprecated; inline dict if needed in future.

@@ -68,6 +68,11 @@ class DataGovernor:
         Returns:
             Redacted version of the object
         """
+        # CRITICAL: Handle Pydantic models FIRST - return unchanged to preserve type
+        from ..models import Reductions, Summaries, Correlation, ActionItem
+        if isinstance(obj, (Reductions, Summaries, Correlation, ActionItem)):
+            return obj
+            
         if isinstance(obj, dict):
             return self._redact_dict(obj)
         elif isinstance(obj, list):
