@@ -8,6 +8,7 @@ incremental population and external serialization without validation overhead.
 """
 from typing import TypedDict, List, Dict, Any, Optional, Callable
 import os
+import logging
 
 
 class GraphState(TypedDict, total=False):
@@ -268,6 +269,12 @@ def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
     # Core selection - prefer reliability, then performance, then enhanced, then scaffold, then legacy
     enrich_node = _select(reliable_enrich_findings, enrich_findings_batch, enhanced_enrich_findings, scaffold_enrich_findings)
     if enrich_node is None:
+        logger = logging.getLogger(__name__)
+        logger.warning("build_workflow: No enrich node available - workflow assembly failed")
+        if enhanced:
+            logger.error("AGENT_GRAPH_MODE=enhanced but required enhancements are missing")
+            raise RuntimeError("Enhanced workflow mode requires scaffold nodes but none are available. "
+                             "Ensure graph_nodes_scaffold.py is properly implemented or set AGENT_GRAPH_MODE=baseline")
         return None, None
 
     summarize_node = _select(reliable_summarize_state, summarize_host_state_streaming, enhanced_summarize_host_state, scaffold_summarize_host_state, legacy_summarize_host_state)

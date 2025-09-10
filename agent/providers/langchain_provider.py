@@ -1,5 +1,6 @@
 from __future__ import annotations
-"""LangChain-based LLM Provider (experimental) INT-FUT-LLM
+"""
+LangChain-based LLM Provider (experimental) INT-FUT-LLM
 
 This provider adapts the ILLMProvider interface onto LangChain Expression Language.
 It supports only summarize() initially; other methods fall back to heuristics.
@@ -12,6 +13,19 @@ Environment Variables:
 Safety:
   All inputs are redacted via DataGovernor before leaving process boundary.
 """
+import os, time
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime
+from ..models import Reductions, Correlation, Summaries, ActionItem
+from ..llm_provider import ILLMProvider, NullLLMProvider, ProviderMetadata
+from ..data_governance import get_data_governor
+
+try:  # Lazy import to avoid hard dependency if user doesn't enable
+    from langchain_openai import ChatOpenAI
+    from langchain_core.prompts import ChatPromptTemplate
+except Exception:  # pragma: no cover - missing optional deps
+    ChatOpenAI = None
+    ChatPromptTemplate = None
 import os, time
 from typing import List, Optional, Dict, Any
 from ..models import Reductions, Correlation, Summaries, ActionItem
@@ -56,9 +70,10 @@ class LangChainLLMProvider(ILLMProvider):
     # -------- ILLMProvider methods --------
     def summarize(self, reductions: Reductions, correlations: List[Correlation], actions: List[ActionItem], *,
                   skip: bool = False, previous: Optional[Summaries] = None,
-                  skip_reason: Optional[str] = None, baseline_context: Optional[Dict[str, Any]] = None) -> Summaries:
+                  skip_reason: Optional[str] = None, baseline_context: Optional[Dict[str, Any]] = None) -> Tuple[Summaries, ProviderMetadata]:
         if skip:
-            return self.null_fallback.summarize(reductions, correlations, actions, skip=skip, previous=previous, skip_reason=skip_reason)
+            summaries, metadata = self.null_fallback.summarize(reductions, correlations, actions, skip=skip, previous=previous, skip_reason=skip_reason)
+            return summaries, metadata
         # Redact reductions top findings only (already redacted fields inside pipeline earlier for titles)
         red_top = self.governor.redact_for_llm(reductions.top_findings) if reductions.top_findings else []
         mod = reductions.module_summary or {}
@@ -77,7 +92,8 @@ class LangChainLLMProvider(ILLMProvider):
             }).content.strip()
         except Exception:
             # Fallback to heuristic provider on error
-            return self.null_fallback.summarize(reductions, correlations, actions, previous=previous)
+            summaries, metadata = self.null_fallback.summarize(reductions, correlations, actions, previous=previous)
+            return summaries, metadata
         elapsed = int((time.time()-start)*1000)
         # Approximate token counts (very rough heuristic); real impl could call tiktoken
         pt = 200 + len(red_top)*20
@@ -91,14 +107,28 @@ class LangChainLLMProvider(ILLMProvider):
         }
         if baseline_context:
             summary_text += f"\nBaseline references: {len(baseline_context)} findings checked."
-        return Summaries(executive_summary=summary_text, metrics=metrics, explanation_provenance={
-            'executive_summary': [f.get('id') for f in red_top]
-        })
+        
+        summaries = Summaries(executive_summary=summary_text, metrics=metrics)
+        
+        metadata = ProviderMetadata(
+            model_name=self.llm.model,
+            provider_name='langchain-openai',
+            latency_ms=elapsed,
+            tokens_prompt=int(pt),
+            tokens_completion=int(ct),
+            cached=False,
+            fallback=False,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        return summaries, metadata
 
-    def refine_rules(self, suggestions: List[Dict[str, Any]], examples: Optional[Dict[str, List[str]]] = None) -> List[Dict[str, Any]]:  # pragma: no cover
-        return self.null_fallback.refine_rules(suggestions, examples)
+    def refine_rules(self, suggestions: List[Dict[str, Any]], examples: Optional[Dict[str, List[str]]] = None) -> Tuple[List[Dict[str, Any]], ProviderMetadata]:  # pragma: no cover
+        refined, metadata = self.null_fallback.refine_rules(suggestions, examples)
+        return refined, metadata
 
-    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Dict[str, Any]:  # pragma: no cover
-        return self.null_fallback.triage(reductions, correlations)
+    def triage(self, reductions: Reductions, correlations: List[Correlation]) -> Tuple[Dict[str, Any], ProviderMetadata]:  # pragma: no cover
+        result, metadata = self.null_fallback.triage(reductions, correlations)
+        return result, metadata
 
 __all__ = ['LangChainLLMProvider']

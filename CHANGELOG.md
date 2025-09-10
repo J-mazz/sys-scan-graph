@@ -62,6 +62,10 @@ All notable changes will be documented in this file.
 - **Test Suite Memory Corruption**: Fixed dangling pointer issues in `test_integration.cpp` by replacing temporary `string().c_str()` calls with persistent string variables for file paths used in argument arrays
 - **Config Struct Initialization**: Added default values (`= ""`) to all `std::string` members in `Config.h` to ensure proper initialization and prevent undefined behavior
 - **Argument Parsing Validation**: Corrected argument counts in integration tests to match actual argument array sizes, ensuring deterministic test execution
+- **Workflow Equivalence Testing**: Implemented comprehensive test suite (`test_workflow_equivalence.py`) validating scaffold vs enhanced workflow equivalence with 7 passing tests covering deterministic behavior, contract compliance, and error handling
+- **Asyncio Event Loop Conflicts**: Fixed asyncio event loop conflicts in `EnhancedLLMProvider` by implementing fallback to null provider for async test contexts and correcting provider call patterns
+- **Provider Call Corrections**: Fixed tuple unpacking errors and async/sync boundaries in scaffold and enhanced workflow nodes, ensuring proper LLM provider integration
+- **Test Normalization**: Enhanced test result normalization to remove timing and ID fields, ensuring deterministic test outcomes across different execution environments
 
 ## [0.1.0] - Initial Release
 
