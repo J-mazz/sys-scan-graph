@@ -119,17 +119,6 @@ def _build_agent_state(findings: List[Finding], scanner_name: str = "mixed") -> 
     )
     return AgentState(report=report)
 
-# Forward reference / safe import for GraphState to avoid circular import at module import time.
-# If the real GraphState cannot be imported yet (during early bootstrap), we fall back to a
-# structural placeholder (dict subtype / alias) sufficient for static typing tools.
-try:  # Prefer real definition when available
-    if TYPE_CHECKING:
-        from .graph import GraphState  # type: ignore  # noqa: F401
-    else:  # Runtime attempt (may succeed if import order permits)
-        from .graph import GraphState  # type: ignore
-except Exception:  # Fallback lightweight alias
-    GraphState = Dict[str, Any]  # type: ignore
-
 # Type alias for better readability
 if TYPE_CHECKING:
     StateType = Dict[str, Any]  # type: ignore
@@ -267,6 +256,7 @@ def _batch_calculate_risk_metrics(fields: Dict[str, List[Any]]) -> Dict[str, Any
     risk_values = []
 
     for sev, risk_score in zip(fields['severities'], fields['risk_scores']):
+        sev = sev if sev in sev_counters else 'unknown'
         sev_counters[sev] += 1
         total_risk += risk_score
         risk_values.append(risk_score)
@@ -465,6 +455,7 @@ def suggest_rules(state: StateType) -> StateType:
     # Ensure monotonic timing is initialized for accurate duration calculations
     state = ensure_monotonic_timing(state)
 
+    tf_path = None
     try:
         findings = _extract_findings_from_state(state, 'enriched_findings')
         if not findings:
@@ -476,6 +467,7 @@ def suggest_rules(state: StateType) -> StateType:
 
         # Use context manager for automatic cleanup (still needed for mine_gap_candidates API)
         with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as tf:
+            tf_path = tf.name
             _json.dump({'enriched_findings': findings}, tf)
             tf.flush()
             result = mine_gap_candidates([Path(tf.name)], risk_threshold=10, min_support=2)
@@ -484,6 +476,13 @@ def suggest_rules(state: StateType) -> StateType:
     except Exception as e:  # pragma: no cover
         logger.exception("suggest_rules failed: %s", e)
         _append_warning(state, 'graph', 'rule_mine', str(e))  # type: ignore
+    finally:
+        if tf_path:
+            try:
+                import os
+                os.unlink(tf_path)
+            except Exception:
+                pass
     return state
 
 
@@ -630,7 +629,16 @@ async def streaming_summarizer(provider, reductions, correlations, actions, base
     token emission) to maintain determinism. Later this could yield partial
     chunks and assemble them into a final Summaries object.
     """
-    return await provider.summarize(reductions, correlations, actions, baseline_context=baseline_context)
+    return await _call_summarize(provider, reductions, correlations, actions, baseline_context)
+
+
+async def _call_summarize(provider, reductions, correlations, actions, baseline_context):
+    """Helper to normalize async/sync summarize calls."""
+    import inspect
+    res = provider.summarize(reductions, correlations, actions, baseline_context=baseline_context)
+    if inspect.isawaitable(res):
+        return await res
+    return res
 
 
 async def enhanced_summarize_host_state(state: StateType) -> StateType:
@@ -668,7 +676,7 @@ async def enhanced_summarize_host_state(state: StateType) -> StateType:
         if streaming:
             summaries, metadata = await streaming_summarizer(provider, reductions, corr_objs, actions=[], baseline_context=baseline_context)
         else:
-            summaries, metadata = provider.summarize(reductions, corr_objs, actions=[], baseline_context=baseline_context)
+            summaries, metadata = await _call_summarize(provider, reductions, corr_objs, actions=[], baseline_context=baseline_context)
 
         state['summary'] = summaries.model_dump()
         state['iteration_count'] = iters + 1
@@ -698,6 +706,7 @@ async def enhanced_suggest_rules(state: StateType) -> StateType:
     state = normalize_graph_state(state)
 
     start = time.monotonic()
+    tf_path = None
     try:
         provider = get_enhanced_llm_provider()
         findings_src = _extract_findings_from_state(state, 'correlated_findings')
@@ -722,6 +731,7 @@ async def enhanced_suggest_rules(state: StateType) -> StateType:
         findings_data = {'enriched_findings': [f.model_dump() for f in findings_models]}
         
         with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as tf:
+            tf_path = tf.name
             _json.dump(findings_data, tf)
             tf.flush()
             from pathlib import Path
@@ -762,6 +772,12 @@ async def enhanced_suggest_rules(state: StateType) -> StateType:
         _append_warning(state, 'graph', 'enhanced_suggest_rules', f"{type(e).__name__}: {e}")  # type: ignore
     finally:
         _update_metrics_duration(state, 'rule_suggest_duration', start)
+        if tf_path:
+            try:
+                import os
+                os.unlink(tf_path)
+            except Exception:
+                pass
     return state
 
 

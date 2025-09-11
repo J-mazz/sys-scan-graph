@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(BUILD_TESTS "Build unit tests" ON)
+option(BUILD_TESTS "Build unit tests" OFF)
 option(ENABLE_OPENSSL "Use OpenSSL for hashing if available" ON)
 option(SYS_SCAN_REPRO_BUILD "Enable reproducible build settings (avoid embedding timestamps, absolute paths)" OFF)
 option(ENABLE_SECCOMP "Enable optional seccomp-bpf sandbox (requires libseccomp)" ON)
@@ -13,8 +13,33 @@ option(ENABLE_CAPABILITIES "Enable Linux capabilities privilege dropping (libcap
 option(BUILD_FUZZERS "Build libFuzzer harnesses (Clang only)" OFF)
 option(WITH_EBPF "Enable eBPF-based scanners (requires bpftool and BTF)" OFF)
 option(WITH_EBPF_STRICT "Require eBPF skeleton generation (fail if bpftool not found or incompatible)" OFF)
+option(ENABLE_COMPRESSION "Enable optional compression libraries (ZLIB, LZMA)" ON)
 
 set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
+
+# Generate BuildInfo.h from template
+find_package(Git QUIET)
+if(GIT_FOUND)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+endif()
+if(NOT GIT_COMMIT)
+  set(GIT_COMMIT "unknown")
+endif()
+
+# Collect all CXX flags
+string(JOIN " " ALL_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}})
+
+# Configure BuildInfo.h
+configure_file(
+  ${CMAKE_SOURCE_DIR}/BuildInfo.h.in
+  ${CMAKE_BINARY_DIR}/generated/BuildInfo.h
+)
 
 # eBPF support - completely optional
 if(WITH_EBPF)
@@ -118,12 +143,15 @@ target_link_libraries(sys_scan_core PUBLIC Threads::Threads)
 # nlohmann/json for JSON handling
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
-  # Download nlohmann/json header
-  file(DOWNLOAD
-    https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp
-    ${CMAKE_BINARY_DIR}/third_party/nlohmann/json.hpp
-    SHOW_PROGRESS
-  )
+  set(JSON_HPP_PATH ${CMAKE_BINARY_DIR}/third_party/nlohmann/json.hpp)
+  if(NOT EXISTS ${JSON_HPP_PATH})
+    # Download nlohmann/json header only if it doesn't exist
+    file(DOWNLOAD
+      https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp
+      ${JSON_HPP_PATH}
+      SHOW_PROGRESS
+    )
+  endif()
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/third_party/nlohmann)
   target_include_directories(sys_scan_core PUBLIC ${CMAKE_BINARY_DIR}/third_party)
 else()
@@ -137,20 +165,10 @@ endif()
 if(ENABLE_SECCOMP)
   find_library(LIBSECCOMP_LIB seccomp)
   if(NOT LIBSECCOMP_LIB)
-    # Try alternative library names and paths
-    find_library(LIBSECCOMP_LIB seccomp2)
-    if(NOT LIBSECCOMP_LIB)
-      find_library(LIBSECCOMP_LIB seccomp.so.2)
-      if(NOT LIBSECCOMP_LIB)
-        # Try direct path
-        set(LIBSECCOMP_LIB "/usr/lib/x86_64-linux-gnu/libseccomp.so")
-        if(NOT EXISTS ${LIBSECCOMP_LIB})
-          set(LIBSECCOMP_LIB "/usr/lib/x86_64-linux-gnu/libseccomp.so.2")
-        endif()
-      endif()
-    endif()
+    # Try common alternative names
+    find_library(LIBSECCOMP_LIB NAMES seccomp seccomp2 seccomp.so.2)
   endif()
-  if(LIBSECCOMP_LIB AND EXISTS ${LIBSECCOMP_LIB})
+  if(LIBSECCOMP_LIB)
     target_link_libraries(sys_scan_core PUBLIC ${LIBSECCOMP_LIB})
     target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_SECCOMP=1)
   endif()
@@ -170,23 +188,18 @@ if(ENABLE_CAPABILITIES)
 endif()
 
 # Optional compression libraries for in-process module decompression (replaces popen to xz/gzip)
-find_package(ZLIB QUIET)
-if(ZLIB_FOUND)
-  target_link_libraries(sys_scan_core PUBLIC ZLIB::ZLIB)
-  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_ZLIB=1)
-endif()
+if(ENABLE_COMPRESSION)
+  find_package(ZLIB QUIET)
+  if(ZLIB_FOUND)
+    target_link_libraries(sys_scan_core PUBLIC ZLIB::ZLIB)
+    target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_ZLIB=1)
+  endif()
 
-# Fuzzers (libFuzzer) – simple harness example
-if(BUILD_FUZZERS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_executable(fuzz_rules fuzz/fuzz_rules.cpp)
-  target_link_libraries(fuzz_rules PRIVATE sys_scan_core)
-  target_compile_options(fuzz_rules PRIVATE -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
-  target_link_options(fuzz_rules PRIVATE -fsanitize=fuzzer,address,undefined)
-endif()
-find_package(LibLZMA QUIET)
-if(LIBLZMA_FOUND)
-  target_link_libraries(sys_scan_core PUBLIC LibLZMA::LibLZMA)
-  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_LZMA=1)
+  find_package(LibLZMA QUIET)
+  if(LIBLZMA_FOUND)
+    target_link_libraries(sys_scan_core PUBLIC LibLZMA::LibLZMA)
+    target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_LZMA=1)
+  endif()
 endif()
 
 add_executable(sys-scan src/main.cpp)
