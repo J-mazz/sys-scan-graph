@@ -29,6 +29,7 @@ struct Rule {
     std::string legacy_field; 
     std::string legacy_contains; 
     std::string legacy_equals;
+    std::string legacy_regex;
 };
 
 // Structured warning emitted during rule loading. Replaces legacy flat string while

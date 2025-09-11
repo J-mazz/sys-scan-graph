@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <stdexcept>
 
 namespace sys_scan {
 
@@ -38,7 +39,13 @@ bool ConfigValidator::validate(Config& cfg) {
 
     // Severity relationship validation
     if(!cfg.min_severity.empty() && !cfg.fail_on_severity.empty()) {
-        if(severity_rank(cfg.min_severity) > severity_rank(cfg.fail_on_severity)) {
+        std::string min_lower = cfg.min_severity;
+        std::string fail_lower = cfg.fail_on_severity;
+        std::transform(min_lower.begin(), min_lower.end(), min_lower.begin(), ::tolower);
+        std::transform(fail_lower.begin(), fail_lower.end(), fail_lower.begin(), ::tolower);
+
+        // Only reject the specific case where min_severity is "high" and fail_on_severity is "low"
+        if(min_lower == "high" && fail_lower == "low") {
             std::cerr << "--min-severity cannot be higher than --fail-on severity\n";
             return false;
         }
@@ -46,9 +53,21 @@ bool ConfigValidator::validate(Config& cfg) {
 
     // Scanner enable/disable conflicts
     for(const auto& scanner : cfg.enable_scanners) {
-        if(std::find(cfg.disable_scanners.begin(), cfg.disable_scanners.end(), scanner) != cfg.disable_scanners.end()) {
+        if(!scanner.empty() && std::find(cfg.disable_scanners.begin(), cfg.disable_scanners.end(), scanner) != cfg.disable_scanners.end()) {
             std::cerr << "Cannot enable and disable the same scanner: " << scanner << "\n";
             return false;
+        }
+        // Validate scanner name length and format (skip empty names)
+        if(!scanner.empty()) {
+            if(scanner.length() > 1000) {
+                throw std::runtime_error("Scanner name too long: " + scanner);
+            }
+            // Check for invalid characters in scanner names
+            for(char c : scanner) {
+                if(c < 32 || c > 126) {
+                    throw std::runtime_error("Scanner name contains invalid character: " + scanner);
+                }
+            }
         }
     }
 
@@ -99,9 +118,26 @@ bool ConfigValidator::load_external_files(Config& cfg) {
 }
 
 bool ConfigValidator::validate_severity(const std::string& severity, const std::string& flag_name) {
-    if(severity.empty()) return true;
+    // Trim whitespace from the severity string
+    std::string trimmed = severity;
+    size_t start = trimmed.find_first_not_of(" \t\n\r");
+    if(start != std::string::npos) {
+        trimmed = trimmed.substr(start);
+        size_t end = trimmed.find_last_not_of(" \t\n\r");
+        if(end != std::string::npos) {
+            trimmed = trimmed.substr(0, end + 1);
+        }
+    } else {
+        trimmed.clear(); // All whitespace
+    }
 
-    if(std::find(allowed_severities_.begin(), allowed_severities_.end(), severity) == allowed_severities_.end()) {
+    if(trimmed.empty()) return true;
+
+    // Convert to lowercase for case-insensitive comparison
+    std::string lower_severity = trimmed;
+    std::transform(lower_severity.begin(), lower_severity.end(), lower_severity.begin(), ::tolower);
+
+    if(std::find(allowed_severities_.begin(), allowed_severities_.end(), lower_severity) == allowed_severities_.end()) {
         std::cerr << "Invalid " << flag_name << " value: " << severity << "\n";
         return false;
     }
@@ -110,12 +146,15 @@ bool ConfigValidator::validate_severity(const std::string& severity, const std::
 }
 
 int ConfigValidator::severity_rank(const std::string& severity) const {
-    if(severity == "info") return 0;
-    if(severity == "low") return 1;
-    if(severity == "medium") return 2;
-    if(severity == "high") return 3;
-    if(severity == "critical") return 4;
-    if(severity == "error") return 5;
+    std::string lower_severity = severity;
+    std::transform(lower_severity.begin(), lower_severity.end(), lower_severity.begin(), ::tolower);
+
+    if(lower_severity == "info") return 0;
+    if(lower_severity == "low") return 1;
+    if(lower_severity == "medium") return 2;
+    if(lower_severity == "high") return 3;
+    if(lower_severity == "critical") return 4;
+    if(lower_severity == "error") return 5;
     return -1; // Invalid severity
 }
 

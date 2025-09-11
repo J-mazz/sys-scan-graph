@@ -21,13 +21,13 @@ protected:
         invalid_rule_dir = temp_dir / "invalid_rules";
         std::filesystem::create_directories(invalid_rule_dir);
 
-        // Create a valid rule file
+        // Create a valid rule file (using custom format)
         auto valid_rule_file = valid_rule_dir / "test.rule";
         std::ofstream rule_file(valid_rule_file);
         rule_file << "# Valid test rule\n";
-        rule_file << "rule test_rule {\n";
-        rule_file << "  condition: true\n";
-        rule_file << "}\n";
+        rule_file << "id=test_rule\n";
+        rule_file << "field=description\n";
+        rule_file << "contains=test_pattern\n";
         rule_file.close();
 
         // Create an invalid rule file
@@ -134,9 +134,9 @@ TEST_F(RuleEngineInitializerTest, ValidateRuleDirectorySecurity) {
     auto security_rule_file = security_test_dir / "security.rule";
     std::ofstream security_file(security_rule_file);
     security_file << "# Security test rule\n";
-    security_file << "rule security_rule {\n";
-    security_file << "  condition: true\n";
-    security_file << "}\n";
+    security_file << "id=security_rule\n";
+    security_file << "field=description\n";
+    security_file << "contains=security_pattern\n";
     security_file.close();
 
     Config cfg;
@@ -162,9 +162,9 @@ TEST_F(RuleEngineInitializerTest, ValidateRuleFilePermissions) {
     auto perm_rule_file = file_perm_test_dir / "perm_test.rule";
     std::ofstream perm_file(perm_rule_file);
     perm_file << "# Permission test rule\n";
-    perm_file << "rule perm_rule {\n";
-    perm_file << "  condition: true\n";
-    perm_file << "}\n";
+    perm_file << "id=perm_rule\n";
+    perm_file << "field=description\n";
+    perm_file << "contains=permission_pattern\n";
     perm_file.close();
 
     Config cfg;
@@ -185,17 +185,17 @@ TEST_F(RuleEngineInitializerTest, InitializeMultipleRuleFiles) {
     auto rule_file2 = valid_rule_dir / "test2.rule";
     std::ofstream rule2(rule_file2);
     rule2 << "# Second test rule\n";
-    rule2 << "rule test_rule2 {\n";
-    rule2 << "  condition: false\n";
-    rule2 << "}\n";
+    rule2 << "id=test_rule2\n";
+    rule2 << "field=description\n";
+    rule2 << "contains=test_pattern2\n";
     rule2.close();
 
     auto rule_file3 = valid_rule_dir / "test3.rule";
     std::ofstream rule3(rule_file3);
     rule3 << "# Third test rule\n";
-    rule3 << "rule test_rule3 {\n";
-    rule3 << "  condition: true\n";
-    rule3 << "}\n";
+    rule3 << "id=test_rule3\n";
+    rule3 << "field=description\n";
+    rule3 << "contains=test_pattern3\n";
     rule3.close();
 
     Config cfg;
@@ -212,12 +212,9 @@ TEST_F(RuleEngineInitializerTest, InitializeDifferentFileExtensions) {
     auto yara_file = valid_rule_dir / "test.yar";
     std::ofstream yara(yara_file);
     yara << "# YARA rule\n";
-    yara << "rule test_yara {\n";
-    yara << "  strings:\n";
-    yara << "    $test = \"test\"\n";
-    yara << "  condition:\n";
-    yara << "    $test\n";
-    yara << "}\n";
+    yara << "id=test_yara\n";
+    yara << "field=description\n";
+    yara << "contains=yara_pattern\n";
     yara.close();
 
     Config cfg;
@@ -238,9 +235,9 @@ TEST_F(RuleEngineInitializerTest, InitializeRuleDirectoryWithSubdirs) {
     auto base_rule = subdir_test_dir / "base.rule";
     std::ofstream base_file(base_rule);
     base_file << "# Base rule\n";
-    base_file << "rule base_rule {\n";
-    base_file << "  condition: true\n";
-    base_file << "}\n";
+    base_file << "id=base_rule\n";
+    base_file << "field=description\n";
+    base_file << "contains=base_pattern\n";
     base_file.close();
 
     // Create subdirectory with rules
@@ -250,9 +247,9 @@ TEST_F(RuleEngineInitializerTest, InitializeRuleDirectoryWithSubdirs) {
     auto sub_rule = subdir / "sub.rule";
     std::ofstream sub_file(sub_rule);
     sub_file << "# Rule in subdirectory\n";
-    sub_file << "rule sub_rule {\n";
-    sub_file << "  condition: true\n";
-    sub_file << "}\n";
+    sub_file << "id=sub_rule\n";
+    sub_file << "field=description\n";
+    sub_file << "contains=sub_pattern\n";
     sub_file.close();
 
     Config cfg;
@@ -312,10 +309,9 @@ TEST_F(RuleEngineInitializerTest, ParseRuleFileEdgeCases) {
     std::ofstream edge_file(edge_case_file);
     edge_file << "# Rule with empty lines\n";
     edge_file << "\n";
-    edge_file << "rule edge_case {\n";
-    edge_file << "  \n";  // Empty line with spaces
-    edge_file << "  condition: true\n";
-    edge_file << "}\n";
+    edge_file << "id=edge_case\n";
+    edge_file << "field=description\n";
+    edge_file << "contains=edge_pattern\n";
     edge_file << "\n";  // Trailing empty line
     edge_file.close();
 
@@ -337,9 +333,9 @@ TEST_F(RuleEngineInitializerTest, TestRuleDirectoryAccess) {
     auto access_rule_file = access_test_dir / "access.rule";
     std::ofstream access_file(access_rule_file);
     access_file << "# Access test rule\n";
-    access_file << "rule access_rule {\n";
-    access_file << "  condition: true\n";
-    access_file << "}\n";
+    access_file << "id=access_rule\n";
+    access_file << "field=description\n";
+    access_file << "contains=access_pattern\n";
     access_file.close();
 
     Config cfg;

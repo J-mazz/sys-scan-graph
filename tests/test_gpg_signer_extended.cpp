@@ -29,6 +29,7 @@ protected:
 // Test signing with very large file
 TEST_F(GPGSignerExtendedTest, SignLargeFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a very large test file (10MB)
@@ -48,6 +49,7 @@ TEST_F(GPGSignerExtendedTest, SignLargeFile) {
 // Test signing with empty file
 TEST_F(GPGSignerExtendedTest, SignEmptyFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create an empty test file
@@ -63,6 +65,7 @@ TEST_F(GPGSignerExtendedTest, SignEmptyFile) {
 // Test signing with special characters in file content
 TEST_F(GPGSignerExtendedTest, SignFileWithSpecialCharacters) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with special characters
@@ -82,6 +85,7 @@ TEST_F(GPGSignerExtendedTest, SignFileWithSpecialCharacters) {
 // Test signing with binary file
 TEST_F(GPGSignerExtendedTest, SignBinaryFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a binary test file with all possible byte values
@@ -103,6 +107,7 @@ TEST_F(GPGSignerExtendedTest, SignBinaryFile) {
 // Test signing with very long key ID
 TEST_F(GPGSignerExtendedTest, SignWithVeryLongKeyId) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = std::string(1000, 'a');  // Very long key ID
 
     // Create a test file
@@ -136,6 +141,7 @@ TEST_F(GPGSignerExtendedTest, SignWithEmptyKeyId) {
 // Test signing with special characters in key ID
 TEST_F(GPGSignerExtendedTest, SignWithSpecialCharactersInKeyId) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key_with_special_chars!@#$%^&*()";  // Special chars in key ID
 
     // Create a test file
@@ -152,6 +158,7 @@ TEST_F(GPGSignerExtendedTest, SignWithSpecialCharactersInKeyId) {
 // Test signing with Unicode characters in file
 TEST_F(GPGSignerExtendedTest, SignUnicodeFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with Unicode content
@@ -169,6 +176,7 @@ TEST_F(GPGSignerExtendedTest, SignUnicodeFile) {
 // Test signing with null bytes in file
 TEST_F(GPGSignerExtendedTest, SignFileWithNullBytes) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with null bytes
@@ -186,6 +194,7 @@ TEST_F(GPGSignerExtendedTest, SignFileWithNullBytes) {
 // Test signing with file containing only whitespace
 TEST_F(GPGSignerExtendedTest, SignWhitespaceOnlyFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with only whitespace
@@ -202,6 +211,7 @@ TEST_F(GPGSignerExtendedTest, SignWhitespaceOnlyFile) {
 // Test signing with file containing only control characters
 TEST_F(GPGSignerExtendedTest, SignControlCharactersOnlyFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with only control characters
@@ -222,6 +232,7 @@ TEST_F(GPGSignerExtendedTest, SignControlCharactersOnlyFile) {
 // Test signing with extremely large file (100MB+)
 TEST_F(GPGSignerExtendedTest, SignExtremelyLargeFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create extremely large file (100MB)
@@ -239,6 +250,7 @@ TEST_F(GPGSignerExtendedTest, SignExtremelyLargeFile) {
 // Test signing with file containing GPG-like commands
 TEST_F(GPGSignerExtendedTest, SignFileLookingLikeGPGCommands) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with GPG-like content
@@ -255,6 +267,7 @@ TEST_F(GPGSignerExtendedTest, SignFileLookingLikeGPGCommands) {
 // Test signing with file containing path separators
 TEST_F(GPGSignerExtendedTest, SignFileWithPathSeparators) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with path-like content
@@ -271,6 +284,7 @@ TEST_F(GPGSignerExtendedTest, SignFileWithPathSeparators) {
 // Test signing with file containing shell metacharacters
 TEST_F(GPGSignerExtendedTest, SignFileWithShellMetacharacters) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with shell metacharacters
@@ -287,6 +301,7 @@ TEST_F(GPGSignerExtendedTest, SignFileWithShellMetacharacters) {
 // Test signing with XML-like content
 TEST_F(GPGSignerExtendedTest, SignXMLLikeFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with XML-like content
@@ -303,6 +318,7 @@ TEST_F(GPGSignerExtendedTest, SignXMLLikeFile) {
 // Test signing with JSON-like content
 TEST_F(GPGSignerExtendedTest, SignJSONLikeFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with JSON-like content
@@ -319,6 +335,7 @@ TEST_F(GPGSignerExtendedTest, SignJSONLikeFile) {
 // Test signing with base64-like content
 TEST_F(GPGSignerExtendedTest, SignBase64LikeFile) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with base64-like content
@@ -335,6 +352,7 @@ TEST_F(GPGSignerExtendedTest, SignBase64LikeFile) {
 // Test signing with very long lines
 TEST_F(GPGSignerExtendedTest, SignFileWithVeryLongLines) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with very long lines
@@ -353,6 +371,7 @@ TEST_F(GPGSignerExtendedTest, SignFileWithVeryLongLines) {
 // Test signing with many short lines
 TEST_F(GPGSignerExtendedTest, SignFileWithManyShortLines) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with many short lines
@@ -371,6 +390,7 @@ TEST_F(GPGSignerExtendedTest, SignFileWithManyShortLines) {
 // Test signing with mixed encodings
 TEST_F(GPGSignerExtendedTest, SignFileWithMixedEncodings) {
     Config cfg;
+    cfg.sign_gpg = true;
     cfg.sign_gpg_key = "test_key";
 
     // Create a file with mixed encodings

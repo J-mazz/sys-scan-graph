@@ -351,29 +351,91 @@ namespace sys_scan
         return info;
     }
 
+    // Runtime eBPF feature detection
+    bool EbpfScanner::is_ebpf_available() const
+    {
+#ifndef SYS_SCAN_HAVE_EBPF
+        // eBPF not compiled in at all
+        return false;
+#else
+        // Check if bpftool is available
+        if (system("which bpftool > /dev/null 2>&1") != 0) {
+            Logger::instance().debug("bpftool not found in PATH");
+            return false;
+        }
+
+        // Check kernel version for eBPF support (minimum 4.4)
+        std::ifstream version_file("/proc/version");
+        if (version_file.is_open()) {
+            std::string version_line;
+            if (std::getline(version_file, version_line)) {
+                // Look for kernel version pattern like "Linux version 5.4.0"
+                size_t pos = version_line.find("Linux version ");
+                if (pos != std::string::npos) {
+                    std::string version_str = version_line.substr(pos + 14);
+                    // Extract major.minor version
+                    size_t dot_pos = version_str.find('.');
+                    if (dot_pos != std::string::npos) {
+                        size_t second_dot = version_str.find('.', dot_pos + 1);
+                        std::string major_minor = version_str.substr(0, second_dot);
+                        try {
+                            float kernel_version = std::stof(major_minor);
+                            if (kernel_version < 4.4f) {
+                                Logger::instance().debug("Kernel version " + major_minor + " too old for eBPF");
+                                return false;
+                            }
+                        } catch (const std::exception&) {
+                            Logger::instance().debug("Could not parse kernel version: " + major_minor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for BTF support
+        if (!std::filesystem::exists("/sys/kernel/btf/vmlinux")) {
+            Logger::instance().debug("Kernel BTF not available - CO-RE may not work");
+            // Don't return false here as some eBPF programs work without BTF
+        }
+
+        // Try to load a simple eBPF program to test functionality
+        SkelPtr test_skel{process_exec_bpf__open()};
+        if (!test_skel) {
+            Logger::instance().debug("Failed to open eBPF skeleton - eBPF may not be available");
+            return false;
+        }
+
+        // Try to load the program
+        if (process_exec_bpf__load(test_skel.get()) != 0) {
+            Logger::instance().debug("Failed to load eBPF program - eBPF may not be available");
+            return false;
+        }
+
+        Logger::instance().debug("eBPF runtime check passed");
+        return true;
+#endif
+    }
     void EbpfScanner::scan(ScanContext& context)
     {
         const auto& cfg = context.config;
         int duration = cfg.ioc_exec_trace_seconds > 0 ? cfg.ioc_exec_trace_seconds : 3;
 
-        // Check if eBPF is available
-        bool ebpf_available = false;
-#ifdef SYS_SCAN_HAVE_EBPF
-        ebpf_available = true;
-#endif
+        // Check if eBPF is available at runtime
+        bool ebpf_available = is_ebpf_available();
 
         if (!ebpf_available) {
             // eBPF not available - perform alternative detection methods
-            Logger::instance().info("eBPF not available, performing alternative exec tracing");
+            Logger::instance().info("eBPF not available at runtime, performing alternative exec tracing");
 
             // Create finding about eBPF unavailability
             Finding f_ebpf;
             f_ebpf.id = "ebpf:disabled";
-            f_ebpf.title = "eBPF support not available";
+            f_ebpf.title = "eBPF support not available at runtime";
             f_ebpf.severity = Severity::Info;
-            f_ebpf.description = "eBPF tools not installed or incompatible kernel. Using alternative detection methods.";
+            f_ebpf.description = "eBPF tools not installed, incompatible kernel, or missing capabilities. Using alternative detection methods.";
             f_ebpf.metadata["alternative_detection"] = "true";
             f_ebpf.metadata["source"] = "ebpf_fallback";
+            f_ebpf.metadata["detection_method"] = "runtime_check";
             context.report.add_finding(name(), std::move(f_ebpf));
 
             // Perform alternative exec detection using /proc filesystem

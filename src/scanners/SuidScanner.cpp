@@ -16,6 +16,7 @@ namespace sys_scan {
 // Ultra-lean constants (reduced to prevent stack overflow)
 #define MAX_SUID_FILES_LEAN 2000
 #define MAX_PATH_LEN_LEAN 256
+#define MAX_FILES_PER_DIR_LEAN 3000
 #define MAX_EXPECTED_SUID_LEAN 50
 #define MAX_DIRS_TO_PROCESS_LEAN 500
 
@@ -98,7 +99,7 @@ static int collect_suid_files_batch(const char* root_path, SuidFileLean* suid_fi
         const char* current_dir = dir_stack->dirs[dir_stack->count];
 
         // List files in current directory
-        int file_count = list_files_batch(current_dir, filenames, MAX_PATH_LEN_LEAN);
+        int file_count = list_files_batch(current_dir, filenames, MAX_FILES_PER_DIR_LEAN);
         if (file_count == 0) continue;
 
         // Process each file
@@ -229,7 +230,7 @@ void SuidScanner::scan(ScanContext& context) {
     // Use heap allocation to avoid stack overflow
     SuidFileLean* suid_files = new (std::nothrow) SuidFileLean[MAX_SUID_FILES_LEAN];
     DirStack* dir_stack = new (std::nothrow) DirStack[1];
-    char (*filenames)[MAX_PATH_LEN_LEAN] = new (std::nothrow) char[MAX_PATH_LEN_LEAN][MAX_PATH_LEN_LEAN];
+    char (*filenames)[MAX_PATH_LEN_LEAN] = new (std::nothrow) char[MAX_FILES_PER_DIR_LEAN][MAX_PATH_LEN_LEAN];
 
     if (!suid_files || !dir_stack || !filenames) {
         // Memory allocation failed
@@ -242,7 +243,7 @@ void SuidScanner::scan(ScanContext& context) {
     // Initialize
     memset(suid_files, 0, sizeof(SuidFileLean) * MAX_SUID_FILES_LEAN);
     memset(dir_stack, 0, sizeof(DirStack));
-    memset(filenames, 0, sizeof(char) * MAX_PATH_LEN_LEAN * MAX_PATH_LEN_LEAN);
+    memset(filenames, 0, sizeof(char) * MAX_FILES_PER_DIR_LEAN * MAX_PATH_LEN_LEAN);
 
     int total_suid_count = 0;
 

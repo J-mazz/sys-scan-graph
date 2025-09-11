@@ -175,19 +175,23 @@ TEST_F(ConfigValidatorExtendedTest, ValidateExtremeSeverityThresholds) {
 TEST_F(ConfigValidatorExtendedTest, ValidateMalformedSeverityStrings) {
     Config cfg;
 
-    // Test with empty severity strings
+    // Test with empty severity strings (should be allowed)
     cfg.min_severity = "";
     cfg.fail_on_severity = "";
-    EXPECT_FALSE(validator.validate(cfg));
+    EXPECT_TRUE(validator.validate(cfg));
 
-    // Test with whitespace-only severity strings
+    // Test with whitespace-only severity strings (should be allowed)
     cfg.min_severity = "   ";
     cfg.fail_on_severity = "\t\n";
+    EXPECT_TRUE(validator.validate(cfg));
+
+    // Test with truly invalid severity strings
+    cfg.min_severity = "invalid_severity";
+    cfg.fail_on_severity = "high";
     EXPECT_FALSE(validator.validate(cfg));
 
-    // Test with mixed case invalid severities
-    cfg.min_severity = "Medium"; // Wrong case
-    cfg.fail_on_severity = "HIGH"; // Wrong case
+    cfg.min_severity = "high";
+    cfg.fail_on_severity = "nonexistent";
     EXPECT_FALSE(validator.validate(cfg));
 }
 

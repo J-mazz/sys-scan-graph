@@ -35,8 +35,12 @@ void log_capabilities(const std::string& context) {
 
 void drop_capabilities(bool keep_cap_dac){
 #ifdef SYS_SCAN_HAVE_LIBCAP
-    Logger::instance().info("Dropping capabilities (keep_cap_dac=" + std::string(keep_cap_dac ? "true" : "false") + ")");
-    log_capabilities("before drop");
+    // Don't log if seccomp has been applied, as logging may use forbidden syscalls
+    static bool seccomp_applied = false;
+    if (!seccomp_applied) {
+        Logger::instance().info("Dropping capabilities (keep_cap_dac=" + std::string(keep_cap_dac ? "true" : "false") + ")");
+        log_capabilities("before drop");
+    }
     
     cap_t caps = cap_get_proc(); if(!caps) return; // best-effort
     cap_clear(caps);
@@ -47,11 +51,18 @@ void drop_capabilities(bool keep_cap_dac){
         cap_set_flag(caps, CAP_INHERITABLE, 1, &v, CAP_SET);
     }
     if(cap_set_proc(caps)!=0){ 
-        Logger::instance().error("cap_set_proc failed");
+        if (!seccomp_applied) {
+            Logger::instance().error("cap_set_proc failed");
+        }
     } else {
-        log_capabilities("after drop");
+        if (!seccomp_applied) {
+            log_capabilities("after drop");
+        }
     }
     cap_free(caps);
+    
+    // Check if seccomp has been applied (this is a heuristic)
+    seccomp_applied = seccomp_applied || (apply_seccomp_profile() == false); // If seccomp fails, it might already be applied
 #else
     Logger::instance().info("Capability dropping not available (libcap not compiled in)");
 #endif
@@ -59,6 +70,12 @@ void drop_capabilities(bool keep_cap_dac){
 
 bool apply_seccomp_profile(){
 #ifdef SYS_SCAN_HAVE_SECCOMP
+    static bool seccomp_applied = false;
+    if (seccomp_applied) {
+        // Seccomp has already been applied to this process
+        return true;
+    }
+    
     Logger::instance().info("Applying seccomp profile");
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_KILL); if(!ctx) {
         Logger::instance().error("Failed to initialize seccomp context");
@@ -69,7 +86,8 @@ bool apply_seccomp_profile(){
                     SCMP_SYS(lseek), SCMP_SYS(mmap), SCMP_SYS(mprotect), SCMP_SYS(munmap), SCMP_SYS(brk), SCMP_SYS(rt_sigaction),
                     SCMP_SYS(rt_sigprocmask), SCMP_SYS(getpid), SCMP_SYS(gettid), SCMP_SYS(clock_gettime), SCMP_SYS(nanosleep),
                     SCMP_SYS(getrandom), SCMP_SYS(ioctl), SCMP_SYS(getdents64), SCMP_SYS(prlimit64), SCMP_SYS(statx), SCMP_SYS(access),
-                    SCMP_SYS(readlink), SCMP_SYS(readlinkat), SCMP_SYS(getuid), SCMP_SYS(geteuid), SCMP_SYS(getgid), SCMP_SYS(getegid) };
+                    SCMP_SYS(readlink), SCMP_SYS(readlinkat), SCMP_SYS(getuid), SCMP_SYS(geteuid), SCMP_SYS(getgid), SCMP_SYS(getegid),
+                    SCMP_SYS(exit), SCMP_SYS(exit_group) };
     for(int c: calls){ if(!allow(c)){ 
         Logger::instance().error("Failed to allow syscall " + std::to_string(c) + " in seccomp");
         seccomp_release(ctx); 
@@ -81,7 +99,8 @@ bool apply_seccomp_profile(){
         return false; 
     }
     seccomp_release(ctx); 
-    Logger::instance().info("Seccomp profile applied successfully");
+    seccomp_applied = true;
+    // Don't log success after seccomp is applied - logging might use forbidden syscalls
     return true;
 #else
     Logger::instance().info("Seccomp not available (not compiled in)");

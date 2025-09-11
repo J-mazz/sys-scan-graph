@@ -31,7 +31,7 @@ except Exception:  # Fallback lightweight alias
 
 # Core provider & helper imports (existing project modules)
 from .llm_provider import get_llm_provider  # LLM provider abstraction
-from .graph_nodes import _findings_from_graph, _append_warning  # Reuse existing parsing & warning helpers
+from .legacy.graph_nodes import _findings_from_graph, _append_warning  # Reuse existing parsing & warning helpers
 from .pipeline import augment as _augment  # Core augmentation stage
 from .knowledge import apply_external_knowledge  # External knowledge enrichment
 from .reduction import reduce_all  # Reduction / summarization helpers

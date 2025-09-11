@@ -19,6 +19,9 @@ public:
     void scan(ScanContext& context) override;
 
 private:
+    // Runtime eBPF feature detection
+    bool is_ebpf_available() const;
+
     // Alternative detection structures
     struct ProcessInfo {
         pid_t pid;

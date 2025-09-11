@@ -11,38 +11,60 @@ option(SYS_SCAN_REPRO_BUILD "Enable reproducible build settings (avoid embedding
 option(ENABLE_SECCOMP "Enable optional seccomp-bpf sandbox (requires libseccomp)" ON)
 option(ENABLE_CAPABILITIES "Enable Linux capabilities privilege dropping (libcap)" ON)
 option(BUILD_FUZZERS "Build libFuzzer harnesses (Clang only)" OFF)
-option(WITH_EBPF "Enable eBPF-based scanners (requires bpftool and BTF)" ON)
-option(WITH_EBPF_STRICT "Require eBPF skeleton generation (fail if bpftool not found or incompatible)" ON)
+option(WITH_EBPF "Enable eBPF-based scanners (requires bpftool and BTF)" OFF)
+option(WITH_EBPF_STRICT "Require eBPF skeleton generation (fail if bpftool not found or incompatible)" OFF)
 
 set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
 
-# eBPF support
+# eBPF support - completely optional
 if(WITH_EBPF)
+  # Only do eBPF detection if explicitly enabled
   find_program(BPFTOOL_EXECUTABLE bpftool)
   if(NOT BPFTOOL_EXECUTABLE)
-    if(WITH_EBPF_STRICT)
-      message(FATAL_ERROR "bpftool not found in PATH, required for WITH_EBPF_STRICT")
-    else()
-      message(WARNING "bpftool not found in PATH, eBPF scanners will be disabled")
-      set(WITH_EBPF OFF)
-    endif()
+    message(FATAL_ERROR "bpftool not found in PATH. eBPF requires bpftool to be installed. Install with: sudo apt install linux-tools-generic")
   endif()
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(LIBBPF REQUIRED libbpf)
+
+  find_program(CLANG_EXECUTABLE clang)
+  if(NOT CLANG_EXECUTABLE)
+    message(FATAL_ERROR "clang not found in PATH. eBPF requires clang for BPF compilation. Install with: sudo apt install clang")
+  endif()
+
+  # Find libbpf
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(LIBBPF REQUIRED libbpf)
+  else()
+    find_library(LIBBPF_LIBRARIES REQUIRED NAMES bpf libbpf)
+  endif()
+
+  # Generate eBPF skeleton
+  set(BPF_SRC ${CMAKE_SOURCE_DIR}/src/ebpf/process_exec.bpf.c)
+  set(BPF_OBJ ${CMAKE_BINARY_DIR}/generated/process_exec.bpf.o)
+  set(BPF_SKEL ${CMAKE_BINARY_DIR}/generated/process_exec.skel.h)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
+
+  add_custom_command(
+    OUTPUT ${BPF_OBJ}
+    COMMAND ${CLANG_EXECUTABLE} -O2 -g -Wall -Werror -target bpf -c ${BPF_SRC} -o ${BPF_OBJ}
+    DEPENDS ${BPF_SRC}
+    COMMENT "Compiling eBPF object"
+  )
+  add_custom_command(
+    OUTPUT ${BPF_SKEL}
+    COMMAND ${BPFTOOL_EXECUTABLE} gen skeleton ${BPF_OBJ} > ${BPF_SKEL}
+    DEPENDS ${BPF_OBJ}
+    COMMENT "Generating eBPF skeleton"
+  )
+  add_custom_target(ebpf_skeleton DEPENDS ${BPF_SKEL})
 endif()
 
-if(SYS_SCAN_REPRO_BUILD)
-  # Common reproducible build suggestions (user can still override externally)
-  add_compile_definitions(SYS_SCAN_REPRO_BUILD=1)
-  # Avoid __DATE__/__TIME__ if used anywhere
-  add_compile_definitions(__DATE__="1970-01-01" __TIME__="00:00:00")
-endif()
-
-include(CheckIncludeFile)
-include(CheckLibraryExists)
-
-if(ENABLE_OPENSSL)
-  find_package(OpenSSL QUIET)
+if(WITH_EBPF AND BPFTOOL_EXECUTABLE AND LIBBPF_FOUND AND CLANG_EXECUTABLE)
+  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_EBPF=1)
+  target_link_libraries(sys_scan_core PUBLIC ${LIBBPF_LIBRARIES})
+  target_include_directories(sys_scan_core PUBLIC ${LIBBPF_INCLUDE_DIRS})
+  message(STATUS "eBPF support enabled with full toolchain")
+elseif(WITH_EBPF)
+  message(STATUS "eBPF support enabled in fallback mode (limited functionality)")
 endif()
 
 add_library(sys_scan_core
@@ -83,49 +105,8 @@ add_library(sys_scan_core
   src/scanners/EbpfScanner.cpp
 )
 
-if(WITH_EBPF)
+if(WITH_EBPF AND TARGET ebpf_skeleton)
   add_dependencies(sys_scan_core ebpf_skeleton)
-endif()
-
-#-------------------- Build provenance (git commit, compiler, flags) --------------------
-find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
-  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
-                  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                  OUTPUT_VARIABLE GIT_COMMIT
-                  OUTPUT_STRIP_TRAILING_WHITESPACE)
-else()
-  set(GIT_COMMIT "unknown")
-endif()
-
-# Merge relevant flags into a single string (escape quotes)
-set(ALL_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}" )
-string(REPLACE "\n" " " ALL_CXX_FLAGS "${ALL_CXX_FLAGS}")
-string(REPLACE "\"" "'" ALL_CXX_FLAGS "${ALL_CXX_FLAGS}")
-
-configure_file(${CMAKE_SOURCE_DIR}/BuildInfo.h.in ${CMAKE_BINARY_DIR}/generated/BuildInfo.h @ONLY)
-target_include_directories(sys_scan_core PUBLIC ${CMAKE_BINARY_DIR}/generated)
-
-# eBPF object and skeleton generation
-if(WITH_EBPF)
-  set(BPF_SRC ${CMAKE_SOURCE_DIR}/src/ebpf/process_exec.bpf.c)
-  set(BPF_OBJ ${CMAKE_BINARY_DIR}/generated/process_exec.bpf.o)
-  set(BPF_SKEL ${CMAKE_BINARY_DIR}/generated/process_exec.skel.h)
-  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
-  add_custom_command(
-    OUTPUT ${BPF_OBJ}
-    COMMAND clang -O2 -g -Wall -Werror -target bpf -c ${BPF_SRC} -o ${BPF_OBJ}
-    DEPENDS ${BPF_SRC}
-    COMMENT "Compiling eBPF object"
-  )
-  add_custom_command(
-    OUTPUT ${BPF_SKEL}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
-    COMMAND ${BPFTOOL_EXECUTABLE} gen skeleton ${BPF_OBJ} > ${BPF_SKEL}
-    DEPENDS ${BPF_OBJ}
-    COMMENT "Generating eBPF skeleton"
-  )
-  add_custom_target(ebpf_skeleton DEPENDS ${BPF_SKEL})
 endif()
 
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party ${CMAKE_BINARY_DIR}/generated)
@@ -153,14 +134,6 @@ if(OpenSSL_FOUND)
   target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_OPENSSL=1)
   target_link_libraries(sys_scan_core PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
-
-if(WITH_EBPF)
-  target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_EBPF=1)
-  target_link_libraries(sys_scan_core PUBLIC ${LIBBPF_LIBRARIES})
-  target_include_directories(sys_scan_core PUBLIC ${LIBBPF_INCLUDE_DIRS})
-endif()
-
-# libseccomp (sandbox)
 if(ENABLE_SECCOMP)
   find_library(LIBSECCOMP_LIB seccomp)
   if(NOT LIBSECCOMP_LIB)
@@ -357,6 +330,44 @@ if(BUILD_TESTS)
   add_executable(test_comprehensive_system tests/test_comprehensive_system.cpp)
   target_link_libraries(test_comprehensive_system PRIVATE sys_scan_core GTest::gtest_main)
   add_test(NAME comprehensive_system COMMAND test_comprehensive_system)
+  
+  # New comprehensive test files for core components
+  add_executable(test_compliance tests/test_compliance.cpp)
+  target_link_libraries(test_compliance PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME compliance COMMAND test_compliance)
+  
+  add_executable(test_json_writer tests/test_json_writer.cpp)
+  target_link_libraries(test_json_writer PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  target_include_directories(test_json_writer PRIVATE ${CMAKE_BINARY_DIR}/third_party)
+  add_test(NAME json_writer COMMAND test_json_writer)
+  
+  add_executable(test_jsonutil tests/test_jsonutil.cpp)
+  target_link_libraries(test_jsonutil PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME jsonutil COMMAND test_jsonutil)
+  
+  add_executable(test_logging tests/test_logging.cpp)
+  target_link_libraries(test_logging PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME logging COMMAND test_logging)
+  
+  add_executable(test_privilege tests/test_privilege.cpp)
+  target_link_libraries(test_privilege PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME privilege COMMAND test_privilege)
+  
+  add_executable(test_utils tests/test_utils.cpp)
+  target_link_libraries(test_utils PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME utils COMMAND test_utils)
+  
+  add_executable(test_scanner tests/test_scanner.cpp)
+  target_link_libraries(test_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME scanner COMMAND test_scanner)
+  
+  add_executable(test_scanner_registry tests/test_scanner_registry.cpp)
+  target_link_libraries(test_scanner_registry PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME scanner_registry COMMAND test_scanner_registry)
+  
+  add_executable(test_rule_engine tests/test_rule_engine.cpp)
+  target_link_libraries(test_rule_engine PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME rule_engine COMMAND test_rule_engine)
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically
