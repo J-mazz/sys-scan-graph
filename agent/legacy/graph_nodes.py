@@ -10,7 +10,7 @@ captures the error as a warning entry and proceeds without aborting the graph.
 from typing import Any, List, Dict
 import tempfile, json
 
-from .graph import GraphState
+from ..graph import GraphState
 from .data_governance import get_data_governor
 from .models import Finding, ScannerResult, Report, Meta, Summary, SummaryExtension, AgentState
 from .knowledge import apply_external_knowledge
@@ -18,8 +18,8 @@ from .pipeline import augment as _augment
 from .reduction import reduce_all
 from .llm_provider import get_llm_provider
 from .rules import Correlator, DEFAULT_RULES
-from .rule_gap_miner import mine_gap_candidates
-from .graph_state import normalize_graph_state
+from ..rule_gap_miner import mine_gap_candidates
+from ..graph_state import normalize_graph_state
 try:  # Optional: message classes for tool planning/integration
     from langchain_core.messages import AIMessage, ToolMessage  # type: ignore
 except Exception:  # pragma: no cover

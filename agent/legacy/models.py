@@ -10,5 +10,8 @@ from ..models import (
     ScannerResult,
     MultiHostCorrelation,
     Correlation,
-    AgentWarning
+    AgentWarning,
+    Meta,
+    Summary,
+    SummaryExtension
 )
