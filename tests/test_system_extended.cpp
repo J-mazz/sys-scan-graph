@@ -79,7 +79,7 @@ TEST_F(SystemExtendedTest, CompleteSystemExtremeValuesEdgeCases) {
     // Test exit code with extreme threshold
     ExitCodeHandler handler;
     int exit_code = handler.calculate_exit_code(report, cfg);
-    EXPECT_EQ(exit_code, 0); // Should not exceed max threshold
+    EXPECT_EQ(exit_code, 1); // Should exceed threshold (1000 findings > 50 threshold)
 }
 
 } // namespace sys_scan

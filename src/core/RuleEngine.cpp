@@ -35,7 +35,7 @@ void RuleEngine::load_dir(const std::string& dir, std::string& warning_out){
 			else if(k=="rule_version") { try { r.version = std::stoi(v); } catch(...) { r.version = 0; } if(r.version!=1) { warn << r.id << ":unsupported_version=" << v << ";"; warnings_.push_back({r.id, "unsupported_version", v}); } }
 			else if(k=="scope") r.scope=v; else if(k=="severity"||k=="severity_override") r.severity_override=v; else if(k=="mitre") r.mitre=v;
 			else if(k=="logic") { if(v=="any"||v=="ANY") r.logic_any=true; }
-			else if(k=="field") r.legacy_field=v; else if(k=="contains") r.legacy_contains=v; else if(k=="equals") r.legacy_equals=v; // legacy single
+			else if(k=="field") r.legacy_field=v; else if(k=="contains") r.legacy_contains=v; else if(k=="equals") r.legacy_equals=v; else if(k=="regex") r.legacy_regex=v; // legacy single
 			else {
 				// conditionN.key
 				auto dot = k.find('.'); if(dot!=std::string::npos){
@@ -55,8 +55,8 @@ void RuleEngine::load_dir(const std::string& dir, std::string& warning_out){
 			for(auto& kv : indexed){ int n=0; try{ n=std::stoi(kv.first);}catch(...){ } tmp.emplace_back(n, kv.second); }
 			std::sort(tmp.begin(), tmp.end(), [](auto&a, auto&b){ return a.first < b.first; });
 			for(auto& pr: tmp){ r.conditions.push_back(std::move(pr.second)); }
-		} else if(!r.legacy_field.empty() || !r.legacy_contains.empty() || !r.legacy_equals.empty()) {
-			RuleCondition rc; rc.field = r.legacy_field; rc.contains = r.legacy_contains; rc.equals = r.legacy_equals; r.conditions.push_back(std::move(rc));
+		} else if(!r.legacy_field.empty() || !r.legacy_contains.empty() || !r.legacy_equals.empty() || !r.legacy_regex.empty()) {
+			RuleCondition rc; rc.field = r.legacy_field; rc.contains = r.legacy_contains; rc.equals = r.legacy_equals; rc.regex = r.legacy_regex; r.conditions.push_back(std::move(rc));
 		}
 		if(r.conditions.empty()) { warn << r.id << ":no_conditions;"; warnings_.push_back({r.id, "no_conditions", ""}); }
 		else {

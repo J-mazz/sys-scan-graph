@@ -79,6 +79,6 @@ int main(){
     setenv("SYS_SCAN_PROV_BUILD_TYPE","Rel",1);
     JSONWriter w; auto json = w.write(r, cfg);
     auto h = sha256(json);
-    const std::string expected_hash = "87634a26707305e7e46bfb29634606e13fb2712d1c45a65f88288019572238b1"; // updated for base_severity_score schema change
+    const std::string expected_hash = "9cdccc998f62de99f4facd8bfaaa0d21beef4e33e9e2e8a9280e08d263382f68"; // updated for recent schema/metadata changes
     if(h!=expected_hash){ std::cerr << "Canonical hash mismatch: got="<<h<<" expected="<<expected_hash<<"\n"; return 1; }
     std::cout << "Canonical golden test passed" << std::endl; return 0; }

@@ -44,7 +44,7 @@ TEST_F(OutputWriterExtendedTest, WriteReportExtremeFindingCounts) {
     result.end_time = std::chrono::system_clock::now();
 
     // Add a large number of findings
-    for (int i = 0; i < 100; ++i) {  // Reduced from 10,000 to 100
+    for (int i = 0; i < 1000; ++i) {  // Reasonable number for testing extreme cases
         result.findings.push_back(Finding{
             "finding_" + std::to_string(i),
             "Finding " + std::to_string(i),
@@ -67,7 +67,7 @@ TEST_F(OutputWriterExtendedTest, WriteReportExtremeFindingCounts) {
 
     auto json = nlohmann::json::parse(content);
     EXPECT_TRUE(json.contains("results"));
-    EXPECT_EQ(json["results"][0]["findings"].size(), 10000);
+    EXPECT_EQ(json["results"][0]["findings"].size(), 1000);
 }
 
 // Test JSON output with very large metadata

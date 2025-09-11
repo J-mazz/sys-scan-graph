@@ -49,14 +49,14 @@ try:  # Optional dependency guard
     from langgraph.graph import StateGraph, END  # type: ignore
     from langgraph.prebuilt import ToolNode  # type: ignore
     # Import legacy baseline nodes for fallback
-    from .graph_nodes import summarize_host_state as legacy_summarize_host_state  # type: ignore
-    from .graph_nodes import should_suggest_rules as legacy_should_suggest_rules  # type: ignore
-    from .graph_nodes import choose_post_summarize as legacy_choose_post_summarize  # type: ignore
-    from .graph_nodes import plan_baseline_queries as legacy_plan_baseline_queries  # type: ignore
-    from .graph_nodes import integrate_baseline_results as legacy_integrate_baseline_results  # type: ignore
-    from .graph_nodes import suggest_rules as legacy_suggest_rules  # type: ignore
+    from .legacy.graph_nodes import summarize_host_state as legacy_summarize_host_state  # type: ignore
+    from .legacy.graph_nodes import should_suggest_rules as legacy_should_suggest_rules  # type: ignore
+    from .legacy.graph_nodes import choose_post_summarize as legacy_choose_post_summarize  # type: ignore
+    from .legacy.graph_nodes import plan_baseline_queries as legacy_plan_baseline_queries  # type: ignore
+    from .legacy.graph_nodes import integrate_baseline_results as legacy_integrate_baseline_results  # type: ignore
+    from .legacy.graph_nodes import suggest_rules as legacy_suggest_rules  # type: ignore
     try:  # correlate may not exist legacy
-        from .graph_nodes import correlate_findings as legacy_correlate_findings  # type: ignore
+        from .legacy.graph_nodes import correlate_findings as legacy_correlate_findings  # type: ignore
     except Exception:  # pragma: no cover
         legacy_correlate_findings = None  # type: ignore
 
@@ -106,7 +106,7 @@ try:  # Optional dependency guard
 
     # Attempt to import performance-optimized nodes
     try:
-        from .graph_nodes_performance import (
+        from .legacy.graph_nodes_performance import (
             enrich_findings_batch,
             correlate_findings_batch,
             summarize_host_state_streaming,
@@ -122,7 +122,7 @@ try:  # Optional dependency guard
 
     # Attempt to import scalability nodes
     try:
-        from .graph_nodes_scalability import (
+        from .legacy.graph_nodes_scalability import (
             parallel_findings_processing,
             horizontal_scaling_router,
             adaptive_batch_sizing,
@@ -138,7 +138,7 @@ try:  # Optional dependency guard
 
     # Attempt to import reliability nodes
     try:
-        from .graph_nodes_reliability import (
+        from .legacy.graph_nodes_reliability import (
             reliable_enrich_findings,
             reliable_correlate_findings,
             reliable_summarize_state,
@@ -241,7 +241,7 @@ def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
             scaffold_metrics_collector = getattr(sm, 'metrics_collector', None)
 
             # Import performance nodes
-            pm = import_module('agent.graph_nodes_performance')
+            pm = import_module('agent.legacy.graph_nodes_performance')
             enrich_findings_batch = getattr(pm, 'enrich_findings_batch', None)
             correlate_findings_batch = getattr(pm, 'correlate_findings_batch', None)
             summarize_host_state_streaming = getattr(pm, 'summarize_host_state_streaming', None)
@@ -249,7 +249,7 @@ def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
             parallel_node_execution = getattr(pm, 'parallel_node_execution', None)
 
             # Import scalability nodes
-            sm = import_module('agent.graph_nodes_scalability')
+            sm = import_module('agent.legacy.graph_nodes_scalability')
             parallel_findings_processing = getattr(sm, 'parallel_findings_processing', None)
             horizontal_scaling_router = getattr(sm, 'horizontal_scaling_router', None)
             adaptive_batch_sizing = getattr(sm, 'adaptive_batch_sizing', None)
@@ -257,7 +257,7 @@ def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
             shutdown_scalability = getattr(sm, 'shutdown_scalability', None)
 
             # Import reliability nodes
-            rm = import_module('agent.graph_nodes_reliability')
+            rm = import_module('agent.legacy.graph_nodes_reliability')
             reliable_enrich_findings = getattr(rm, 'reliable_enrich_findings', None)
             reliable_correlate_findings = getattr(rm, 'reliable_correlate_findings', None)
             reliable_summarize_state = getattr(rm, 'reliable_summarize_state', None)

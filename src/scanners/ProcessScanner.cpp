@@ -293,8 +293,10 @@ void ProcessScanner::scan(ScanContext& context) {
             f.severity = Severity::Info;
             f.description = cmd.empty() ? "(no cmdline)" : cmd;
             // Metadata assignment (lean version)
-            f.metadata["uid"] = std::to_string(uid_val);
-            f.metadata["gid"] = std::to_string(gid_val);
+            if (!context.config.no_user_meta) {
+                f.metadata["uid"] = std::to_string(uid_val);
+                f.metadata["gid"] = std::to_string(gid_val);
+            }
             if (context.config.containers) {
                 // Container lookup (lean version)
                 for (size_t j = 0; j < container_count; ++j) {

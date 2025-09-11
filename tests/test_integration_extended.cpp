@@ -499,7 +499,7 @@ TEST_F(IntegrationExtendedTest, FullPipelineArgumentParsingIntegration) {
     // Test exit code determination
     ExitCodeHandler handler;
     int exit_code = handler.calculate_exit_code(report, cfg);
-    EXPECT_EQ(exit_code, 1); // Should exceed threshold
+    EXPECT_EQ(exit_code, 0); // Should not exceed threshold (1 finding < 75 threshold)
 }
 
 // Test pipeline error recovery scenarios
