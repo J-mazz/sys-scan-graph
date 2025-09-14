@@ -62,6 +62,14 @@ BuildInfo.h
 /*_report.json
 /module_summary*.json
 
+# Coverage reports (HTML and other formats)
+/htmlcov/
+/coverage_report/
+/.coverage
+*.cover
+coverage.xml
+*.lcov
+
 # Logs
 *.log
 

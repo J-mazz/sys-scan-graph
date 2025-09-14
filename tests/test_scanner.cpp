@@ -5,6 +5,7 @@
 #include "../src/core/Config.h"
 #include "../src/core/Report.h"
 #include "../src/core/ScanContext.h"
+#include "../src/scanners/NetworkScanner.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -274,6 +275,12 @@ TEST_F(ScannerRegistryTest, MultipleExceptions) {
         EXPECT_EQ(it->findings[0].id, expected_name + ":error");
         EXPECT_EQ(it->findings[0].description, "Exception " + std::to_string(i));
     }
+}
+
+TEST(NetworkScannerTest, NameAndDescription) {
+    NetworkScanner scanner;
+    EXPECT_EQ(scanner.name(), "network");
+    EXPECT_EQ(scanner.description(), "Enumerate listening TCP/UDP sockets");
 }
 
 int main(int argc, char **argv) {

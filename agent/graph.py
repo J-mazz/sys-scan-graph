@@ -192,26 +192,32 @@ except Exception:  # pragma: no cover - graph optional
 def _select(
     *candidates: Optional[Callable],
 ) -> Optional[Callable]:
-    """Return first callable candidate or None."""
+    """Return first callable synchronous candidate or None. Skips async functions for sync API compatibility."""
+    import inspect
+    
+    # Only return synchronous functions to ensure compatibility with LangGraph sync API
     for c in candidates:
-        if callable(c):  # type: ignore
+        if callable(c) and not inspect.iscoroutinefunction(c):
             return c  # type: ignore
+    
+    # Don't return async functions as they cause "No synchronous function provided" errors
     return None
 
 
-def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
+def build_workflow(enhanced: Optional[bool] = None):  # type: ignore
     """Build and compile a StateGraph workflow.
 
     Parameters:
         enhanced: If True, prefer enhanced scaffold async nodes. If False, use baseline/legacy.
                   If None, derive from env AGENT_GRAPH_MODE ("enhanced" => True).
+                  Defaults to False if enhanced nodes are not available.
     Returns:
         (workflow, app) tuple – uncompiled workflow object and compiled app (or (None, None)).
     """
     if StateGraph is None:
         return None, None
     if enhanced is None:
-        mode = os.getenv("AGENT_GRAPH_MODE", "enhanced").lower()
+        mode = os.getenv("AGENT_GRAPH_MODE", "baseline").lower()  # Default to baseline
         enhanced = mode == "enhanced"
 
     # Attempt dynamic import recovery if prior import during module init failed
@@ -264,10 +270,16 @@ def build_workflow(enhanced: Optional[bool] = True):  # type: ignore
             initialize_reliability = getattr(rm, 'initialize_reliability', None)
             shutdown_reliability = getattr(rm, 'shutdown_reliability', None)
         except Exception:
+            # If enhanced imports fail, force baseline mode
+            enhanced = False
             pass
 
+    # If enhanced mode was requested but scaffold functions are not available, fall back to baseline
+    if enhanced and scaffold_enrich_findings is None:
+        enhanced = False
+
     # Core selection - prefer reliability, then performance, then enhanced, then scaffold, then legacy
-    enrich_node = _select(reliable_enrich_findings, enrich_findings_batch, enhanced_enrich_findings, scaffold_enrich_findings)
+    enrich_node = _select(reliable_enrich_findings, enrich_findings_batch, scaffold_enrich_findings, enhanced_enrich_findings)
     if enrich_node is None:
         logger = logging.getLogger(__name__)
         logger.warning("build_workflow: No enrich node available - workflow assembly failed")

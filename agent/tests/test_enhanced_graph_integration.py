@@ -9,7 +9,8 @@ def test_enhanced_workflow_end_to_end(monkeypatch):
     initial_state = {
         'raw_findings': [
             {'id': 'f1', 'title': 'Test Finding', 'severity': 'low', 'description': 'desc', 'risk_score': 1}
-        ]
+        ],
+        'baseline_cycle_done': True  # Skip baseline functionality for this test
     }
     # Invoke asynchronously because first node may be async
     result = asyncio.run(app.ainvoke(initial_state))

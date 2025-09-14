@@ -21,8 +21,8 @@ def test_enhanced_suggest_rules_monkeypatch(monkeypatch):
     monkeypatch.setattr(scaffold, 'mine_gap_candidates', fake_mine)
 
     try:
-        asyncio.run(enhanced_enrich_findings(state))
-        asyncio.run(enhanced_suggest_rules(state))
+        state = asyncio.run(enhanced_enrich_findings(state))
+        state = asyncio.run(enhanced_suggest_rules(state))
     finally:
         # Restore (defensive)
         monkeypatch.setattr(scaffold, 'mine_gap_candidates', orig)

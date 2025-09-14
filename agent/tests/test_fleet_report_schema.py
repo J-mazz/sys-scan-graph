@@ -15,6 +15,8 @@ def test_fleet_report_schema_validation(tmp_path: Path):
     store = BaselineStore(db)
     store.record_metrics(host_id="dummy_host", scan_id="init", metrics={})
     data = build_fleet_report(db, top_n=3, recent_seconds=3600, module_min_hosts=1)
-    schema = json.loads(Path('schema/fleet_report.schema.json').read_text())
+    # Use absolute path to schema file
+    schema_path = Path(__file__).parent.parent.parent / 'schema' / 'fleet_report.schema.json'
+    schema = json.loads(schema_path.read_text())
     validate(instance=data, schema=schema)
     assert 'generated_ts' in data

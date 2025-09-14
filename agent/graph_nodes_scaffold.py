@@ -19,15 +19,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 # Forward reference / safe import for GraphState to avoid circular import at module import time.
-# If the real GraphState cannot be imported yet (during early bootstrap), we fall back to a
-# structural placeholder (dict subtype / alias) sufficient for static typing tools.
-try:  # Prefer real definition when available
-    if TYPE_CHECKING:
-        from .graph import GraphState  # type: ignore  # noqa: F401
-    else:  # Runtime attempt (may succeed if import order permits)
-        from .graph import GraphState  # type: ignore
-except Exception:  # Fallback lightweight alias
-    GraphState = Dict[str, Any]  # type: ignore
+# Use Dict[str, Any] directly to avoid circular import issues during module initialization.
+GraphState = Dict[str, Any]  # type: ignore
 
 # Core provider & helper imports (existing project modules)
 from .llm_provider import get_llm_provider  # LLM provider abstraction
@@ -120,10 +113,7 @@ def _build_agent_state(findings: List[Finding], scanner_name: str = "mixed") -> 
     return AgentState(report=report)
 
 # Type alias for better readability
-if TYPE_CHECKING:
-    StateType = Dict[str, Any]  # type: ignore
-else:
-    StateType = Dict[str, Any]  # type: ignore
+StateType = Dict[str, Any]  # type: ignore
 
 def _extract_findings_from_state(state: StateType, key: str) -> List[Dict[str, Any]]:
     """Safely extract findings from state with fallback chain."""
@@ -202,7 +192,8 @@ def _batch_check_compliance_indicators(fields: Dict[str, List[Any]]) -> List[int
     )):
         if ('compliance' in tags or
             category == 'compliance' or
-            metadata.get('compliance_standard')):
+            metadata.get('compliance_standard') or
+            _normalize_compliance_standard(category)):
             compliance_indices.append(i)
     return compliance_indices
 
@@ -220,7 +211,8 @@ def _batch_check_baseline_status(findings: List[Dict[str, Any]]) -> List[int]:
     """Batch check which findings are missing baseline status."""
     missing_indices = []
     for i, finding in enumerate(findings):
-        if 'baseline_status' not in finding:
+        baseline_status = finding.get('baseline_status')
+        if baseline_status is None or 'baseline_status' not in finding:
             missing_indices.append(i)
     return missing_indices
 
@@ -789,10 +781,10 @@ def advanced_router(state: StateType) -> str:
     # Normalize state to ensure all mandatory keys exist
     state = normalize_graph_state(state)
     
-    # Ensure monotonic timing is initialized for accurate duration calculations
-    state = ensure_monotonic_timing(state)
-
     try:
+        # Ensure monotonic timing is initialized for accurate duration calculations
+        state = ensure_monotonic_timing(state)
+
         # 1. Human feedback gate
         if state.get('human_feedback_pending'):
             return 'human_feedback'
@@ -983,7 +975,7 @@ def plan_baseline_queries(state: StateType) -> StateType:
             return state
 
         pending = state.get('pending_tool_calls')
-        if pending is None:  # derive on-demand
+        if not pending:  # derive on-demand if empty or None
             enriched = state.get('enriched_findings') or []
             if not enriched:
                 _update_metrics_counter(state, 'baseline_plan_calls')
@@ -1059,20 +1051,26 @@ def integrate_baseline_results(state: StateType) -> StateType:
         import json as _json  # local import
         for m in msgs:
             try:
+                # Handle both ToolMessage objects and dict representations
                 if isinstance(m, ToolMessage):
                     payload = getattr(m, 'content', None)
-                    data_obj = None
-                    if isinstance(payload, dict):
-                        data_obj = payload
-                    elif isinstance(payload, str):
-                        try:
-                            data_obj = _json.loads(payload)
-                        except Exception:  # pragma: no cover
-                            data_obj = None
-                    if isinstance(data_obj, dict):
-                        fid = data_obj.get('finding_id')
-                        if isinstance(fid, str):
-                            results[fid] = data_obj  # type: ignore[index]
+                elif isinstance(m, dict) and m.get('type') == 'tool':
+                    payload = m.get('content')
+                else:
+                    continue
+                    
+                data_obj = None
+                if isinstance(payload, dict):
+                    data_obj = payload
+                elif isinstance(payload, str):
+                    try:
+                        data_obj = _json.loads(payload)
+                    except Exception:  # pragma: no cover
+                        data_obj = None
+                if isinstance(data_obj, dict):
+                    fid = data_obj.get('finding_id')
+                    if isinstance(fid, str):
+                        results[fid] = data_obj  # type: ignore[index]
             except Exception:  # pragma: no cover
                 continue
         state['baseline_results'] = results

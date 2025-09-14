@@ -36,5 +36,8 @@ def test_attack_coverage(tmp_path):
     st = summarize(st)
     assert st.summaries and st.summaries.attack_coverage
     cov = st.summaries.attack_coverage
+    print(f"DEBUG: attack_coverage = {cov}")
+    print(f"DEBUG: findings tags = {[f.tags for r in st.report.results for f in r.findings] if st.report else 'no report'}")
+    print(f"DEBUG: correlations tags = {[c.tags for c in st.correlations] if st.correlations else 'no correlations'}")
     assert cov['technique_count'] >= 1
     assert 'T1548' in cov['techniques']  # suid

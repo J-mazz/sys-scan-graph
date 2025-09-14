@@ -11,10 +11,25 @@ except Exception:  # pragma: no cover
 pytestmark = pytest.mark.skipif(app is None, reason="LangGraph not available")
 
 def run_graph(raw_findings):
-    state = {"raw_findings": raw_findings}
-    assert app is not None
-    out = app.invoke(state)  # type: ignore[attr-defined]
-    return out
+    # Force baseline mode to use synchronous functions
+    import os
+    old_mode = os.environ.get('AGENT_GRAPH_MODE')
+    os.environ['AGENT_GRAPH_MODE'] = 'baseline'
+    try:
+        # Rebuild the app with baseline mode
+        from agent import graph
+        graph.workflow, graph.app = graph.build_workflow(enhanced=False)
+        
+        state = {"raw_findings": raw_findings}
+        assert graph.app is not None
+        out = graph.app.invoke(state)  # type: ignore[attr-defined]
+        return out
+    finally:
+        # Restore original mode
+        if old_mode is not None:
+            os.environ['AGENT_GRAPH_MODE'] = old_mode
+        else:
+            os.environ.pop('AGENT_GRAPH_MODE', None)
 
 def test_baseline_cycle_and_iteration_guard(monkeypatch):
     # Ensure low iteration limit for test
