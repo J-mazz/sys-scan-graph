@@ -11,7 +11,7 @@ def test_risk_analyzer_basic():
         {"id": "f2", "title": "High privilege issue", "severity": "high", "risk_score": 70},
         {"id": "f3", "title": "Info banner", "severity": "info", "risk_score": 1},
     ]}
-    asyncio.run(risk_analyzer(state))
+    state = asyncio.run(risk_analyzer(state))
     ra = state.get('risk_assessment')
     assert ra is not None
     assert ra['counts']['critical'] == 1
@@ -30,7 +30,7 @@ def test_compliance_checker_mapping():
         {"id": "f3", "title": "Generic issue", "severity": "low"},
         {"id": "f4", "title": "Logging gap", "severity": "low", "tags": ["pci", "hipaa"]},
     ]}
-    asyncio.run(compliance_checker(state))
+    state = asyncio.run(compliance_checker(state))
     cc = state.get('compliance_check')
     assert cc is not None
     stds = cc['standards']

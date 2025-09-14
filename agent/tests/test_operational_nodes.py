@@ -21,7 +21,7 @@ def test_error_handler_degraded_and_fallback():
             {'error': 'Provider rate limit'},
         ]
     }
-    asyncio.run(error_handler(state))
+    state = asyncio.run(error_handler(state))
     assert state.get('degraded_mode') is True
     assert state.get('llm_provider_mode') == 'fallback'
     metrics = state.get('metrics', {})
@@ -31,7 +31,7 @@ def test_error_handler_degraded_and_fallback():
 
 def test_human_feedback_node_clears_flag():
     state = {'human_feedback_pending': True}
-    asyncio.run(human_feedback_node(state))
+    state = asyncio.run(human_feedback_node(state))
     assert state.get('human_feedback_pending') is False
     assert state.get('human_feedback_processed') is True
     assert 'human_feedback' in state
@@ -47,16 +47,16 @@ def test_cache_manager_and_metrics_collector():
         'summary': {'executive_summary': 'Example', 'details': {}},
     }
     # Add risk/compliance via their nodes
-    asyncio.run(risk_analyzer(state))
-    asyncio.run(compliance_checker(state))
+    state = asyncio.run(risk_analyzer(state))
+    state = asyncio.run(compliance_checker(state))
     # Run cache manager
-    asyncio.run(cache_manager(state))
+    state = asyncio.run(cache_manager(state))
     cache = state.get('cache') or {}
     assert any(k.startswith('enrich:') for k in cache.keys())
     assert 'risk:latest' in cache
     assert 'compliance:latest' in cache
     # Add metric baseline before metrics_collector
-    asyncio.run(metrics_collector(state))
+    state = asyncio.run(metrics_collector(state))
     final = state.get('final_metrics')
     assert final is not None
     assert 'overall_risk' in final

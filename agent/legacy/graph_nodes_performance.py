@@ -34,8 +34,8 @@ from .pipeline import augment as _augment
 from .reduction import reduce_all
 from .llm_provider import get_llm_provider
 from .rules import Correlator, DEFAULT_RULES
-from .rule_gap_miner import mine_gap_candidates
-from .graph_state import normalize_graph_state
+from ..rule_gap_miner import mine_gap_candidates
+from ..graph_state import normalize_graph_state
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +166,7 @@ class FindingBatch:
         """Clear the batch."""
         self.findings.clear()
         self.metadata.clear()
+        self.batch_id = ""
 
 # Advanced caching with TTL
 class AdvancedCache:

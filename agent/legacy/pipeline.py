@@ -895,7 +895,10 @@ def generate_causal_hypotheses(state: AgentState, max_hypotheses: int = 3) -> li
     return out
 
 
-def _load_attack_mapping(path: Path = Path('agent/attack_mapping.yaml')) -> dict:
+def _load_attack_mapping(path: Path | None = None) -> dict:
+    if path is None:
+        # Use path relative to this file's directory
+        path = Path(__file__).parent.parent / 'attack_mapping.yaml'
     try:
         if not path.exists():
             return {}

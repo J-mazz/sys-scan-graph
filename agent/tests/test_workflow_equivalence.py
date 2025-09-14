@@ -121,10 +121,25 @@ class TestWorkflowEquivalence:
             'final_metrics', 'cache', 'cache_hits', 'cache_keys',
             'iteration_count',  # This increments between runs
             'current_stage',    # This changes during workflow execution
-            'session_id'        # May be generated differently
+            'session_id',       # May be generated differently
+            'monotonic_start',  # Timestamp that changes between runs
         ]
         for field in fields_to_remove:
             normalized.pop(field, None)
+
+        # Normalize summary metrics that may vary
+        if 'summary' in normalized:
+            summary = normalized['summary']
+            if 'metrics' in summary:
+                summary_metrics = summary['metrics']
+                # Remove timing/latency fields from summary
+                timing_keys = [k for k in summary_metrics.keys() if 'latency' in k.lower() or 'time' in k.lower()]
+                for key in timing_keys:
+                    summary_metrics.pop(key, None)
+                # Normalize floating point values that might differ slightly
+                for key in ['avg_prompt_tokens', 'avg_completion_tokens']:
+                    if key in summary_metrics and isinstance(summary_metrics[key], float):
+                        summary_metrics[key] = round(summary_metrics[key], 1)
 
         return normalized
 
@@ -143,28 +158,24 @@ class TestWorkflowEquivalence:
 
         return state
 
-    async def run_enhanced_workflow(self, state: Dict[str, Any]) -> GraphState:
+    async def run_enhanced_workflow(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Run the complete enhanced workflow."""
         # Normalize state first
         state = normalize_graph_state(state)
 
-        # Cast to GraphState for enhanced functions
-        graph_state = GraphState(**state)
-
         # Run workflow steps
-        graph_state = await enhanced_enrich_findings(graph_state)
-        graph_state = await enhanced_summarize(graph_state)
-        graph_state = await enhanced_suggest_rules(graph_state)
-        graph_state = await enhanced_risk_analyzer(graph_state)
-        graph_state = await enhanced_compliance_checker(graph_state)
+        state = await enhanced_enrich_findings(state)
+        state = await enhanced_summarize(state)
+        state = await enhanced_suggest_rules(state)
+        state = await enhanced_risk_analyzer(state)
+        state = await enhanced_compliance_checker(state)
 
-        return graph_state
+        return state
 
-    @pytest.mark.asyncio
-    async def test_enrichment_equivalence(self, base_state):
+    def test_enrichment_equivalence(self, base_state):
         """Test that enrichment produces equivalent results."""
-        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(base_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         # Normalize for comparison
         scaffold_norm = self.normalize_for_comparison(scaffold_state)
@@ -183,14 +194,13 @@ class TestWorkflowEquivalence:
             assert scaffold_f.get('severity') == enhanced_f.get('severity')
             assert scaffold_f.get('risk_score') == enhanced_f.get('risk_score')
 
-    @pytest.mark.asyncio
-    async def test_risk_assessment_equivalence(self, base_state):
+    def test_risk_assessment_equivalence(self, base_state):
         """Test that risk assessment produces equivalent results."""
-        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(base_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         scaffold_norm = self.normalize_for_comparison(scaffold_state)
-        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+        enhanced_norm = self.normalize_for_comparison(enhanced_state)
 
         # Both should have risk_assessment
         assert 'risk_assessment' in scaffold_norm
@@ -215,17 +225,16 @@ class TestWorkflowEquivalence:
         assert scaffold_ra['total_risk_score'] == enhanced_ra['total_risk_score']
         assert scaffold_ra['counts'] == enhanced_ra['counts']
 
-    @pytest.mark.asyncio
-    async def test_workflow_contract_compliance(self, base_state):
+    def test_workflow_contract_compliance(self, base_state):
         """Test that both workflows comply with GraphState contract."""
-        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(base_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         # Both should pass GraphState validation
         from ..graph_state import validate_graph_state
 
         assert validate_graph_state(scaffold_state), "Scaffold state failed validation"
-        assert validate_graph_state(dict(enhanced_state)), "Enhanced state failed validation"
+        assert validate_graph_state(enhanced_state), "Enhanced state failed validation"
 
         # Both should have required fields from schema
         required_fields = [
@@ -237,20 +246,19 @@ class TestWorkflowEquivalence:
             assert field in scaffold_state, f"Scaffold missing {field}"
             assert field in enhanced_state, f"Enhanced missing {field}"
 
-    @pytest.mark.asyncio
-    async def test_deterministic_behavior(self, base_state):
+    def test_deterministic_behavior(self, base_state):
         """Test that both workflows produce deterministic results."""
         # Run scaffold workflow multiple times
         scaffold_results = []
         for _ in range(3):
-            result = await self.run_scaffold_workflow(base_state.copy())
+            result = asyncio.run(self.run_scaffold_workflow(base_state.copy()))
             scaffold_results.append(self.normalize_for_comparison(result))
 
         # Run enhanced workflow multiple times
         enhanced_results = []
         for _ in range(3):
-            result = await self.run_enhanced_workflow(base_state.copy())
-            enhanced_results.append(self.normalize_for_comparison(dict(result)))
+            result = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
+            enhanced_results.append(self.normalize_for_comparison(result))
 
         # All scaffold results should be identical
         assert all(r == scaffold_results[0] for r in scaffold_results), "Scaffold workflow not deterministic"
@@ -258,8 +266,7 @@ class TestWorkflowEquivalence:
         # All enhanced results should be identical
         assert all(r == enhanced_results[0] for r in enhanced_results), "Enhanced workflow not deterministic"
 
-    @pytest.mark.asyncio
-    async def test_error_handling_equivalence(self, base_state):
+    def test_error_handling_equivalence(self, base_state):
         """Test that both workflows handle errors equivalently."""
         # Create state with problematic data
         error_state = base_state.copy()
@@ -268,8 +275,8 @@ class TestWorkflowEquivalence:
             {'id': 'good_finding', 'severity': 'high', 'risk_score': 90}
         ]
 
-        scaffold_state = await self.run_scaffold_workflow(error_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(error_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(error_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(error_state.copy()))
 
         # Both should handle errors gracefully (not crash)
         assert isinstance(scaffold_state, dict), "Scaffold error handling failed"
@@ -277,7 +284,7 @@ class TestWorkflowEquivalence:
 
         # Both should have some findings processed
         scaffold_norm = self.normalize_for_comparison(scaffold_state)
-        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+        enhanced_norm = self.normalize_for_comparison(enhanced_state)
 
         assert 'enriched_findings' in scaffold_norm
         assert 'enriched_findings' in enhanced_norm
@@ -289,14 +296,13 @@ class TestWorkflowEquivalence:
         assert len(scaffold_good) > 0, "Scaffold didn't process good finding"
         assert len(enhanced_good) > 0, "Enhanced didn't process good finding"
 
-    @pytest.mark.asyncio
-    async def test_risk_assessment_canonicalization(self, base_state):
+    def test_risk_assessment_canonicalization(self, base_state):
         """Test that risk assessment canonicalization produces unified schema."""
-        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(base_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         scaffold_norm = self.normalize_for_comparison(scaffold_state)
-        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+        enhanced_norm = self.normalize_for_comparison(enhanced_state)
 
         # Test unified risk assessment schema
         scaffold_ra = scaffold_norm.get('risk_assessment', {})
@@ -331,8 +337,7 @@ class TestWorkflowEquivalence:
         assert scaffold_ra['overall_risk'] == scaffold_ra['overall_risk_level'], "Scaffold risk fields not unified"
         assert enhanced_ra['overall_risk'] == enhanced_ra['overall_risk_level'], "Enhanced risk fields not unified"
 
-    @pytest.mark.asyncio
-    async def test_compliance_check_canonicalization(self, base_state):
+    def test_compliance_check_canonicalization(self, base_state):
         """Test that compliance check canonicalization produces unified schema."""
         # Add compliance-related findings to test compliance canonicalization
         compliance_state = base_state.copy()
@@ -356,11 +361,11 @@ class TestWorkflowEquivalence:
         ])
 
         # Run workflows with compliance data
-        scaffold_state = await self.run_scaffold_workflow(compliance_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(compliance_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(compliance_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(compliance_state.copy()))
 
         scaffold_norm = self.normalize_for_comparison(scaffold_state)
-        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+        enhanced_norm = self.normalize_for_comparison(enhanced_state)
 
         # Test unified compliance check schema
         scaffold_cc = scaffold_norm.get('compliance_check', {})
@@ -388,8 +393,7 @@ class TestWorkflowEquivalence:
         assert scaffold_total >= 2, "Scaffold compliance total incorrect"
         assert enhanced_total >= 2, "Enhanced compliance total incorrect"
 
-    @pytest.mark.asyncio
-    async def test_normalization_function_equivalence(self, base_state):
+    def test_normalization_function_equivalence(self, base_state):
         """Test that normalization functions produce equivalent results."""
         # Test normalize_rule_suggestions
         test_state = base_state.copy()
@@ -426,14 +430,13 @@ class TestWorkflowEquivalence:
 
         assert scaffold_compliance == enhanced_compliance, "Compliance check unification not equivalent"
 
-    @pytest.mark.asyncio
-    async def test_metrics_versioning_and_timing(self, base_state):
+    def test_metrics_versioning_and_timing(self, base_state):
         """Test that metrics versioning and monotonic timing work correctly."""
-        scaffold_state = await self.run_scaffold_workflow(base_state.copy())
-        enhanced_state = await self.run_enhanced_workflow(base_state.copy())
+        scaffold_state = asyncio.run(self.run_scaffold_workflow(base_state.copy()))
+        enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         scaffold_norm = self.normalize_for_comparison(scaffold_state)
-        enhanced_norm = self.normalize_for_comparison(dict(enhanced_state))
+        enhanced_norm = self.normalize_for_comparison(enhanced_state)
 
         # Test metrics versioning
         scaffold_metrics = scaffold_norm.get('metrics', {})
@@ -445,7 +448,7 @@ class TestWorkflowEquivalence:
 
         # Test monotonic timing (should be present but not compared for exact values)
         scaffold_timing = scaffold_state.get('monotonic_start')
-        enhanced_timing = dict(enhanced_state).get('monotonic_start')
+        enhanced_timing = enhanced_state.get('monotonic_start')
 
         assert scaffold_timing is not None, "Scaffold missing monotonic timing"
         assert enhanced_timing is not None, "Enhanced missing monotonic timing"
@@ -454,8 +457,7 @@ class TestWorkflowEquivalence:
         assert isinstance(scaffold_timing, (int, float)), "Scaffold monotonic timing not numeric"
         assert isinstance(enhanced_timing, (int, float)), "Enhanced monotonic timing not numeric"
 
-    @pytest.mark.asyncio
-    async def test_schema_validation_with_unified_fields(self, base_state):
+    def test_schema_validation_with_unified_fields(self, base_state):
         """Test that schema validation works with unified fields."""
         from ..graph_state import validate_graph_state
 

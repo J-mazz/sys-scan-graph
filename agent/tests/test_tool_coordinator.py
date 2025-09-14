@@ -62,13 +62,13 @@ def test_integrate_baseline_results_sets_flag(monkeypatch):
     if ToolMessage is None:
         # Function should still set baseline_cycle_done True
         state = {'messages': []}
-        out = integrate_baseline_results(state)
-        assert out.get('baseline_cycle_done') is True
+        state = integrate_baseline_results(state)
+        assert state.get('baseline_cycle_done') is True
         return
 
     tm = ToolMessage(content=json.dumps({'finding_id': 'f1', 'status': 'baseline_present'}), tool_call_id='x')  # type: ignore
     state = {'messages': [tm]}
-    out = integrate_baseline_results(state)
-    assert out.get('baseline_cycle_done') is True
-    results = out.get('baseline_results', {})
+    state = integrate_baseline_results(state)
+    assert state.get('baseline_cycle_done') is True
+    results = state.get('baseline_results', {})
     assert results.get('f1', {}).get('status') == 'baseline_present'

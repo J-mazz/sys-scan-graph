@@ -13,5 +13,7 @@ from ..models import (
     AgentWarning,
     Meta,
     Summary,
-    SummaryExtension
+    SummaryExtension,
+    Reductions,
+    FollowupResult
 )

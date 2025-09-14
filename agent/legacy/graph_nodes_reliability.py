@@ -415,9 +415,7 @@ async def reliable_enrich_findings(state: GraphState) -> GraphState:
     try:
         # Use circuit breaker for LLM calls
         async def safe_llm_call():
-            return await llm_circuit_breaker.call(
-                lambda: _perform_enrichment_logic(state)
-            )
+            return await llm_circuit_breaker.call(_perform_enrichment_logic, state)
 
         # Use retry mechanism
         enriched_data = await default_retry.execute(safe_llm_call)
@@ -462,7 +460,7 @@ async def reliable_correlate_findings(state: GraphState) -> GraphState:
 
         # Use circuit breaker and retry
         async def safe_correlation():
-            return await _perform_correlation_logic(state)
+            return await llm_circuit_breaker.call(_perform_correlation_logic, state)
 
         correlated_data = await default_retry.execute(safe_correlation)
         state.update(correlated_data)
@@ -506,9 +504,10 @@ async def reliable_summarize_state(state: GraphState) -> GraphState:
 
         # Try primary summarization
         try:
-            summary = await fast_retry.execute(
-                lambda: llm_circuit_breaker.call(_perform_summarization_logic, state)
-            )
+            async def safe_summarize():
+                return await llm_circuit_breaker.call(_perform_summarization_logic, state)
+            
+            summary = await fast_retry.execute(safe_summarize)
         except Exception as primary_error:
             logger.warning(f"Primary summarization failed: {primary_error}")
 
