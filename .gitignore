@@ -6,6 +6,8 @@ agent/executors/__pycache__/
 .pytest_cache/
 agent/.pytest_cache/
 *.pyc
+*.pyo
+*.pyd
 build/
 cmake-build-debug/
 *.sqlite*
@@ -53,9 +55,32 @@ BuildInfo.h
 # Editor / OS noise
 *.swp
 *.DS_Store
+Thumbs.db
 .cache/
 .vscode/
 .idea/
+.vs/
+*.suo
+*.user
+*.aps
+*.pch
+*.vspscc
+*_i.c
+*_p.c
+*.ncb
+*.suo
+*.tlb
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.log
+*.svclog
+*.scc
 
 # Generated reports / JSON outputs
 /report.json
@@ -72,15 +97,19 @@ coverage.xml
 
 # Logs
 *.log
+logs/
 
 # Temporary
 *.tmp
 *.bak
 *.backup
+*.orig
+*.rej
 
 # Environment / secrets
 .env
 .env.*
+.secrets/
 
 # Virtual environments
 venv/
@@ -88,6 +117,122 @@ agent/venv/
 .venv/
 */venv/
 */.venv/
+
+# Python distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Fuzzing
+fuzz-*.log
+fuzz-*.profraw
+fuzz-*.profdata
+
+# Test executables and debug files
+test_*
+debug_*
+*_debug
+*_test
 
 # Assets (tracked - contains documentation images)
 # assets/  # <- Intentionally NOT ignored - contains docs images
