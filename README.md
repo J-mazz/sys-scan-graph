@@ -5,10 +5,12 @@
   <img src="assets/sys-scan-graph_badge.jpg" alt="sys-scan-graph Logo" width="500"/>
 </div>
 
-## CodeScene Analysis
+## System Security Scanner & Intelligence Graph
+**Sys-Scan-Graph**: is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
+
 <div align="center">
   <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/images/analyzed-by-codescene-badge.svg" alt="CodeScene general" />
+    <img src="https://codescene.io/images/analyzed-by-codescene-badge.svg" alt="CodeScene Analysis" />
   </a>
   <a href="https://codescene.io/projects/71206">
     <img src="https://codescene.io/projects/71206/status-badges/average-code-health" alt="CodeScene Average Code Health" />
@@ -17,9 +19,6 @@
     <img src="https://codescene.io/projects/71206/status-badges/system-mastery" alt="CodeScene System Mastery" />
   </a>
 </div>
-
-## System Security Scanner & Intelligence Graph
-**Sys-Scan-Graph**: is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
 
 It combines a high-performance C++ scanning engine with a Python-based intelligence layer to deliver deterministic, reproducible results. The core engine gathers data and outputs it in multiple formats (JSON, NDJSON, SARIF, HTML). This report is then ingested by a robust LangGraph agent that analyzes, organizes, and enriches the findings, providing deep insights with unprecedented speed.
 
