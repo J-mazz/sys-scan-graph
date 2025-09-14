@@ -4,6 +4,20 @@
 <div align="center">
   <img src="assets/sys-scan-graph_badge.jpg" alt="sys-scan-graph Logo" width="500"/>
 </div>
+
+## CodeScene Analysis
+<div align="center">
+  <a href="https://codescene.io/projects/71206">
+    <img src="https://codescene.io/images/analyzed-by-codescene-badge.svg" alt="CodeScene general" />
+  </a>
+  <a href="https://codescene.io/projects/71206">
+    <img src="https://codescene.io/projects/71206/status-badges/average-code-health" alt="CodeScene Average Code Health" />
+  </a>
+  <a href="https://codescene.io/projects/71206">
+    <img src="https://codescene.io/projects/71206/status-badges/system-mastery" alt="CodeScene System Mastery" />
+  </a>
+</div>
+
 ## System Security Scanner & Intelligence Graph
 **Sys-Scan-Graph**: is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
 
