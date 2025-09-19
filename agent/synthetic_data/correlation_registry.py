@@ -12,8 +12,10 @@ from kernel_correlation_producer import KernelCorrelationProducer
 try:
     from parallel_processor import process_correlations_parallel, get_parallel_processor
     PARALLEL_AVAILABLE = True
-except ImportError:
+    print(f"✅ Correlation parallel processing module imported successfully")
+except ImportError as e:
     PARALLEL_AVAILABLE = False
+    print(f"❌ Correlation parallel processing import failed: {e}")
 
 class CorrelationRegistry:
     """Registry for all correlation producers."""
@@ -64,7 +66,7 @@ class CorrelationRegistry:
             if not PARALLEL_AVAILABLE:
                 print("📝 Parallel processing not available, using sequential processing")
             else:
-                print("📝 Small number of correlation producers, using sequential processing")
+                print(f"📝 Small number of correlation producers ({len(self.correlation_producers)}), using sequential processing")
 
             all_correlations = []
             for name, producer in self.correlation_producers.items():

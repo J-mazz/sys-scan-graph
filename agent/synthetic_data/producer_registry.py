@@ -17,8 +17,10 @@ from mac_producer import MacProducer
 try:
     from parallel_processor import process_producers_parallel, get_parallel_processor
     PARALLEL_AVAILABLE = True
-except ImportError:
+    print(f"✅ Parallel processing module imported successfully")
+except ImportError as e:
     PARALLEL_AVAILABLE = False
+    print(f"❌ Parallel processing import failed: {e}")
 
 class ProducerRegistry:
     """Registry for all synthetic data producers."""
@@ -77,7 +79,7 @@ class ProducerRegistry:
             if not PARALLEL_AVAILABLE:
                 print("📝 Parallel processing not available, using sequential processing")
             else:
-                print("📝 Small number of producers, using sequential processing")
+                print(f"📝 Small number of producers ({len(self.producers)}), using sequential processing")
 
             results = {}
             for name, producer in self.producers.items():
