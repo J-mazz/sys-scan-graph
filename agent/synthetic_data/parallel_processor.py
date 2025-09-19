@@ -332,3 +332,51 @@ def process_producers_parallel(producers: Dict[str, Any], counts: Dict[str, int]
 
     logger.info(f"Parallel processing completed: {len(results)} producers processed")
     return results
+
+
+def process_correlations_parallel(findings: Dict[str, List[Dict[str, Any]]], correlation_producers: Dict[str, Any], description: str, processor: ParallelProcessor) -> List[Dict[str, Any]]:
+    """Process correlation analysis in parallel using the given processor.
+
+    Args:
+        findings: Dictionary of scanner type -> list of findings
+        correlation_producers: Dictionary of correlation producer name -> producer instance
+        description: Description for progress reporting
+        processor: The parallel processor to use
+
+    Returns:
+        List of generated correlations
+    """
+    def process_single_correlation_producer(producer_name: str) -> List[Dict[str, Any]]:
+        """Process a single correlation producer."""
+        producer = correlation_producers[producer_name]
+        try:
+            correlations = producer.analyze_correlations(findings)
+            return correlations
+        except Exception as e:
+            logger.error(f"Error processing correlation producer {producer_name}: {e}")
+            return []
+
+    # Get list of correlation producer names to process
+    producer_names = list(correlation_producers.keys())
+
+    # Process in parallel
+    all_correlations = []
+    with processor._get_executor(processor.max_workers) as executor:
+        # Submit all tasks
+        future_to_producer = {
+            executor.submit(process_single_correlation_producer, name): name
+            for name in producer_names
+        }
+
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_producer):
+            producer_name = future_to_producer[future]
+            try:
+                correlations = future.result()
+                all_correlations.extend(correlations)
+                logger.debug(f"Completed correlation producer {producer_name}: {len(correlations)} correlations")
+            except Exception as e:
+                logger.error(f"Correlation producer {producer_name} failed: {e}")
+
+    logger.info(f"Parallel correlation processing completed: {len(all_correlations)} total correlations from {len(producer_names)} producers")
+    return all_correlations
