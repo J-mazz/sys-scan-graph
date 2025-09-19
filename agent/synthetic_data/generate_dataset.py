@@ -340,7 +340,11 @@ class DatasetGenerator:
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Generate massive synthetic datasets for fine-tuning (Production Mode)",
+        description="Generate massive synthetic datasets for fine-tuning (Production Mode)\n\n"
+                   "MODES:\n"
+                   "  Default: Conservative settings for Colab safety (5k/batch, 20 batches)\n"
+                   "  --ultra: Ultra mode - 50k/batch, 200 batches, 11.5h, 20 workers, 20GB memory\n"
+                   "           Full enrichment with LangChain, GPU optimization, maximum performance",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
@@ -348,6 +352,13 @@ def main():
         "--output-dir", "-o",
         default="./massive_datasets",
         help="Output directory for generated datasets"
+    )
+
+    parser.add_argument(
+        "--ultra",
+        action="store_true",
+        default=False,
+        help="Ultra mode: Maximum performance settings (50k findings/batch, 200 batches, 11.5h runtime, 20 workers, 20GB memory). Enables full LangChain enrichment and GPU optimization."
     )
 
     parser.add_argument(
@@ -456,6 +467,23 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Handle ultra mode - override conservative defaults
+    if args.ultra:
+        print("🚀 ULTRA MODE ACTIVATED - MAXIMUM PERFORMANCE SETTINGS")
+        print("=" * 60)
+        args.batch_size = 50000
+        args.max_batches = 200
+        args.max_hours = 11.5
+        args.max_memory_gb = 20.0
+        args.parallel_workers = 20
+        args.gpu = True
+        args.fast_mode = False  # Ultra mode uses full enrichment
+        args.no_langchain = False  # Ultra mode uses LangChain
+        print("Settings: 50k findings/batch, 200 batches, 11.5h runtime, 20 workers, 20GB memory")
+        print("GPU: Enabled, Fast Mode: Disabled, LangChain: Enabled")
+        print("=" * 60)
+        print()
 
     # Configure logging based on verbosity
     if args.quiet:
