@@ -2,7 +2,14 @@
 """
 Production-ready     def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False, max_memory_gb: float = 45.0, parallel_workers: Optional[int] = None, use_langchain: bool = True):
         self.gpu_optimized = gpu_optimized
-        self.conservative_parallel = conservative_parallel
+        self.conservative_parallel = conser    parser = argparse.ArgumentParser(
+        description="Generate massive synthetic datasets for fine-tuning (Production Mode)\n\n"
+                   "MODES:\n"
+                   "  Default: Conservative settings for Colab safety (5k/batch, 20 batches)\n"
+                   "  --ultra: Ultra mode - 35k/batch, 120 batches, 11.5h, 20 workers, 20GB memory\n"
+                   "           Full enrichment with LangChain, GPU optimization, balanced performance",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )arallel
         self.fast_mode = fast_mode
         self.max_memory_gb = max_memory_gb
         self.parallel_workers = parallel_workers
@@ -343,7 +350,7 @@ def main():
         description="Generate massive synthetic datasets for fine-tuning (Production Mode)\n\n"
                    "MODES:\n"
                    "  Default: Conservative settings for Colab safety (5k/batch, 20 batches)\n"
-                   "  --ultra: Ultra mode - 50k/batch, 200 batches, 11.5h, 20 workers, 20GB memory\n"
+                   "  --ultra: Ultra mode - 50k/batch, 100 batches, 4.5h, 20 workers, 40GB memory\n"
                    "           Full enrichment with LangChain, GPU optimization, maximum performance",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -358,7 +365,7 @@ def main():
         "--ultra",
         action="store_true",
         default=False,
-        help="Ultra mode: Maximum performance settings (50k findings/batch, 200 batches, 11.5h runtime, 20 workers, 20GB memory). Enables full LangChain enrichment and GPU optimization."
+        help="Ultra mode: Balanced performance settings (35k findings/batch, 120 batches, 11.5h runtime, 20 workers, 20GB memory). Enables full LangChain enrichment and GPU optimization."
     )
 
     parser.add_argument(
@@ -470,17 +477,17 @@ def main():
 
     # Handle ultra mode - override conservative defaults
     if args.ultra:
-        print("🚀 ULTRA MODE ACTIVATED - MAXIMUM PERFORMANCE SETTINGS")
+        print("🚀 ULTRA MODE ACTIVATED - OPTIMIZED FOR COLAB PERFORMANCE")
         print("=" * 60)
-        args.batch_size = 50000
-        args.max_batches = 200
+        args.batch_size = 35000  # Reduced from 50k for faster batches
+        args.max_batches = 120   # Reduced from 200 for reasonable completion time
         args.max_hours = 11.5
         args.max_memory_gb = 20.0
         args.parallel_workers = 20
         args.gpu = True
         args.fast_mode = False  # Ultra mode uses full enrichment
         args.no_langchain = False  # Ultra mode uses LangChain
-        print("Settings: 50k findings/batch, 200 batches, 11.5h runtime, 20 workers, 20GB memory")
+        print("Settings: 35k findings/batch, 120 batches, 11.5h runtime, 20 workers, 20GB memory")
         print("GPU: Enabled, Fast Mode: Disabled, LangChain: Enabled")
         print("=" * 60)
         print()
