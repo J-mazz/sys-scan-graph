@@ -324,6 +324,42 @@ def main():
         help="Use conservative parallel processing"
     )
 
+    parser.add_argument(
+        "--max-memory-gb",
+        type=float,
+        default=45.0,
+        help="Maximum memory usage in GB (default: 45.0 for L4 safety)"
+    )
+
+    parser.add_argument(
+        "--save-progress",
+        action="store_true",
+        default=True,
+        help="Save progress after each batch for resumability"
+    )
+
+    parser.add_argument(
+        "--compression-level",
+        type=int,
+        choices=[0, 1, 6, 9],
+        default=6,
+        help="gzip compression level (0=none, 1=fast, 6=default, 9=max)"
+    )
+
+    parser.add_argument(
+        "--quality-threshold",
+        type=float,
+        default=0.5,
+        help="Minimum quality score threshold (0.0-1.0)"
+    )
+
+    parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=None,
+        help="Override automatic parallel worker count"
+    )
+
     args = parser.parse_args()
 
     # Configure logging based on verbosity

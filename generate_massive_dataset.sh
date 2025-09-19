@@ -1,6 +1,34 @@
 #!/bin/bash
-# Massive Dataset Generation Launcher
-# Run this script to generate huge synthetic datasets for fine-tuning
+# Massive Dataset Generati# Maximum viable parameters for L4 GPU (51GB RAM, 22.5GB VRAM)
+# Optimized for maximum throughput while maintaining stability
+MAX_VIABLE_ARGS=(
+    "--output-dir" "./massive_datasets_max"
+    "--batch-size" "100000"  # Maximum batch size for L4
+    "--max-batches" "100"    # Extended for massive dataset
+    "--max-hours" "8.0"      # Extended runtime for completion
+    "--gpu"                  # GPU optimization enabled
+    "--verbose"              # Detailed logging
+    "--max-memory-gb" "45.0" # Leave 6GB headroom
+    "--save-progress"        # Enable resumability
+    "--compression-level" "6" # Balanced compression
+    "--quality-threshold" "0.6" # Higher quality threshold
+)
+
+echo
+echo "🚀 MAXIMUM VIABLE CONFIGURATION (L4 GPU Optimized):"
+echo "  Output Directory: ./massive_datasets_max"
+echo "  Batch Size: 100,000 findings per batch"
+echo "  Max Batches: 100 (scalable)"
+echo "  Max Runtime: 8.0 hours"
+echo "  GPU Optimization: Enabled"
+echo "  Memory Limit: 45.0 GB (6GB headroom)"
+echo "  Verbose Logging: Enabled"
+echo "  Progress Saving: Enabled"
+echo "  Compression: Level 6 (balanced)"
+echo "  Quality Threshold: 0.6"
+echo "  Expected Output: ~10M+ findings"
+echo "  Estimated Runtime: 6-8 hours"
+echois script to generate huge synthetic datasets for fine-tuning
 
 set -e  # Exit on any error
 
@@ -57,12 +85,18 @@ echo "  Verbose Logging: Enabled"
 echo "  Expected Output: ~750K+ findings"
 echo
 
-# Allow overriding with command line arguments
+# Allow custom arguments or use maximum viable configuration
 if [ $# -eq 0 ]; then
-    echo "🔄 Using default configuration..."
-    echo "💡 Tip: Run with --help to see all options"
+    echo "🔄 Using MAXIMUM VIABLE configuration for L4 GPU..."
+    echo "💡 This will generate ~10M+ findings in 6-8 hours"
+    echo "💡 Use Ctrl+C to interrupt and resume later"
     echo
-    ARGS=("${DEFAULT_ARGS[@]}")
+    ARGS=("${MAX_VIABLE_ARGS[@]}")
+elif [ "$1" = "max" ]; then
+    echo "🔄 Using MAXIMUM VIABLE configuration (explicit)..."
+    echo "💡 This will generate ~10M+ findings in 6-8 hours"
+    echo
+    ARGS=("${MAX_VIABLE_ARGS[@]}")
 else
     echo "🔧 Using custom configuration..."
     echo
