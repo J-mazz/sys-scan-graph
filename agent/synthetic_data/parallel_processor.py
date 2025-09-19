@@ -64,23 +64,24 @@ except ImportError:
 class ParallelProcessor:
     """Simple parallel processing utility optimized for T4 GPU and high-performance environments."""
 
-    def __init__(self, max_workers: Optional[int] = None, conservative_mode: bool = True, gpu_optimized: bool = False):
+    def __init__(self, conservative_mode: bool = True, gpu_optimized: bool = False, max_workers: Optional[int] = None):
         """
-        Initialize parallel processor optimized for different environments.
+        Initialize the parallel processor with system-aware configuration.
 
         Args:
-            max_workers: Maximum number of worker threads. If None, auto-calculated.
-            conservative_mode: If True, uses conservative resource allocation.
-            gpu_optimized: If True, optimizes for T4 GPU/high-performance environments.
+            conservative_mode: Whether to use conservative resource usage
+            gpu_optimized: Whether to optimize for GPU environments
+            max_workers: Maximum number of parallel workers (auto-detect if None)
         """
         self.conservative_mode = conservative_mode
         self.gpu_optimized = gpu_optimized
 
-        if max_workers is None:
-            # Get system information
-            cpu_count = os.cpu_count() or 8
-            available_memory_gb = self._get_available_memory_gb()
+        # Get system information for worker calculation
+        cpu_count = os.cpu_count() or 8
+        available_memory_gb = self._get_available_memory_gb()
 
+        if max_workers is None:
+            # Auto-detect optimal worker count based on system capabilities
             if gpu_optimized and _is_gpu_env:
                 # T4 GPU optimization: 15GB VRAM, adjust for lower memory
                 if available_memory_gb >= 32:  # High memory with T4
