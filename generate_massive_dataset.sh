@@ -36,23 +36,25 @@ fi
 
 echo "✅ Python $PYTHON_VERSION detected"
 
-# Default parameters for massive generation (optimized for T4 GPU)
+# Default parameters for massive generation (optimized for L4 GPU with 51GB RAM, 22.5GB VRAM)
 DEFAULT_ARGS=(
     "--output-dir" "./massive_datasets"
-    "--batch-size" "5000"
-    "--max-batches" "24"  # ~2 hours at ~5min per batch
-    "--max-hours" "2.0"
+    "--batch-size" "15000"  # Increased for L4 GPU power
+    "--max-batches" "50"    # More batches for massive dataset
+    "--max-hours" "4.0"     # Extended runtime
     "--gpu"
+    "--verbose"             # Detailed logging
 )
 
 echo
-echo "📋 CONFIGURATION:"
+echo "📋 CONFIGURATION (L4 GPU Optimized):"
 echo "  Output Directory: ./massive_datasets"
-echo "  Batch Size: 5,000 findings per batch"
-echo "  Max Batches: 24 (scalable)"
-echo "  Max Runtime: 2.0 hours"
+echo "  Batch Size: 15,000 findings per batch"
+echo "  Max Batches: 50 (scalable)"
+echo "  Max Runtime: 4.0 hours"
 echo "  GPU Optimization: Enabled"
-echo "  Expected Output: ~120K+ findings"
+echo "  Verbose Logging: Enabled"
+echo "  Expected Output: ~750K+ findings"
 echo
 
 # Allow overriding with command line arguments

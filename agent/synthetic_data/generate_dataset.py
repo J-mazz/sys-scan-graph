@@ -10,6 +10,7 @@ import os
 import json
 import time
 import signal
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 import threading
@@ -20,6 +21,17 @@ try:
 except ImportError:
     psutil = None
     HAS_PSUTIL = False
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('generation.log', mode='w')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Add the synthetic_data directory to the path
 script_dir = os.path.dirname(os.path.abspath(__file__) if '__file__' in globals() else os.getcwd())
@@ -95,6 +107,9 @@ class DatasetGenerator:
         print(f"GPU Optimized: {self.gpu_optimized}")
         print()
 
+        logger.info(f"Starting massive dataset generation with {max_batches} batches of {batch_size} findings each")
+        logger.info(f"GPU optimization: {self.gpu_optimized}, Conservative parallel: {self.conservative_parallel}")
+
         output_dir_path = Path(output_dir)
         output_dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -104,6 +119,7 @@ class DatasetGenerator:
         # Start resource monitoring
         monitor_thread = threading.Thread(target=self._monitor_resources, daemon=True)
         monitor_thread.start()
+        logger.debug("Resource monitoring thread started")
 
         all_results = []
         batch_num = 1
@@ -121,6 +137,9 @@ class DatasetGenerator:
                 # Calculate producer counts for this batch
                 producer_counts = self._calculate_producer_counts(batch_size)
 
+                logger.info(f"Starting batch {batch_num}/{max_batches}")
+                logger.debug(f"Producer counts: {producer_counts}")
+
                 # Generate batch
                 batch_start = time.time()
                 result = self._generate_batch(producer_counts, output_dir_path, batch_num)
@@ -134,9 +153,11 @@ class DatasetGenerator:
 
                     batch_time = batch_end - batch_start
                     print(f"  ✓ Batch {batch_num} completed in {batch_time:.2f}s")
+                    logger.info(f"Batch {batch_num} completed: {result['data_summary']['total_findings']} findings, {result['data_summary']['total_correlations']} correlations in {batch_time:.2f}s")
                 else:
                     self.stats["errors"].append(f"Batch {batch_num} failed")
                     print(f"❌ Batch {batch_num} failed")
+                    logger.error(f"Batch {batch_num} failed")
 
                 batch_num += 1
 
@@ -283,13 +304,29 @@ def main():
     )
 
     parser.add_argument(
-        "--conservative",
+        "--verbose", "-v",
         action="store_true",
         default=False,
-        help="Use conservative parallel processing"
+        help="Enable verbose logging and detailed progress output"
+    )
+
+    parser.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        default=False,
+        help="Suppress non-essential output"
     )
 
     args = parser.parse_args()
+
+    # Configure logging based on verbosity
+    if args.quiet:
+        logging.getLogger().setLevel(logging.WARNING)
+    elif args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.info("Verbose logging enabled")
+    else:
+        logging.getLogger().setLevel(logging.INFO)
 
     # Initialize generator
     generator = DatasetGenerator(
