@@ -52,6 +52,15 @@ except ImportError:
     psutil = None
     PSUTIL_AVAILABLE = False
 
+try:
+    import cupy as cp
+    CUPY_AVAILABLE = True
+    print("✅ CuPy available for GPU acceleration")
+except ImportError:
+    cp = None
+    CUPY_AVAILABLE = False
+    print("⚠️  CuPy not available - GPU acceleration limited")
+
 class ParallelProcessor:
     """Simple parallel processing utility optimized for T4 GPU and high-performance environments."""
 
@@ -68,37 +77,58 @@ class ParallelProcessor:
         self.gpu_optimized = gpu_optimized
 
         if max_workers is None:
-            if gpu_optimized:
-                # L4 GPU optimization: Use high parallelization
-                # L4 has 22.5GB VRAM, optimize for both CPU and GPU workloads
-                cpu_count = os.cpu_count() or 16
+            # Get system information
+            cpu_count = os.cpu_count() or 8
+            available_memory_gb = self._get_available_memory_gb()
+
+            if gpu_optimized and _is_gpu_env:
+                # T4 GPU optimization: 15GB VRAM, adjust for lower memory
+                if available_memory_gb >= 32:  # High memory with T4
+                    self.max_workers = max(12, int(cpu_count * 0.8))
+                else:  # Standard memory with T4
+                    self.max_workers = max(8, int(cpu_count * 0.6))
+            elif available_memory_gb >= 32:  # High memory system (32GB+)
+                # High-memory CPU system: use aggressive parallelization
                 if conservative_mode:
-                    # Conservative GPU: 12-16 workers for balanced performance
-                    self.max_workers = min(max(12, cpu_count), 16)
+                    self.max_workers = min(max(8, cpu_count // 2), 12)  # 8-12 workers for balance
                 else:
-                    # Aggressive GPU: Use most available cores for maximum parallelization
-                    self.max_workers = max(16, int(cpu_count * 0.9))
-            elif conservative_mode:
-                # Conservative CPU: use 50% of available CPUs, max 4 for local execution
-                cpu_count = os.cpu_count() or 4
-                self.max_workers = min(max(1, cpu_count // 2), 4)
-            else:
-                # Aggressive CPU: use 75% of available CPUs for server execution
-                cpu_count = os.cpu_count() or 4
-                self.max_workers = max(1, int(cpu_count * 0.75))
+                    # Scale workers based on available RAM (rough estimate: 2-3GB per worker)
+                    ram_based_workers = max(8, int(available_memory_gb / 3))
+                    self.max_workers = min(ram_based_workers, cpu_count * 2)  # Don't exceed 2x CPU cores
+            elif available_memory_gb >= 16:  # Medium memory system (16-32GB)
+                if conservative_mode:
+                    self.max_workers = min(max(6, cpu_count // 2), 10)  # Allow more workers
+                else:
+                    self.max_workers = min(max(8, int(cpu_count * 0.75)), 14)
+            else:  # Standard memory system (8-16GB) - like local development
+                if conservative_mode:
+                    self.max_workers = min(max(4, cpu_count // 2), 6)  # Allow up to 6 workers
+                else:
+                    # For 8-core systems, use more workers even with standard RAM
+                    self.max_workers = min(max(6, int(cpu_count * 0.75)), 10)
         else:
             self.max_workers = max_workers
 
-        # Enhanced GPU optimization: Increase thread pool size for better throughput
-        if gpu_optimized:
-            # Use ProcessPoolExecutor for CPU-bound tasks on GPU systems
+        # Use ProcessPoolExecutor for CPU-bound tasks when we have enough workers
+        if (available_memory_gb >= 8 and self.max_workers >= 6) or self.max_workers > 8:
             self.use_processes = True
-            self.chunk_size = 100  # Process items in larger chunks for L4
+            self.chunk_size = 50  # Moderate chunks for local systems
         else:
             self.use_processes = False
             self.chunk_size = 10
 
         print(f"🔧 Parallel processor initialized: {self.max_workers} workers (conservative: {conservative_mode}, GPU: {gpu_optimized})")
+        print(f"   System: {os.cpu_count()} CPU cores, {available_memory_gb:.1f}GB RAM available")
+
+    def _get_available_memory_gb(self) -> float:
+        """Get available memory in GB."""
+        if PSUTIL_AVAILABLE and psutil is not None:
+            try:
+                mem = psutil.virtual_memory()
+                return mem.available / (1024 ** 3)  # Convert to GB
+            except:
+                pass
+        return 8.0  # Fallback assumption
 
     def _check_system_resources(self) -> bool:
         """Check if system has sufficient resources for parallel processing."""
@@ -106,17 +136,31 @@ class ParallelProcessor:
             return True  # Skip resource checks if psutil not available
 
         try:
-            # Check CPU usage
+            available_memory_gb = self._get_available_memory_gb()
+
+            # Check CPU usage - be less aggressive for high-memory systems
             cpu_percent = psutil.cpu_percent(interval=1)
-            if cpu_percent > 90:  # More aggressive threshold for GPU systems
+            if available_memory_gb >= 32:  # High memory system
+                cpu_threshold = 95  # Allow higher CPU usage
+            elif available_memory_gb >= 16:  # Medium memory system
+                cpu_threshold = 90
+            else:  # Low memory system
+                cpu_threshold = 85
+
+            if cpu_percent > cpu_threshold:
                 print(f"⚠️  High CPU usage detected ({cpu_percent:.1f}%), reducing workers")
                 self.max_workers = max(1, self.max_workers // 2)
                 return False
 
-            # Check memory usage - GPU systems have more memory
+            # Check memory usage - scale thresholds based on available RAM
             memory = psutil.virtual_memory()
-            if self.gpu_optimized:
-                memory_threshold = 90  # Higher threshold for GPU systems
+            if self.gpu_optimized and _is_gpu_env:
+                # T4 has 15GB VRAM, be more conservative
+                memory_threshold = 85  # Lower threshold for T4
+            elif available_memory_gb >= 32:
+                memory_threshold = 95  # Allow using more RAM on high-memory systems
+            elif available_memory_gb >= 16:
+                memory_threshold = 90
             else:
                 memory_threshold = 85
 
@@ -263,7 +307,7 @@ def detect_gpu_environment() -> bool:
         import subprocess
         result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            # Check for NVIDIA GPUs including L4
+            # Check for NVIDIA GPUs including L4 and T4
             gpu_indicators = ['L4', 'T4', 'A100', 'V100', 'P100', 'K80', 'Tesla', 'GeForce', 'Quadro']
             if any(gpu in result.stdout for gpu in gpu_indicators):
                 return True
@@ -297,13 +341,49 @@ parallel_processor_local = ParallelProcessor(conservative_mode=True, gpu_optimiz
 parallel_processor_cloud = ParallelProcessor(conservative_mode=False, gpu_optimized=_is_gpu_env)  # Auto-detect GPU
 parallel_processor_gpu = ParallelProcessor(conservative_mode=False, gpu_optimized=True)  # Explicit GPU optimization
 
-# Default to GPU-optimized if GPU detected, otherwise conservative
-parallel_processor = parallel_processor_gpu if _is_gpu_env else parallel_processor_local
+# Default processor: prioritize high-memory systems, then GPU, then conservative CPU
+def _get_default_processor():
+    """Get the best default processor based on system capabilities."""
+    available_memory_gb = 8.0  # Default fallback
+    if PSUTIL_AVAILABLE and psutil is not None:
+        try:
+            mem = psutil.virtual_memory()
+            available_memory_gb = mem.available / (1024 ** 3)
+        except:
+            pass
+
+    if _is_gpu_env:
+        return parallel_processor_gpu  # GPU-optimized
+    elif available_memory_gb >= 32:
+        # High-memory system: use aggressive CPU parallelization
+        return ParallelProcessor(conservative_mode=False, gpu_optimized=False)
+    elif available_memory_gb >= 16:
+        # Medium-memory system: balanced approach
+        return parallel_processor_cloud
+    else:
+        # Low-memory system: conservative
+        return parallel_processor_local
+
+parallel_processor = _get_default_processor()
 
 def get_parallel_processor(conservative: bool = True, gpu_optimized: Optional[bool] = None, max_workers: Optional[int] = None):
     """Get the appropriate parallel processor based on execution environment."""
     if gpu_optimized is None:
         gpu_optimized = _is_gpu_env
+
+    # Auto-determine conservative mode based on available memory if not specified
+    if conservative:
+        available_memory_gb = 8.0  # Default fallback
+        if PSUTIL_AVAILABLE and psutil is not None:
+            try:
+                mem = psutil.virtual_memory()
+                available_memory_gb = mem.available / (1024 ** 3)
+            except:
+                pass
+
+        # Use aggressive mode for high-memory systems
+        if available_memory_gb >= 32:
+            conservative = False
 
     if gpu_optimized:
         return ParallelProcessor(conservative_mode=conservative, gpu_optimized=True, max_workers=max_workers)

@@ -54,14 +54,26 @@ from synthetic_data_pipeline import SyntheticDataPipeline
 class DatasetGenerator:
     """Production dataset generator with monitoring and extended runtime support."""
 
-    def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False, max_memory_gb: float = 45.0, parallel_workers: Optional[int] = None, use_langchain: bool = True):
-        # Auto-detect conservative vs aggressive parallel based on parallel_workers
-        if parallel_workers is not None and parallel_workers > 4:
-            conservative_parallel = False  # Use aggressive parallel for high worker counts
+    def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False, max_memory_gb: float = 12.0, parallel_workers: Optional[int] = None, use_langchain: bool = True):
+        # Auto-detect conservative vs aggressive parallel based on system capabilities
+        cpu_count = os.cpu_count() or 4
+        if parallel_workers is None:
+            # Auto-scale workers based on CPU cores for local development
+            if cpu_count >= 8:
+                parallel_workers = min(cpu_count, 10)  # Use up to 10 workers on 8+ core systems
+                conservative_parallel = False
+                print(f"🔄 Multi-core system detected ({cpu_count} cores), using {parallel_workers} workers")
+            elif cpu_count >= 4:
+                parallel_workers = min(cpu_count, 6)  # Use up to 6 workers on 4+ core systems
+                conservative_parallel = False
+            else:
+                parallel_workers = 2  # Conservative for low-core systems
+                conservative_parallel = True
+        
+        # Override conservative mode for high worker counts
+        if parallel_workers and parallel_workers > 4:
+            conservative_parallel = False
             print(f"🔄 High worker count ({parallel_workers}) detected, using aggressive parallel processing")
-        elif parallel_workers is not None and parallel_workers <= 4:
-            conservative_parallel = True   # Use conservative for low worker counts
-            print(f"🔄 Low worker count ({parallel_workers}) detected, using conservative parallel processing")
         
         self.gpu_optimized = gpu_optimized
         self.conservative_parallel = conservative_parallel
@@ -69,7 +81,7 @@ class DatasetGenerator:
         self.max_memory_gb = max_memory_gb
         self.parallel_workers = parallel_workers
         self.pipeline = SyntheticDataPipeline(
-            use_langchain=use_langchain,  # Enable LangChain enrichment when available
+            use_langchain=use_langchain,
             conservative_parallel=conservative_parallel,
             gpu_optimized=gpu_optimized,
             fast_mode=fast_mode,
@@ -362,8 +374,8 @@ def main():
     parser.add_argument(
         "--gpu",
         action="store_true",
-        default=True,
-        help="Enable GPU optimization"
+        default=True,  # Default to GPU on Colab/T4
+        help="Enable GPU optimization (auto-detected)"
     )
 
     parser.add_argument(
@@ -404,7 +416,7 @@ def main():
     parser.add_argument(
         "--max-memory-gb",
         type=float,
-        default=16.0,  # Conservative default for Colab
+        default=12.0,  # Adjusted for T4 GPU (15GB VRAM)
         help="Maximum memory usage in GB"
     )
 
