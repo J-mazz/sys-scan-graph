@@ -58,7 +58,7 @@ class CorrelationRegistry:
         if PARALLEL_AVAILABLE and len(self.correlation_producers) > 1:
             processor = get_parallel_processor(conservative_parallel, gpu_optimized)
             print(f"🔄 Using parallel processing for {len(self.correlation_producers)} correlation producers ({processor.max_workers} workers)")
-            return process_correlations_parallel(self.correlation_producers, findings, "Analyzing correlations", processor)
+            return process_correlations_parallel(findings, self.correlation_producers, "Analyzing correlations", processor)
         else:
             # Fallback to sequential processing
             if not PARALLEL_AVAILABLE:
