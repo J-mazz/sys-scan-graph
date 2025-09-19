@@ -317,6 +317,13 @@ def main():
         help="Suppress non-essential output"
     )
 
+    parser.add_argument(
+        "--conservative",
+        action="store_true",
+        default=False,
+        help="Use conservative parallel processing"
+    )
+
     args = parser.parse_args()
 
     # Configure logging based on verbosity
