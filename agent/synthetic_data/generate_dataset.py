@@ -416,6 +416,27 @@ def main():
     )
 
     parser.add_argument(
+        "--save-progress",
+        action="store_true",
+        default=False,
+        help="Enable progress saving for resumability"
+    )
+
+    parser.add_argument(
+        "--compression-level",
+        type=int,
+        default=6,
+        help="Compression level for output files (1-9)"
+    )
+
+    parser.add_argument(
+        "--quality-threshold",
+        type=float,
+        default=0.7,
+        help="Quality threshold for data validation (0.0-1.0)"
+    )
+
+    parser.add_argument(
         "--no-langchain",
         action="store_true",
         default=False,
