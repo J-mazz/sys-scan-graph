@@ -350,8 +350,8 @@ def main():
         description="Generate massive synthetic datasets for fine-tuning (Production Mode)\n\n"
                    "MODES:\n"
                    "  Default: Conservative settings for Colab safety (5k/batch, 20 batches)\n"
-                   "  --ultra: Ultra mode - 50k/batch, 100 batches, 4.5h, 20 workers, 40GB memory\n"
-                   "           Full enrichment with LangChain, GPU optimization, maximum performance",
+                   "  --ultra: Ultra mode - 35k/batch, 120 batches, 11.5h, 20 workers, 20GB memory\n"
+                   "           Full enrichment with LangChain, GPU optimization, balanced performance",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
