@@ -26,9 +26,11 @@ except ImportError:
 class DataTransformationPipeline:
     """Pipeline for transforming and optimizing synthetic security data."""
 
-    def __init__(self, use_langchain: bool = True):
-        self.use_langchain = use_langchain and LANGCHAIN_AVAILABLE
-        if self.use_langchain:
+    def __init__(self, use_langchain: bool = True, fast_mode: bool = False):
+        self.use_langchain = use_langchain and LANGCHAIN_AVAILABLE and not fast_mode
+        if fast_mode:
+            print("Using FAST MODE: Skipping LangChain enrichment for maximum speed")
+        elif self.use_langchain:
             self._setup_langchain_components()
         else:
             print("Using basic transformation without LangChain enrichment")

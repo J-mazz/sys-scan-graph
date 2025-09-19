@@ -42,13 +42,15 @@ from synthetic_data_pipeline import SyntheticDataPipeline
 class DatasetGenerator:
     """Production dataset generator with monitoring and extended runtime support."""
 
-    def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False):
+    def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False):
         self.gpu_optimized = gpu_optimized
         self.conservative_parallel = conservative_parallel
+        self.fast_mode = fast_mode
         self.pipeline = SyntheticDataPipeline(
-            use_langchain=False,
+            use_langchain=False,  # Disable LangChain for speed
             conservative_parallel=conservative_parallel,
-            gpu_optimized=gpu_optimized
+            gpu_optimized=gpu_optimized,
+            fast_mode=fast_mode
         )
         self.running = True
         self.stats = {
@@ -78,7 +80,19 @@ class DatasetGenerator:
             try:
                 cpu_percent = psutil.cpu_percent(interval=5)
                 memory = psutil.virtual_memory()
-                print(f"📊 CPU: {cpu_percent:.1f}% | Memory: {memory.percent:.1f}% | Findings: {self.stats['total_findings']:,}")
+
+                # GPU monitoring if available
+                gpu_info = ""
+                try:
+                    import subprocess
+                    result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'],
+                                          capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        gpu_info = f" | GPU: {result.stdout.strip()}"
+                except:
+                    pass
+
+                print(f"📊 CPU: {cpu_percent:.1f}% | Memory: {memory.percent:.1f}% | Findings: {self.stats['total_findings']:,}{gpu_info}")
                 time.sleep(30)  # Update every 30 seconds
             except:
                 break
@@ -325,39 +339,10 @@ def main():
     )
 
     parser.add_argument(
-        "--max-memory-gb",
-        type=float,
-        default=45.0,
-        help="Maximum memory usage in GB (default: 45.0 for L4 safety)"
-    )
-
-    parser.add_argument(
-        "--save-progress",
+        "--fast-mode",
         action="store_true",
-        default=True,
-        help="Save progress after each batch for resumability"
-    )
-
-    parser.add_argument(
-        "--compression-level",
-        type=int,
-        choices=[0, 1, 6, 9],
-        default=6,
-        help="gzip compression level (0=none, 1=fast, 6=default, 9=max)"
-    )
-
-    parser.add_argument(
-        "--quality-threshold",
-        type=float,
-        default=0.5,
-        help="Minimum quality score threshold (0.0-1.0)"
-    )
-
-    parser.add_argument(
-        "--parallel-workers",
-        type=int,
-        default=None,
-        help="Override automatic parallel worker count"
+        default=False,
+        help="Use fast mode (skip heavy enrichment for massive datasets)"
     )
 
     args = parser.parse_args()
@@ -374,7 +359,8 @@ def main():
     # Initialize generator
     generator = DatasetGenerator(
         gpu_optimized=args.gpu,
-        conservative_parallel=args.conservative
+        conservative_parallel=args.conservative,
+        fast_mode=args.fast_mode
     )
 
     # Generate massive dataset

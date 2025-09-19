@@ -13,8 +13,37 @@ import logging
 T = TypeVar('T')
 R = TypeVar('R')
 
+import concurrent.futures
+import os
+import multiprocessing
+from typing import List, Dict, Any, Callable, TypeVar, Optional
+from functools import partial
+import logging
+
 # Setup logging
 logger = logging.getLogger(__name__)
+
+# Global worker functions for multiprocessing (must be at module level)
+def _process_single_producer(producer_name: str, producers: Dict[str, Any], counts: Dict[str, int]) -> tuple[str, List[Dict[str, Any]]]:
+    """Process a single producer (module-level function for multiprocessing)."""
+    producer = producers[producer_name]
+    count = counts.get(producer_name, 10)
+    try:
+        results = producer.generate_findings(count)
+        return producer_name, results
+    except Exception as e:
+        logger.error(f"Error processing producer {producer_name}: {e}")
+        return producer_name, []
+
+def _process_single_correlation_producer(producer_name: str, correlation_producers: Dict[str, Any], findings: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Process a single correlation producer (module-level function for multiprocessing)."""
+    producer = correlation_producers[producer_name]
+    try:
+        correlations = producer.analyze_correlations(findings)
+        return correlations
+    except Exception as e:
+        logger.error(f"Error processing correlation producer {producer_name}: {e}")
+        return []
 
 try:
     import psutil
@@ -40,15 +69,15 @@ class ParallelProcessor:
 
         if max_workers is None:
             if gpu_optimized:
-                # T4 GPU optimization: Use high parallelization
-                # T4 has 2560 CUDA cores, but for CPU threading we use logical cores
+                # L4 GPU optimization: Use high parallelization
+                # L4 has 22.5GB VRAM, optimize for both CPU and GPU workloads
                 cpu_count = os.cpu_count() or 16
                 if conservative_mode:
-                    # Conservative GPU: 8-12 workers for balanced performance
-                    self.max_workers = min(max(8, cpu_count), 12)
+                    # Conservative GPU: 12-16 workers for balanced performance
+                    self.max_workers = min(max(12, cpu_count), 16)
                 else:
                     # Aggressive GPU: Use most available cores for maximum parallelization
-                    self.max_workers = max(12, int(cpu_count * 0.9))
+                    self.max_workers = max(16, int(cpu_count * 0.9))
             elif conservative_mode:
                 # Conservative CPU: use 50% of available CPUs, max 4 for local execution
                 cpu_count = os.cpu_count() or 4
@@ -60,11 +89,11 @@ class ParallelProcessor:
         else:
             self.max_workers = max_workers
 
-        # GPU optimization: Increase thread pool size for better throughput
+        # Enhanced GPU optimization: Increase thread pool size for better throughput
         if gpu_optimized:
             # Use ProcessPoolExecutor for CPU-bound tasks on GPU systems
             self.use_processes = True
-            self.chunk_size = 50  # Process items in larger chunks
+            self.chunk_size = 100  # Process items in larger chunks for L4
         else:
             self.use_processes = False
             self.chunk_size = 10
@@ -228,14 +257,14 @@ class ParallelProcessor:
 
 # Environment-specific processor instances
 def detect_gpu_environment() -> bool:
-    """Detect if running in a GPU environment (T4, A100, or similar)."""
+    """Detect if running in a GPU environment (L4, T4, A100, or similar)."""
     try:
         # Check for NVIDIA GPU
         import subprocess
         result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            # Check for any NVIDIA GPU (T4, A100, V100, etc.)
-            gpu_indicators = ['T4', 'A100', 'V100', 'P100', 'K80', 'Tesla', 'GeForce', 'Quadro']
+            # Check for NVIDIA GPUs including L4
+            gpu_indicators = ['L4', 'T4', 'A100', 'V100', 'P100', 'K80', 'Tesla', 'GeForce', 'Quadro']
             if any(gpu in result.stdout for gpu in gpu_indicators):
                 return True
             # Also check for CUDA capability
@@ -296,26 +325,15 @@ def process_producers_parallel(producers: Dict[str, Any], counts: Dict[str, int]
     Returns:
         Dictionary of producer name -> list of generated items
     """
-    def process_single_producer(producer_name: str) -> tuple[str, List[Dict[str, Any]]]:
-        """Process a single producer."""
-        producer = producers[producer_name]
-        count = counts.get(producer_name, 10)
-        try:
-            results = producer.generate_findings(count)
-            return producer_name, results
-        except Exception as e:
-            logger.error(f"Error processing producer {producer_name}: {e}")
-            return producer_name, []
-
     # Get list of producer names to process
     producer_names = list(producers.keys())
 
-    # Process in parallel
+    # Process in parallel using module-level function
     results = {}
     with processor._get_executor(processor.max_workers) as executor:
-        # Submit all tasks
+        # Submit all tasks using the module-level function
         future_to_producer = {
-            executor.submit(process_single_producer, name): name
+            executor.submit(_process_single_producer, name, producers, counts): name
             for name in producer_names
         }
 
@@ -346,25 +364,15 @@ def process_correlations_parallel(findings: Dict[str, List[Dict[str, Any]]], cor
     Returns:
         List of generated correlations
     """
-    def process_single_correlation_producer(producer_name: str) -> List[Dict[str, Any]]:
-        """Process a single correlation producer."""
-        producer = correlation_producers[producer_name]
-        try:
-            correlations = producer.analyze_correlations(findings)
-            return correlations
-        except Exception as e:
-            logger.error(f"Error processing correlation producer {producer_name}: {e}")
-            return []
-
     # Get list of correlation producer names to process
     producer_names = list(correlation_producers.keys())
 
-    # Process in parallel
+    # Process in parallel using module-level function
     all_correlations = []
     with processor._get_executor(processor.max_workers) as executor:
-        # Submit all tasks
+        # Submit all tasks using the module-level function
         future_to_producer = {
-            executor.submit(process_single_correlation_producer, name): name
+            executor.submit(_process_single_correlation_producer, name, correlation_producers, findings): name
             for name in producer_names
         }
 

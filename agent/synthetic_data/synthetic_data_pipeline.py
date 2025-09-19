@@ -15,7 +15,7 @@ from data_transformation_pipeline import DataTransformationPipeline
 class SyntheticDataPipeline:
     """Complete pipeline for generating, correlating, verifying, and transforming synthetic security data."""
 
-    def __init__(self, use_langchain: bool = True, conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None):
+    def __init__(self, use_langchain: bool = True, conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None, fast_mode: bool = False):
         """
         Initialize the synthetic data pipeline.
 
@@ -23,15 +23,17 @@ class SyntheticDataPipeline:
             use_langchain: Whether to use LangChain for data enrichment
             conservative_parallel: Whether to use conservative parallel processing
             gpu_optimized: Whether to use GPU-optimized parallel processing (auto-detect if None)
+            fast_mode: Whether to use fast mode (skip heavy enrichment for massive datasets)
         """
         self.use_langchain = use_langchain
         self.conservative_parallel = conservative_parallel
         self.gpu_optimized = gpu_optimized
+        self.fast_mode = fast_mode
 
         self.producer_registry = registry
         self.correlation_registry = correlation_registry
         self.verification_agent = AdvancedVerificationAgent()
-        self.transformation_pipeline = DataTransformationPipeline(use_langchain=use_langchain)
+        self.transformation_pipeline = DataTransformationPipeline(use_langchain=use_langchain, fast_mode=fast_mode)
 
         # Pipeline execution state
         self.execution_state = {
