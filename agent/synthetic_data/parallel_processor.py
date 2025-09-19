@@ -225,13 +225,19 @@ class ParallelProcessor:
 
 # Environment-specific processor instances
 def detect_gpu_environment() -> bool:
-    """Detect if running in a GPU environment (T4 or similar)."""
+    """Detect if running in a GPU environment (T4, A100, or similar)."""
     try:
         # Check for NVIDIA GPU
         import subprocess
         result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0 and 'T4' in result.stdout:
-            return True
+        if result.returncode == 0:
+            # Check for any NVIDIA GPU (T4, A100, V100, etc.)
+            gpu_indicators = ['T4', 'A100', 'V100', 'P100', 'K80', 'Tesla', 'GeForce', 'Quadro']
+            if any(gpu in result.stdout for gpu in gpu_indicators):
+                return True
+            # Also check for CUDA capability
+            if 'CUDA' in result.stdout or 'NVIDIA' in result.stdout:
+                return True
     except (ImportError, subprocess.TimeoutExpired, FileNotFoundError):
         pass
 
@@ -240,6 +246,15 @@ def detect_gpu_environment() -> bool:
     for var in gpu_env_vars:
         if os.getenv(var) is not None:
             return True
+
+    # Colab-specific detection
+    try:
+        # Check if we're in Google Colab
+        import sys
+        if 'google.colab' in sys.modules:
+            return True
+    except ImportError:
+        pass
 
     return False
 
