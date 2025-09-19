@@ -13,7 +13,7 @@ ULTRA_OPTIMIZED_ARGS=(
     "--save-progress"        # Enable resumability
     "--compression-level" "6" # Balanced compression
     "--quality-threshold" "0.7" # Higher quality threshold
-    "--parallel-workers" "8"  # Reduced for Colab CPU cores
+    "--parallel-workers" "20"  # Aggressive parallel processing for ultra mode
     "--fast-mode"            # Skip heavy enrichment for speed
 )
 
@@ -47,6 +47,7 @@ MAX_VIABLE_ARGS=(
     "--save-progress"        # Enable resumability
     "--compression-level" "6" # Balanced compression
     "--quality-threshold" "0.6" # Higher quality threshold
+    "--parallel-workers" "16" # Aggressive parallel processing
     "--fast-mode"            # Skip heavy enrichment for speed
 )
 
@@ -123,7 +124,7 @@ DEFAULT_ARGS=(
     "--gpu"
     "--verbose"              # Detailed logging
     "--max-memory-gb" "16.0" # Conservative memory usage for Colab
-    "--parallel-workers" "6" # Conservative worker count for Colab
+    "--parallel-workers" "12" # Aggressive parallel processing for high RAM
     "--fast-mode"            # Skip heavy enrichment for speed
 )
 

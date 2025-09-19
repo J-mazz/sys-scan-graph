@@ -15,7 +15,7 @@ from data_transformation_pipeline import DataTransformationPipeline
 class SyntheticDataPipeline:
     """Complete pipeline for generating, correlating, verifying, and transforming synthetic security data."""
 
-    def __init__(self, use_langchain: bool = True, conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None, fast_mode: bool = False):
+    def __init__(self, use_langchain: bool = True, conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None, fast_mode: bool = False, max_workers: Optional[int] = None):
         """
         Initialize the synthetic data pipeline.
 
@@ -24,11 +24,13 @@ class SyntheticDataPipeline:
             conservative_parallel: Whether to use conservative parallel processing
             gpu_optimized: Whether to use GPU-optimized parallel processing (auto-detect if None)
             fast_mode: Whether to use fast mode (skip heavy enrichment for massive datasets)
+            max_workers: Maximum number of parallel workers
         """
         self.use_langchain = use_langchain
         self.conservative_parallel = conservative_parallel
         self.gpu_optimized = gpu_optimized
         self.fast_mode = fast_mode
+        self.max_workers = max_workers
 
         self.producer_registry = registry
         self.correlation_registry = correlation_registry
@@ -143,7 +145,7 @@ class SyntheticDataPipeline:
             # Default: 10 findings per producer
             producer_counts = {name: 10 for name in self.producer_registry.list_producers()}
 
-        findings = self.producer_registry.generate_all_findings(producer_counts, self.conservative_parallel, self.gpu_optimized)
+        findings = self.producer_registry.generate_all_findings(producer_counts, self.conservative_parallel, self.gpu_optimized, self.max_workers)
 
         total_findings = sum(len(f) for f in findings.values())
         print(f"  ✓ Generated {total_findings} total findings")
@@ -154,7 +156,7 @@ class SyntheticDataPipeline:
         """Execute correlation analysis across all findings."""
         print(f"  Analyzing correlations with {len(self.correlation_registry.list_correlation_producers())} correlation producers...")
 
-        correlations = self.correlation_registry.analyze_all_correlations(findings, self.conservative_parallel, self.gpu_optimized)
+        correlations = self.correlation_registry.analyze_all_correlations(findings, self.conservative_parallel, self.gpu_optimized, self.max_workers)
 
         # Get correlation summary
         summary = self.correlation_registry.get_correlation_summary(correlations)

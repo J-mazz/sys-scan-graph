@@ -54,7 +54,7 @@ class ProducerRegistry:
         """List all registered producers."""
         return list(self.producers.keys())
 
-    def generate_all_findings(self, counts: Optional[Dict[str, int]] = None, conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None) -> Dict[str, List[Dict[str, Any]]]:
+    def generate_all_findings(self, counts: Optional[Dict[str, int]] = None, conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None, max_workers: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
         """Generate findings from all producers.
 
         Args:
@@ -62,6 +62,7 @@ class ProducerRegistry:
                    If None, generates 10 findings per producer.
             conservative_parallel: Whether to use conservative parallel processing
             gpu_optimized: Whether to use GPU-optimized parallel processing
+            max_workers: Maximum number of parallel workers
 
         Returns:
             Dictionary mapping producer names to their findings.
@@ -71,7 +72,7 @@ class ProducerRegistry:
 
         # Use parallel processing if available and beneficial
         if PARALLEL_AVAILABLE and len(self.producers) > 2:
-            processor = get_parallel_processor(conservative_parallel, gpu_optimized)
+            processor = get_parallel_processor(conservative_parallel, gpu_optimized, max_workers)
             print(f"🔄 Using parallel processing for {len(self.producers)} producers ({processor.max_workers} workers)")
             return process_producers_parallel(self.producers, counts, "Generating findings", processor)
         else:

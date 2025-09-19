@@ -44,7 +44,7 @@ class CorrelationRegistry:
         """List all registered correlation producers."""
         return list(self.correlation_producers.keys())
 
-    def analyze_all_correlations(self, findings: Dict[str, List[Dict[str, Any]]], conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None) -> List[Dict[str, Any]]:
+    def analyze_all_correlations(self, findings: Dict[str, List[Dict[str, Any]]], conservative_parallel: bool = True, gpu_optimized: Optional[bool] = None, max_workers: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Run all correlation producers and collect their findings.
 
@@ -52,13 +52,14 @@ class CorrelationRegistry:
             findings: Dictionary mapping scanner types to their findings
             conservative_parallel: Whether to use conservative parallel processing
             gpu_optimized: Whether to use GPU-optimized parallel processing
+            max_workers: Maximum number of parallel workers
 
         Returns:
             List of all correlation findings from all producers
         """
         # Use parallel processing if available and beneficial
         if PARALLEL_AVAILABLE and len(self.correlation_producers) > 1:
-            processor = get_parallel_processor(conservative_parallel, gpu_optimized)
+            processor = get_parallel_processor(conservative_parallel, gpu_optimized, max_workers)
             print(f"🔄 Using parallel processing for {len(self.correlation_producers)} correlation producers ({processor.max_workers} workers)")
             return process_correlations_parallel(findings, self.correlation_producers, "Analyzing correlations", processor)
         else:

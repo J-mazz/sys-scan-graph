@@ -300,13 +300,13 @@ parallel_processor_gpu = ParallelProcessor(conservative_mode=False, gpu_optimize
 # Default to GPU-optimized if GPU detected, otherwise conservative
 parallel_processor = parallel_processor_gpu if _is_gpu_env else parallel_processor_local
 
-def get_parallel_processor(conservative: bool = True, gpu_optimized: Optional[bool] = None):
+def get_parallel_processor(conservative: bool = True, gpu_optimized: Optional[bool] = None, max_workers: Optional[int] = None):
     """Get the appropriate parallel processor based on execution environment."""
     if gpu_optimized is None:
         gpu_optimized = _is_gpu_env
 
     if gpu_optimized:
-        return ParallelProcessor(conservative_mode=conservative, gpu_optimized=True)
+        return ParallelProcessor(conservative_mode=conservative, gpu_optimized=True, max_workers=max_workers)
     elif conservative:
         return parallel_processor_local
     else:
