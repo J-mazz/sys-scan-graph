@@ -1,49 +1,49 @@
 #!/bin/bash
 # Massive Dataset Generation Script
-# Ultra-Optimized for L4 GPU (51GB RAM, 22.5GB VRAM)
-# Enhanced for maximum throughput with GPU acceleration
+# Optimized for Google Colab L4 GPU (12-25GB system RAM, 22.5GB VRAM)
+# Conservative settings to prevent OOM crashes
 ULTRA_OPTIMIZED_ARGS=(
     "--output-dir" "./massive_datasets_ultra"
-    "--batch-size" "250000"  # Ultra-large batch size for L4 GPU
-    "--max-batches" "200"    # Extended for ultra-massive dataset
-    "--max-hours" "12.0"     # Extended runtime for completion
+    "--batch-size" "50000"   # Reduced for Colab RAM limits
+    "--max-batches" "200"    # Extended for massive dataset
+    "--max-hours" "11.5"     # Colab 12-hour limit with buffer
     "--gpu"                  # GPU optimization enabled
     "--verbose"              # Detailed logging
-    "--max-memory-gb" "48.0" # Leave 3GB headroom for GPU operations
+    "--max-memory-gb" "20.0" # Conservative for Colab (12-25GB available)
     "--save-progress"        # Enable resumability
-    "--compression-level" "9" # Maximum compression for storage efficiency
-    "--quality-threshold" "0.7" # Higher quality threshold for better data
-    "--parallel-workers" "16" # Optimized worker count for L4
+    "--compression-level" "6" # Balanced compression
+    "--quality-threshold" "0.7" # Higher quality threshold
+    "--parallel-workers" "8"  # Reduced for Colab CPU cores
     "--fast-mode"            # Skip heavy enrichment for speed
 )
 
 echo
-echo "🚀 ULTRA-OPTIMIZED CONFIGURATION (L4 GPU Enhanced):"
+echo "🚀 ULTRA-OPTIMIZED CONFIGURATION (Colab L4 GPU):"
 echo "  Output Directory: ./massive_datasets_ultra"
-echo "  Batch Size: 250,000 findings per batch"
+echo "  Batch Size: 50,000 findings per batch"
 echo "  Max Batches: 200 (ultra-scalable)"
-echo "  Max Runtime: 12.0 hours"
+echo "  Max Runtime: 11.5 hours"
 echo "  GPU Optimization: Enabled"
-echo "  Memory Limit: 48.0 GB (3GB headroom)"
-echo "  Parallel Workers: 16"
+echo "  Memory Limit: 20.0 GB (conservative)"
+echo "  Parallel Workers: 8"
 echo "  Verbose Logging: Enabled"
 echo "  Progress Saving: Enabled"
-echo "  Compression: Level 9 (maximum)"
+echo "  Compression: Level 6 (balanced)"
 echo "  Quality Threshold: 0.7"
-echo "  Expected Output: ~50M+ findings"
-echo "  Estimated Runtime: 8-12 hours"
+echo "  Expected Output: ~10M+ findings"
+echo "  Estimated Runtime: 8-11 hours"
 echo "This script generates ultra-massive synthetic datasets for advanced fine-tuning"
 
-# Maximum viable parameters for L4 GPU (51GB RAM, 22.5GB VRAM)
-# Optimized for maximum throughput while maintaining stability
+# Maximum viable parameters for Colab L4 GPU (12-25GB system RAM, 22.5GB VRAM)
+# Conservative settings to prevent OOM crashes
 MAX_VIABLE_ARGS=(
     "--output-dir" "./massive_datasets_max"
-    "--batch-size" "100000"  # Maximum batch size for L4
+    "--batch-size" "25000"   # Conservative batch size for Colab
     "--max-batches" "100"    # Extended for massive dataset
-    "--max-hours" "8.0"      # Extended runtime for completion
+    "--max-hours" "11.5"     # Colab 12-hour limit with buffer
     "--gpu"                  # GPU optimization enabled
     "--verbose"              # Detailed logging
-    "--max-memory-gb" "45.0" # Leave 6GB headroom
+    "--max-memory-gb" "18.0" # Conservative for Colab
     "--save-progress"        # Enable resumability
     "--compression-level" "6" # Balanced compression
     "--quality-threshold" "0.6" # Higher quality threshold
@@ -51,20 +51,20 @@ MAX_VIABLE_ARGS=(
 )
 
 echo
-echo "🚀 MAXIMUM VIABLE CONFIGURATION (L4 GPU Optimized):"
+echo "🚀 MAXIMUM VIABLE CONFIGURATION (Colab L4 GPU):"
 echo "  Output Directory: ./massive_datasets_max"
-echo "  Batch Size: 100,000 findings per batch"
+echo "  Batch Size: 25,000 findings per batch"
 echo "  Max Batches: 100 (scalable)"
-echo "  Max Runtime: 8.0 hours"
+echo "  Max Runtime: 11.5 hours"
 echo "  GPU Optimization: Enabled"
-echo "  Memory Limit: 45.0 GB (6GB headroom)"
+echo "  Memory Limit: 18.0 GB (conservative)"
 echo "  Verbose Logging: Enabled"
 echo "  Progress Saving: Enabled"
 echo "  Compression: Level 6 (balanced)"
 echo "  Quality Threshold: 0.6"
-echo "  Expected Output: ~10M+ findings"
-echo "  Estimated Runtime: 6-8 hours"
-echo "This script generates huge synthetic datasets for fine-tuning"
+echo "  Expected Output: ~2.5M+ findings"
+echo "  Estimated Runtime: 4-6 hours"
+echo "This script generates large synthetic datasets for fine-tuning"
 
 set -e  # Exit on any error
 
@@ -114,30 +114,30 @@ check_gpu() {
 
 check_gpu
 
-# Default parameters for massive generation (optimized for L4 GPU with 51GB RAM, 22.5GB VRAM)
+# Default parameters for massive generation (optimized for Colab L4 GPU with 12-25GB system RAM, 22.5GB VRAM)
 DEFAULT_ARGS=(
     "--output-dir" "./massive_datasets"
-    "--batch-size" "150000"  # Increased for L4 GPU power
+    "--batch-size" "15000"   # Conservative batch size for Colab
     "--max-batches" "100"    # More batches for massive dataset
-    "--max-hours" "6.0"      # Extended runtime
+    "--max-hours" "11.5"     # Colab 12-hour limit with buffer
     "--gpu"
     "--verbose"              # Detailed logging
-    "--max-memory-gb" "46.0" # Optimized memory usage
-    "--parallel-workers" "12" # GPU-optimized worker count
+    "--max-memory-gb" "16.0" # Conservative memory usage for Colab
+    "--parallel-workers" "6" # Conservative worker count for Colab
     "--fast-mode"            # Skip heavy enrichment for speed
 )
 
 echo
-echo "📋 ENHANCED CONFIGURATION (L4 GPU Optimized):"
+echo "📋 ENHANCED CONFIGURATION (Colab L4 GPU):"
 echo "  Output Directory: ./massive_datasets"
-echo "  Batch Size: 150,000 findings per batch"
+echo "  Batch Size: 15,000 findings per batch"
 echo "  Max Batches: 100 (scalable)"
-echo "  Max Runtime: 6.0 hours"
+echo "  Max Runtime: 11.5 hours"
 echo "  GPU Optimization: Enabled"
-echo "  Memory Limit: 46.0 GB"
-echo "  Parallel Workers: 12"
+echo "  Memory Limit: 16.0 GB"
+echo "  Parallel Workers: 6"
 echo "  Verbose Logging: Enabled"
-echo "  Expected Output: ~15M+ findings"
+echo "  Expected Output: ~1.5M+ findings"
 echo
 
 # Allow custom arguments or use enhanced configuration

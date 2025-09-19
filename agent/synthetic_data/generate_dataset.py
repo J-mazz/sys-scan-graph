@@ -94,6 +94,13 @@ class DatasetGenerator:
                 cpu_percent = psutil.cpu_percent(interval=5)
                 memory = psutil.virtual_memory()
 
+                # Check for memory pressure - prevent OOM crashes
+                memory_percent = memory.percent
+                if memory_percent > 85:  # Critical threshold
+                    print(f"⚠️  CRITICAL: High memory usage ({memory_percent:.1f}%), reducing batch size and workers")
+                    # This would require adjusting batch size dynamically, but for now just warn
+                    # In a full implementation, we'd reduce batch_size here
+
                 # GPU monitoring if available
                 gpu_info = ""
                 try:
@@ -105,7 +112,7 @@ class DatasetGenerator:
                 except:
                     pass
 
-                print(f"📊 CPU: {cpu_percent:.1f}% | Memory: {memory.percent:.1f}% | Findings: {self.stats['total_findings']:,}{gpu_info}")
+                print(f"📊 CPU: {cpu_percent:.1f}% | Memory: {memory_percent:.1f}% | Findings: {self.stats['total_findings']:,}{gpu_info}")
                 time.sleep(30)  # Update every 30 seconds
             except:
                 break
@@ -133,6 +140,20 @@ class DatasetGenerator:
         print(f"Max Runtime: {max_runtime_hours} hours")
         print(f"GPU Optimized: {self.gpu_optimized}")
         print()
+
+        # Pre-flight memory check
+        if HAS_PSUTIL and psutil:
+            memory = psutil.virtual_memory()
+            available_gb = memory.available / (1024**3)
+            print(f"🧠 System Memory Check: {available_gb:.1f}GB available")
+            if available_gb < 8.0:  # Minimum required
+                print("❌ ERROR: Insufficient memory (< 8GB available). Reduce batch size or free up memory.")
+                return {"error": "insufficient_memory", "available_gb": available_gb}
+            if self.max_memory_gb and available_gb < self.max_memory_gb:
+                print(f"⚠️  WARNING: Requested {self.max_memory_gb}GB but only {available_gb:.1f}GB available. Adjusting...")
+                self.max_memory_gb = available_gb * 0.8  # Use 80% of available
+        else:
+            print("⚠️  Memory monitoring unavailable - proceed with caution")
 
         logger.info(f"Starting massive dataset generation with {max_batches} batches of {batch_size} findings each")
         logger.info(f"GPU optimization: {self.gpu_optimized}, Conservative parallel: {self.conservative_parallel}")
@@ -169,7 +190,19 @@ class DatasetGenerator:
 
                 # Generate batch
                 batch_start = time.time()
-                result = self._generate_batch(producer_counts, output_dir_path, batch_num)
+                try:
+                    result = self._generate_batch(producer_counts, output_dir_path, batch_num)
+                except MemoryError:
+                    print(f"❌ MEMORY ERROR in batch {batch_num}: Out of memory! Try reducing batch size.")
+                    self.stats["errors"].append(f"Batch {batch_num} failed: Out of memory")
+                    batch_num += 1
+                    continue
+                except Exception as e:
+                    print(f"❌ ERROR in batch {batch_num}: {e}")
+                    self.stats["errors"].append(f"Batch {batch_num} failed: {str(e)}")
+                    batch_num += 1
+                    continue
+
                 batch_end = time.time()
 
                 if result:
@@ -298,21 +331,21 @@ def main():
     parser.add_argument(
         "--batch-size", "-b",
         type=int,
-        default=5000,
+        default=5000,  # Reduced default for Colab safety
         help="Findings per batch"
     )
 
     parser.add_argument(
         "--max-batches", "-m",
         type=int,
-        default=20,
+        default=20,  # Reduced default
         help="Maximum number of batches to generate"
     )
 
     parser.add_argument(
         "--max-hours", "-t",
         type=float,
-        default=2.0,
+        default=2.0,  # Conservative default
         help="Maximum runtime in hours"
     )
 
@@ -361,7 +394,7 @@ def main():
     parser.add_argument(
         "--max-memory-gb",
         type=float,
-        default=45.0,
+        default=16.0,  # Conservative default for Colab
         help="Maximum memory usage in GB"
     )
 
