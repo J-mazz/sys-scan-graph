@@ -13,6 +13,9 @@ import logging
 T = TypeVar('T')
 R = TypeVar('R')
 
+# Setup logging
+logger = logging.getLogger(__name__)
+
 try:
     import psutil
     PSUTIL_AVAILABLE = True
@@ -279,3 +282,53 @@ def get_parallel_processor(conservative: bool = True, gpu_optimized: Optional[bo
         return parallel_processor_local
     else:
         return parallel_processor_cloud
+
+
+def process_producers_parallel(producers: Dict[str, Any], counts: Dict[str, int], description: str, processor: ParallelProcessor) -> Dict[str, List[Dict[str, Any]]]:
+    """Process multiple producers in parallel using the given processor.
+
+    Args:
+        producers: Dictionary of producer name -> producer instance
+        counts: Dictionary of producer name -> number of items to generate
+        description: Description for progress reporting
+        processor: The parallel processor to use
+
+    Returns:
+        Dictionary of producer name -> list of generated items
+    """
+    def process_single_producer(producer_name: str) -> tuple[str, List[Dict[str, Any]]]:
+        """Process a single producer."""
+        producer = producers[producer_name]
+        count = counts.get(producer_name, 10)
+        try:
+            results = producer.generate_findings(count)
+            return producer_name, results
+        except Exception as e:
+            logger.error(f"Error processing producer {producer_name}: {e}")
+            return producer_name, []
+
+    # Get list of producer names to process
+    producer_names = list(producers.keys())
+
+    # Process in parallel
+    results = {}
+    with processor._get_executor(processor.max_workers) as executor:
+        # Submit all tasks
+        future_to_producer = {
+            executor.submit(process_single_producer, name): name
+            for name in producer_names
+        }
+
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_producer):
+            producer_name = future_to_producer[future]
+            try:
+                name, findings = future.result()
+                results[name] = findings
+                logger.debug(f"Completed producer {name}: {len(findings)} findings")
+            except Exception as e:
+                logger.error(f"Producer {producer_name} failed: {e}")
+                results[producer_name] = []
+
+    logger.info(f"Parallel processing completed: {len(results)} producers processed")
+    return results
