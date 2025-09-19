@@ -409,6 +409,13 @@ def main():
     )
 
     parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=None,
+        help="Number of parallel workers (auto-detected if not specified)"
+    )
+
+    parser.add_argument(
         "--no-langchain",
         action="store_true",
         default=False,
