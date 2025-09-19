@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 """
-Production-ready synthetic data generation pipeline for massive dataset creation.
+Production-ready     def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False, max_memory_gb: float = 45.0, parallel_workers: Optional[int] = None):
+        self.gpu_optimized = gpu_optimized
+        self.conservative_parallel = conservative_parallel
+        self.fast_mode = fast_mode
+        self.max_memory_gb = max_memory_gb
+        self.parallel_workers = parallel_workers
+        self.pipeline = SyntheticDataPipeline(
+            use_langchain=False,  # Disable LangChain for speed
+            conservative_parallel=conservative_parallel,
+            gpu_optimized=gpu_optimized,
+            fast_mode=fast_mode
+        )data generation pipeline for massive dataset creation.
 Optimized for T4 GPU with extended runtime capabilities.
 """
 
@@ -42,10 +53,12 @@ from synthetic_data_pipeline import SyntheticDataPipeline
 class DatasetGenerator:
     """Production dataset generator with monitoring and extended runtime support."""
 
-    def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False):
+    def __init__(self, gpu_optimized: bool = True, conservative_parallel: bool = False, fast_mode: bool = False, max_memory_gb: float = 45.0, parallel_workers: Optional[int] = None):
         self.gpu_optimized = gpu_optimized
         self.conservative_parallel = conservative_parallel
         self.fast_mode = fast_mode
+        self.max_memory_gb = max_memory_gb
+        self.parallel_workers = parallel_workers
         self.pipeline = SyntheticDataPipeline(
             use_langchain=False,  # Disable LangChain for speed
             conservative_parallel=conservative_parallel,
@@ -345,6 +358,20 @@ def main():
         help="Use fast mode (skip heavy enrichment for massive datasets)"
     )
 
+    parser.add_argument(
+        "--max-memory-gb",
+        type=float,
+        default=45.0,
+        help="Maximum memory usage in GB"
+    )
+
+    parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=None,
+        help="Number of parallel workers (auto-detected if not specified)"
+    )
+
     args = parser.parse_args()
 
     # Configure logging based on verbosity
@@ -360,7 +387,9 @@ def main():
     generator = DatasetGenerator(
         gpu_optimized=args.gpu,
         conservative_parallel=args.conservative,
-        fast_mode=args.fast_mode
+        fast_mode=args.fast_mode,
+        max_memory_gb=args.max_memory_gb,
+        parallel_workers=args.parallel_workers
     )
 
     # Generate massive dataset
