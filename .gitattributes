@@ -40,7 +40,6 @@ CMakeLists.txt text eol=lf
 *.bz2       binary -diff
 *.zip       binary -diff
 *.tar       binary -diff
-*.tar.gz filter=lfs diff=lfs merge=lfs -text
 *.tgz       binary -diff
 *.img       binary -diff
 *.pdf       binary -diff
