@@ -17,6 +17,14 @@ agent_baseline.db
 /build/
 /build-*/
 
+#fucking datasets
+*.tar.*
+*.tar.gz
+massive_datasets/
+massive_datasets.tar.gz
+agent/synthetic_data/dataset_backup.tar.gz
+agent/synthetic_data/*.tar.gz
+
 # CMake generator files
 CMakeCache.txt
 CMakeFiles/

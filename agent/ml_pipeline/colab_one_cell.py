@@ -3,8 +3,12 @@ Complete Fine-Tuning Pipeline for Colab TPU
 Copy and paste this entire cell into Google Colab and run it.
 Make sure to:
 1. Change runtime to TPU
-2. Upload massive_datasets.tar.gz to your Colab workspace
+2. Upload massive_datasets.tar.gz to your Colab workspace (or update download_dataset.py with your URL)
 3. Have your Hugging Face token ready
+
+NOTE: To avoid uploading large files repeatedly, update the download_dataset.py script
+with your dataset URL (GitHub releases, Google Drive, etc.) and the script will
+download it automatically.
 """
 
 # Install dependencies (robust installation with fallbacks)
