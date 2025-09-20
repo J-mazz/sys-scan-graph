@@ -1,245 +1,188 @@
-#!/usr/bin/env python3
 """
-Google Colab TPU Training Script for Security ML Models
-This script handles the complete TPU setup and training pipeline for both Specialist and Generalist models.
+Main training orchestrator for fine-tuning models on TPU.
+
+This script coordinates the entire fine-tuning pipeline:
+1. Setup environment and dependencies
+2. Authenticate with Hugging Face
+3. Prepare training data
+4. Fine-tune Specialist model (Llama 3 8B)
+5. Fine-tune Generalist model (Mixtral 8x7B with LoRA)
+6. Quantize and package models
+
+Designed for Google Colab TPU environment.
 """
 
 import os
 import sys
-import torch
-import torch_xla.core.xla_model as xm
-from transformers import AutoTokenizer
-import argparse
-import logging
+import subprocess
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def setup_colab_tpu():
-    """Setup Google Colab TPU environment."""
-    print("🚀 Setting up Google Colab TPU environment...")
-
-    # Check if running on TPU
-    try:
-        import torch_xla.core.xla_model as xm
-        device = xm.xla_device()
-        print(f"✅ TPU device detected: {device}")
-        return True
-    except ImportError:
-        print("❌ torch_xla not available. Please install torch_xla for TPU support.")
-        return False
-    except:
-        print("❌ TPU not detected. This script requires TPU runtime.")
-        print("   Please change runtime to TPU in Google Colab.")
-        return False
 
 def install_dependencies():
-    """Install required dependencies for Colab TPU."""
-    print("📦 Installing ML dependencies...")
+    """Install required dependencies for TPU training."""
+    print("📦 Installing dependencies...")
 
-    # Install torch_xla for TPU support
-    os.system("pip install torch_xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html")
+    # Install PyTorch/XLA for TPU support
+    subprocess.run([
+        "pip", "install", "cloud-tpu-client",
+        "https://storage.googleapis.com/tpu-pytorch/wheels/colab/torch_xla-2.1-cp310-cp310-linux_x86_64.whl",
+        "-q"
+    ], check=True)
 
-    # Install other dependencies
-    dependencies = [
-        "torch>=2.0.0",
-        "transformers>=4.35.0",
-        "peft>=0.6.0",
-        "trl>=0.7.0",
-        "datasets>=2.14.0",
-        "accelerate>=0.24.0",
-        "bitsandbytes>=0.41.0",
-        "scipy>=1.11.0",
-        "scikit-learn>=1.3.0",
-        "wandb>=0.15.0",
-        "tensorboard>=2.14.0"
+    # Install ML libraries
+    ml_packages = [
+        "transformers==4.40.1",
+        "peft==0.10.0",
+        "accelerate==0.29.3",
+        "llama-cpp-python==0.2.77",
+        "trl==0.8.6",
+        "datasets",
+        "huggingface_hub"
     ]
 
-    for dep in dependencies:
-        os.system(f"pip install {dep}")
+    for package in ml_packages:
+        subprocess.run(["pip", "install", package, "-q"], check=True)
 
-    print("✅ Dependencies installed")
+    print("✅ Dependencies installed successfully.")
 
-def verify_tpu_setup():
-    """Verify TPU setup and print configuration."""
-    print("🔍 Verifying TPU setup...")
 
+def setup_authentication():
+    """Setup Hugging Face authentication."""
+    import getpass
+
+    if 'HF_TOKEN' not in os.environ:
+        hf_token = getpass.getpass('Enter your Hugging Face Hub token: ')
+        os.environ['HF_TOKEN'] = hf_token
+
+    # Verify token
+    from huggingface_hub import HfApi
+    api = HfApi()
     try:
-        # Check TPU availability
-        tpu_device = xm.xla_device()
-        print(f"✅ TPU Device: {tpu_device}")
-
-        # Check TPU cores
-        num_cores = xm.xrt_world_size()
-        print(f"✅ TPU Cores: {num_cores}")
-
-        # Check memory
-        if hasattr(torch, 'xla'):
-            print("✅ torch_xla available")
-        else:
-            print("❌ torch_xla not properly configured")
-
-        return True
-
+        user = api.whoami()
+        print(f"✅ Authenticated as: {user['name']}")
     except Exception as e:
-        print(f"❌ TPU setup verification failed: {e}")
-        return False
+        print(f"❌ Authentication failed: {e}")
+        sys.exit(1)
 
-def prepare_data_for_colab():
-    """Prepare training data for Colab environment."""
+
+def verify_dataset():
+    """Verify that the dataset is available."""
+    dataset_path = "massive_datasets.tar.gz"
+    if not os.path.exists(dataset_path):
+        print("❌ Dataset not found!")
+        print("Please upload your 'massive_datasets.tar.gz' file to the current directory.")
+        print("You can do this by:")
+        print("1. Clicking the folder icon in the left sidebar")
+        print("2. Navigating to the sys-scan-graph directory")
+        print("3. Uploading your dataset file")
+        sys.exit(1)
+    else:
+        print("✅ Dataset found.")
+
+
+def prepare_data():
+    """Prepare training data from the dataset."""
     print("📊 Preparing training data...")
 
-    # Check if data exists
-    data_archive = Path("../../massive_datasets.tar.gz")
-    if not data_archive.exists():
-        print(f"❌ Data archive not found at {data_archive}")
-        print("   Please upload massive_datasets.tar.gz to the project root")
-        return False
+    # Import and run data preparation
+    sys.path.append('agent/ml_pipeline')
+    from data_loader import create_training_files
 
-    # Create training data directory
-    training_dir = Path("training_data")
-    training_dir.mkdir(exist_ok=True)
+    create_training_files()
 
-    # Run data preparation
-    print("🔄 Running data preparation pipeline...")
-    os.system("python ml_pipeline/data_loader.py")
 
-    # Verify data was created
-    specialist_data = training_dir / "specialist_data.jsonl"
-    generalist_data = training_dir / "generalist_data.jsonl"
+def fine_tune_specialist():
+    """Fine-tune the Specialist model."""
+    print("🎯 Fine-tuning Specialist model...")
 
-    if specialist_data.exists() and generalist_data.exists():
-        print("✅ Training data prepared successfully")
-        return True
-    else:
-        print("❌ Training data preparation failed")
-        return False
+    # Run specialist training
+    result = subprocess.run([
+        "python", "agent/ml_pipeline/train_specialist.py"
+    ], capture_output=True, text=True)
 
-def train_specialist_model(hf_token=None):
-    """Train the Specialist model on TPU."""
-    print("🎯 Training Specialist Model...")
+    if result.returncode != 0:
+        print("❌ Specialist model training failed:")
+        print(result.stderr)
+        sys.exit(1)
 
-    cmd = "python ml_pipeline/train_specialist.py"
-    if hf_token:
-        cmd += f" --huggingface-token {hf_token}"
+    print("✅ Specialist model fine-tuned successfully.")
 
-    print(f"Running: {cmd}")
-    result = os.system(cmd)
 
-    if result == 0:
-        print("✅ Specialist model training completed")
-        return True
-    else:
-        print("❌ Specialist model training failed")
-        return False
+def fine_tune_generalist():
+    """Fine-tune the Generalist model."""
+    print("🌐 Fine-tuning Generalist model...")
 
-def train_generalist_model(hf_token=None):
-    """Train the Generalist model on TPU with LoRA."""
-    print("🧠 Training Generalist Model (LoRA)...")
+    # Run generalist training
+    result = subprocess.run([
+        "python", "agent/ml_pipeline/train_generalist.py"
+    ], capture_output=True, text=True)
 
-    cmd = "python ml_pipeline/train_generalist.py"
-    if hf_token:
-        cmd += f" --huggingface-token {hf_token}"
+    if result.returncode != 0:
+        print("❌ Generalist model training failed:")
+        print(result.stderr)
+        sys.exit(1)
 
-    print(f"Running: {cmd}")
-    result = os.system(cmd)
+    print("✅ Generalist model fine-tuned successfully.")
 
-    if result == 0:
-        print("✅ Generalist model training completed")
-        return True
-    else:
-        print("❌ Generalist model training failed")
-        return False
+
+def quantize_models():
+    """Quantize and package the models."""
+    print("⚡ Quantizing models...")
+
+    # Run quantization
+    result = subprocess.run([
+        "python", "agent/ml_pipeline/quantize_models.py"
+    ], capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print("❌ Model quantization failed:")
+        print(result.stderr)
+        sys.exit(1)
+
+    print("✅ Models quantized and packaged successfully.")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Colab TPU Training Pipeline")
-    parser.add_argument(
-        "--huggingface-token",
-        type=str,
-        help="HuggingFace token for accessing gated models (can also be set via HF_TOKEN env var)"
-    )
-    parser.add_argument(
-        "--skip-setup",
-        action="store_true",
-        help="Skip dependency installation and TPU setup"
-    )
-    parser.add_argument(
-        "--data-only",
-        action="store_true",
-        help="Only prepare data, don't train models"
-    )
-    parser.add_argument(
-        "--specialist-only",
-        action="store_true",
-        help="Only train specialist model"
-    )
-    parser.add_argument(
-        "--generalist-only",
-        action="store_true",
-        help="Only train generalist model"
-    )
-
-    args = parser.parse_args()
-
-    # Handle HuggingFace token from environment variable or argument
-    hf_token = args.huggingface_token or os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_TOKEN')
-
-    if not hf_token:
-        print("⚠️  WARNING: No HuggingFace token provided!")
-        print("   Set via --huggingface-token argument or HF_TOKEN environment variable")
-        print("   Some models may not be accessible without authentication")
-        print()
-
-    print("🤖 Security ML Training Pipeline for Google Colab TPU")
+    """Main orchestration function."""
+    print("🚀 Starting Sys-Scan-Graph Model Fine-Tuning Pipeline")
     print("=" * 60)
-    if hf_token:
-        print("🔐 HuggingFace token: Configured ✓")
-    else:
-        print("🔐 HuggingFace token: Not configured ⚠️")
-    print()
 
-    # Setup phase
-    if not args.skip_setup:
-        if not setup_colab_tpu():
-            sys.exit(1)
-
+    try:
+        # Step 1: Install dependencies
         install_dependencies()
 
-        if not verify_tpu_setup():
-            sys.exit(1)
+        # Step 2: Setup authentication
+        setup_authentication()
 
-    # Data preparation
-    if not prepare_data_for_colab():
+        # Step 3: Verify dataset
+        verify_dataset()
+
+        # Step 4: Prepare data
+        prepare_data()
+
+        # Step 5: Fine-tune Specialist model
+        fine_tune_specialist()
+
+        # Step 6: Fine-tune Generalist model
+        fine_tune_generalist()
+
+        # Step 7: Quantize models
+        quantize_models()
+
+        print("=" * 60)
+        print("🎉 Pipeline completed successfully!")
+        print("📦 Your quantized models are available in: models/package/")
+        print("   - specialist_model_q4km.gguf")
+        print("   - generalist_model_q4km.gguf")
+        print("\nDownload these files for integration into your application.")
+
+    except KeyboardInterrupt:
+        print("\n⚠️  Pipeline interrupted by user.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Pipeline failed: {e}")
         sys.exit(1)
 
-    if args.data_only:
-        print("📊 Data preparation completed. Exiting.")
-        return
-
-    # Training phase
-    success = True
-
-    if not args.generalist_only:
-        if not train_specialist_model(hf_token):
-            success = False
-
-    if not args.specialist_only:
-        if not train_generalist_model(hf_token):
-            success = False
-
-    if success:
-        print("\n🎉 All training completed successfully!")
-        print("📁 Models saved in:")
-        print("   - models/specialist_model/")
-        print("   - models/generalist_model_lora/")
-        print("\n🚀 Next steps:")
-        print("   1. Run quantization: python ml_pipeline/quantize_and_deploy.py")
-        print("   2. Integrate with LangGraph: Update agent/providers/")
-        print("   3. Test the complete pipeline")
-    else:
-        print("\n❌ Training failed. Check logs above for details.")
-        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -241,13 +241,6 @@ debug_*
 *_debug
 *_test
 
-# Large dataset files (generated - not tracked in git)
-*.tar.gz
-massive_datasets/
-agent/synthetic_data/massive_datasets/
-agent/synthetic_data/dataset_backup.tar.gz
-massive_datasets/massive_datasets.tar.gz
-
 # Assets (tracked - contains documentation images)
 # assets/  # <- Intentionally NOT ignored - contains docs images
 

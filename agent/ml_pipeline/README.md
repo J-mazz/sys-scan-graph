@@ -1,213 +1,278 @@
-# Security ML Training Pipeline
+# ML Pipeline for Sys-Scan-Graph
 
-This directory contains the complete ML pipeline for training specialized security analysis models using Google Colab's TPU infrastructure.
+This directory contains the machine learning pipeline for fine-tuning models used in the Sys-Scan-Graph intelligence layer. The pipeline implements a dual-model approach with a Specialist model for security-specific tasks and a Generalist model for broader analysis.
 
 ## Overview
 
-The pipeline trains two models:
-- **Specialist Model**: Transforms raw sys-scan output into enriched security reports
-- **Generalist Model**: Performs agentic reasoning and tool calling for security analysis
+The ML pipeline consists of two fine-tuned models:
 
-## Key Features
+### Specialist Model
+- **Base Model**: Llama 3 8B
+- **Purpose**: Security-specific analysis, threat detection, compliance checking
+- **Training Data**: Security-related content from the dataset
+- **Fine-tuning Method**: Full fine-tuning on TPU
 
-- ✅ **TPU-Optimized**: Designed for Google Colab TPU runtime
-- ✅ **Proper Loss Functions**: CrossEntropyLoss with TPU-specific optimizations
-- ✅ **LoRA Fine-Tuning**: Parameter-efficient training for the Generalist model
-- ✅ **Distributed Training**: Handles TPU core parallelism automatically
-- ✅ **Memory Efficient**: Gradient accumulation and bfloat16 precision
+### Generalist Model
+- **Base Model**: Mixtral 8x7B Instruct
+- **Purpose**: General analysis, context understanding, report generation
+- **Training Data**: General knowledge content from the dataset
+- **Fine-tuning Method**: LoRA (Low-Rank Adaptation) on TPU
 
 ## Prerequisites
 
-### Google Colab Setup
-1. Open [Google Colab](https://colab.research.google.com/)
-2. Change runtime to **TPU** (Runtime → Change runtime type → TPU)
-3. Mount Google Drive (optional, for data persistence)
+### Hardware Requirements
+- **TPU Environment**: Google Colab Pro+ with TPU v2/v3 or Cloud TPU
+- **Memory**: At least 32GB RAM for model loading
+- **Storage**: 100GB+ for datasets and models
 
-### Data Preparation
-Ensure `massive_datasets.tar.gz` is available in the project root directory.
+### Software Requirements
+- Python 3.10+
+- PyTorch 2.0+
+- CUDA-compatible GPU (optional, for non-TPU environments)
+- Hugging Face account with access to required models
 
-## Quick Start
+### Required Models Access
+- `meta-llama/Meta-Llama-3-8B` (requires Hugging Face approval)
+- `mistralai/Mixtral-8x7B-Instruct-v0.1`
 
-### 1. Setup and Data Preparation
-```bash
-# Clone the repository
-!git clone https://github.com/your-username/sys-scan-graph.git
-%cd sys-scan-graph/agent
+## Installation
 
-# Install dependencies
-!pip install -r requirements.txt
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Mazzlabs/sys-scan-graph.git
+   cd sys-scan-graph
+   ```
 
-# Run the complete Colab pipeline
-!python ml_pipeline/colab_train.py --huggingface-token YOUR_HF_TOKEN
+2. **Install dependencies**:
+   ```bash
+   cd agent
+   pip install -r requirements.txt
+   ```
+
+3. **Set up Hugging Face authentication**:
+   ```bash
+   export HF_TOKEN=your_hugging_face_token
+   ```
+
+## Data Preparation
+
+### Dataset Format
+The pipeline expects a `massive_datasets.tar.gz` file containing training data. The data should be in JSON format with the following structure:
+
+```json
+{
+  "title": "Security Finding Title",
+  "description": "Detailed description of the finding",
+  "content": "Full content of the security report",
+  "findings": ["finding1", "finding2"]
+}
 ```
 
-### 2. Secure Token Setup (Recommended)
-For security, set your tokens as environment variables:
+### Data Processing
+The `data_loader.py` script automatically:
+1. Unpacks the dataset archive
+2. Processes JSON files
+3. Categorizes content as security-related (Specialist) or general (Generalist)
+4. Creates JSONL files for training
 
+## Training Pipeline
+
+### Option 1: Colab TPU Training (Recommended)
+
+1. **Upload to Colab**:
+   - Open Google Colab
+   - Upload `massive_datasets.tar.gz` to the workspace
+   - Change runtime to TPU
+
+2. **Run the orchestrator**:
+   ```python
+   !python agent/ml_pipeline/colab_train.py
+   ```
+
+### Option 2: Local Training
+
+1. **Prepare data**:
+   ```bash
+   python agent/ml_pipeline/data_loader.py
+   ```
+
+2. **Train Specialist model**:
+   ```bash
+   python agent/ml_pipeline/train_specialist.py
+   ```
+
+3. **Train Generalist model**:
+   ```bash
+   python agent/ml_pipeline/train_generalist.py
+   ```
+
+4. **Quantize models**:
+   ```bash
+   python agent/ml_pipeline/quantize_models.py
+   ```
+
+## Model Configuration
+
+### Specialist Model (Llama 3 8B)
 ```python
-import os
-os.environ['HF_TOKEN'] = 'your_huggingface_token_here'
-os.environ['HUGGINGFACE_TOKEN'] = 'your_huggingface_token_here'  # Alternative
+# Key parameters
+MODEL_ID = "meta-llama/Meta-Llama-3-8B"
+MAX_SEQ_LENGTH = 4096
+BATCH_SIZE = 4
+LEARNING_RATE = 2e-5
+EPOCHS = 1
 ```
 
-Then run without exposing tokens:
-```bash
-!python ml_pipeline/colab_train.py
-```
-
-### 3. Individual Training Steps
-
-#### Data Preparation Only
-```bash
-!python ml_pipeline/colab_train.py --data-only
-```
-
-#### Train Specialist Model Only
-```bash
-!python ml_pipeline/train_specialist.py --huggingface-token YOUR_HF_TOKEN
-```
-
-#### Train Generalist Model Only
-```bash
-!python ml_pipeline/train_generalist.py --huggingface-token YOUR_HF_TOKEN
-```
-
-## Loss Function Details
-
-### Specialist Model (Full Fine-Tune)
-- **Loss Function**: `CrossEntropyLoss` with TPU optimizations
-- **Key Features**:
-  - Proper label shifting for causal language modeling
-  - TPU device handling
-  - Distributed loss computation across TPU cores
-
-### Generalist Model (LoRA Fine-Tune)
-- **Loss Function**: `CrossEntropyLoss` with causal LM shifting
-- **Key Features**:
-  - Optimized for LoRA parameter updates
-  - Reduced memory footprint
-  - Faster training convergence
-
-## Training Configuration
-
-### TPU-Specific Settings
+### Generalist Model (Mixtral 8x7B)
 ```python
-# Training arguments optimized for TPU
-training_args = TrainingArguments(
-    per_device_train_batch_size=2,      # Small batch size for TPU memory
-    gradient_accumulation_steps=8,      # Accumulate for effective batch size
-    bf16=True,                          # bfloat16 for TPU efficiency
-    dataloader_pin_memory=False,        # TPU doesn't use pinned memory
-    dataloader_num_workers=0,           # TPU handles parallelism internally
-)
+# Key parameters
+MODEL_ID = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+MAX_SEQ_LENGTH = 2048
+BATCH_SIZE = 2
+LEARNING_RATE = 1e-4
+EPOCHS = 1
+
+# LoRA configuration
+LORA_R = 16
+LORA_ALPHA = 32
+LORA_DROPOUT = 0.1
 ```
 
-### LoRA Configuration
-```python
-lora_config = LoraConfig(
-    r=16,                               # LoRA rank
-    lora_alpha=32,                      # Scaling parameter
-    target_modules=["q_proj", "v_proj"], # Attention layers
-    lora_dropout=0.05,                  # Regularization
-)
-```
+## Quantization
 
-## Model Specifications
+Models are quantized using llama.cpp for efficient inference:
 
-### Specialist Model
-- **Base Model**: Llama-3-8B (or similar 8B parameter model)
-- **Training**: Full fine-tuning
-- **Purpose**: Raw scan → Enriched report transformation
-- **Output**: `models/specialist_model/`
-
-### Generalist Model
-- **Base Model**: Mixtral-8x7B-Instruct-v0.1 (or similar MoE model)
-- **Training**: LoRA fine-tuning
-- **Purpose**: Agentic reasoning and tool calling
-- **Output**: `models/generalist_model_lora/`
-
-## Memory Optimization
-
-### For TPU Training
-- Use `bfloat16` precision (automatically enabled)
-- Gradient accumulation to simulate larger batch sizes
-- LoRA for parameter-efficient training on larger models
-- Proper data collation to minimize padding
-
-### Memory Requirements
-- **Specialist (8B)**: ~16GB TPU memory
-- **Generalist (46B effective)**: ~24GB TPU memory with LoRA
-
-## Troubleshooting
-
-### Common Issues
-
-#### TPU Not Detected
-```bash
-# Ensure you're using TPU runtime in Colab
-Runtime → Change runtime type → TPU
-```
-
-#### Out of Memory
-```python
-# Reduce batch size and increase gradient accumulation
-per_device_train_batch_size=1
-gradient_accumulation_steps=16
-```
-
-#### Import Errors
-```bash
-# Install torch_xla for TPU support
-!pip install torch_xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html
-```
-
-#### HuggingFace Authentication
-```python
-# Set your token
-import os
-os.environ["HF_TOKEN"] = "your_token_here"
-```
+- **Format**: GGUF (GPT-Generated Unified Format)
+- **Quantization**: Q4_K_M (4-bit with medium quality)
+- **Benefits**: Reduced memory footprint, faster inference, CPU compatibility
 
 ## Output Structure
 
 ```
 models/
-├── specialist_model/
-│   ├── pytorch_model.bin
-│   ├── tokenizer.json
-│   └── config.json
-└── generalist_model_lora/
-    ├── adapter_model.bin
-    ├── adapter_config.json
-    └── tokenizer.json
+├── specialist_model_fine_tuned/     # Full fine-tuned Specialist model
+├── generalist_model_lora_adapters/  # LoRA adapters for Generalist
+├── generalist_model_merged/         # Merged Generalist model
+├── specialist_model_q4km.gguf       # Quantized Specialist model
+├── generalist_model_q4km.gguf       # Quantized Generalist model
+└── package/                         # Packaged models for deployment
+    ├── specialist_model_q4km.gguf
+    ├── generalist_model_q4km.gguf
+    └── README.md
 ```
 
-## Next Steps
+## Integration
 
-After training:
+### Loading Quantized Models
 
-1. **Quantization**: Run `python ml_pipeline/quantize_and_deploy.py`
-2. **Integration**: Update `agent/providers/` with local LLM provider
-3. **Testing**: Test the complete LangGraph pipeline
-4. **Deployment**: Deploy quantized models for inference
+```python
+from llama_cpp import Llama
 
-## Performance Expectations
+# Load Specialist model
+specialist = Llama(
+    model_path="models/package/specialist_model_q4km.gguf",
+    n_ctx=4096,
+    n_threads=8
+)
 
-### Training Time (TPU v3-8)
-- **Specialist**: ~4-6 hours for 3 epochs
-- **Generalist**: ~8-12 hours for 3 epochs with LoRA
+# Load Generalist model
+generalist = Llama(
+    model_path="models/package/generalist_model_q4km.gguf",
+    n_ctx=2048,
+    n_threads=8
+)
+```
 
-### Model Performance
-- **Specialist**: High accuracy on enrichment tasks
-- **Generalist**: Effective tool calling and reasoning
+### Using in Sys-Scan-Graph
 
-## Support
+The fine-tuned models enhance the intelligence layer by providing:
 
-For issues specific to:
-- **TPU Training**: Check torch_xla documentation
-- **Model Training**: Refer to transformers/PEFT documentation
-- **Data Format**: Check the synthetic data generation scripts
+1. **Specialist Model**: Deep security analysis, threat correlation, compliance validation
+2. **Generalist Model**: Contextual understanding, report generation, general analysis
 
----
+Models are integrated into the LangGraph pipeline for enhanced analysis capabilities.
 
-**Note**: This pipeline is optimized for Google Colab's TPU environment. For local training, modify the device handling and batch sizes accordingly.
+## Performance Optimization
+
+### TPU-Specific Optimizations
+- **bfloat16 precision**: Native TPU format for optimal performance
+- **XLA compilation**: Automatic graph optimization
+- **Large batch sizes**: Efficient TPU core utilization
+
+### Memory Management
+- **Gradient checkpointing**: Reduced memory for large models
+- **LoRA for Generalist**: Parameter-efficient fine-tuning
+- **Quantization**: 75% memory reduction for inference
+
+## Troubleshooting
+
+### Authentication Issues
+
+If you're getting 401 Unauthorized errors even for public models like GPT-2:
+
+1. **Test Authentication Locally**:
+   ```bash
+   python agent/ml_pipeline/test_auth.py
+   ```
+
+2. **Check Token Validity**:
+   - Visit [Hugging Face Settings](https://huggingface.co/settings/tokens)
+   - Verify your token is active and has read permissions
+   - Regenerate token if expired
+
+3. **Clear Environment Variables**:
+   ```bash
+   unset HF_TOKEN
+   unset HUGGINGFACE_HUB_TOKEN
+   ```
+
+4. **Colab-Specific Setup**:
+   - Go to Settings → Secrets → Add new secret
+   - Name: `HF_TOKEN`, Value: your_token_here
+   - Restart runtime after adding secret
+
+5. **Model Access Requests**:
+   - For Llama 3: Visit [Meta Llama 3 Access](https://huggingface.co/meta-llama/Meta-Llama-3-8B)
+   - For Mixtral: Visit [Mistral Mixtral Access](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1)
+   - Accept terms and wait for approval
+
+### Common Issues
+
+1. **TPU Not Available**:
+   - Ensure Colab Pro+ subscription
+   - Check TPU runtime selection
+   - Verify TPU availability with `import torch_xla.core.xla_model as xm; print(xm.xla_device_count())`
+
+2. **Model Loading Errors**:
+   - Verify Hugging Face token has access to required models
+   - Check available disk space (models require 50GB+)
+   - Ensure sufficient RAM (32GB+ recommended)
+
+3. **Out of Memory**:
+   - Reduce batch size in training arguments
+   - Enable gradient checkpointing
+   - Use smaller sequence lengths
+
+4. **Quantization Failures**:
+   - Ensure llama.cpp is properly built
+   - Check model paths are correct
+   - Verify sufficient disk space for conversion
+
+### Performance Tuning
+
+- **Training Speed**: Monitor TPU utilization (>90% ideal)
+- **Memory Usage**: Track with `nvidia-smi` or TPU metrics
+- **Convergence**: Adjust learning rates based on loss curves
+
+## Contributing
+
+When contributing to the ML pipeline:
+
+1. Test changes on TPU environment
+2. Update documentation for any parameter changes
+3. Validate model performance on test datasets
+4. Ensure compatibility with existing Sys-Scan-Graph integration
+
+## License
+
+See main repository LICENSE file for licensing information. Note that the intelligence layer uses Business Source License 1.1 for commercial use.

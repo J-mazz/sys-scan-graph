@@ -1,297 +1,252 @@
-#!/usr/bin/env python3
 """
-Train the Generalist model for agentic reasoning and tool calling.
-Uses LoRA for parameter-efficient fine-tuning, optimized for TPU.
+Fine-tuning script for the Generalist model (Mixtral 8x7B).
+
+This script performs LoRA fine-tuning of the Mixtral 8x7B model
+on general data using TPU acceleration.
 """
 
 import os
 import torch
-import torch_xla.core.xla_model as xm
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TrainingArguments,
-    DataCollatorForLanguageModeling
+    TrainingArguments
 )
 from trl import SFTTrainer
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-import argparse
-import logging
-from pathlib import Path
+from peft import LoraConfig, get_peft_model
+import torch_xla.core.xla_model as xm
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-class TPUCrossEntropyLoss(torch.nn.CrossEntropyLoss):
-    """TPU-optimized CrossEntropyLoss with proper distributed handling."""
+def setup_tpu():
+    """Initialize TPU device."""
+    if xm.xla_device_count() == 0:
+        raise RuntimeError("No TPU devices found. Make sure you're running on a TPU-enabled environment.")
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    device = xm.xla_device()
+    print(f"✅ Using TPU device: {device}")
+    return device
 
-    def forward(self, input, target):
-        # Ensure input and target are on the same device
-        if input.device != target.device:
-            target = target.to(input.device)
 
-        # Handle TPU-specific tensor operations
-        return super().forward(input.view(-1, input.size(-1)), target.view(-1))
+def load_model_and_tokenizer(model_id: str = "mistralai/Mixtral-8x7B-Instruct-v0.1"):
+    """
+    Load the model and tokenizer.
 
-class TPUGeneralistTrainer:
-    """TPU-optimized trainer for the Generalist model with LoRA."""
+    Args:
+        model_id: Hugging Face model ID
 
-    def __init__(self, model_name: str, dataset_path: str, output_dir: str):
-        self.model_name = model_name
-        self.dataset_path = dataset_path
-        self.output_dir = output_dir
-        self.device = xm.xla_device()
+    Returns:
+        Tuple of (model, tokenizer)
+    """
+    print(f"Loading model: {model_id}")
 
-    def load_model_and_tokenizer(self):
-        """Load model and tokenizer with TPU and LoRA optimizations."""
-        logger.info(f"Loading model: {self.model_name}")
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.pad_token = tokenizer.eos_token
 
-        # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+    # Load model with bfloat16 for TPU efficiency
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch.bfloat16,
+        device_map="auto"  # Let accelerate handle device placement
+    )
 
-        # Load model with TPU optimizations
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.bfloat16,  # TPU optimized dtype
-            device_map="auto",
-            trust_remote_code=True
+    print("✅ Model and tokenizer loaded successfully")
+    return model, tokenizer
+
+
+def prepare_dataset(data_path: str, tokenizer):
+    """
+    Load and prepare the training dataset.
+
+    Args:
+        data_path: Path to the JSONL training data
+        tokenizer: The tokenizer to use
+
+    Returns:
+        Dataset object
+    """
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Training data not found: {data_path}")
+
+    print(f"Loading dataset from: {data_path}")
+    dataset = load_dataset('json', data_files=data_path, split='train')
+
+    # Add tokenization if needed
+    def tokenize_function(examples):
+        return tokenizer(
+            examples["text"],
+            truncation=True,
+            padding="max_length",
+            max_length=2048
         )
 
-        # Prepare model for TPU training
-        self.model = prepare_model_for_kbit_training(self.model)
+    # Tokenize dataset
+    tokenized_dataset = dataset.map(tokenize_function, batched=True)
 
-        # Configure LoRA
-        self.lora_config = LoraConfig(
-            r=16,  # LoRA rank
-            lora_alpha=32,  # LoRA scaling
-            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],  # Attention layers
-            lora_dropout=0.05,
-            bias="none",
-            task_type="CAUSAL_LM"
-        )
+    print(f"✅ Dataset prepared with {len(tokenized_dataset)} samples")
+    return tokenized_dataset
 
-        # Apply LoRA to the model
-        self.model = get_peft_model(self.model, self.lora_config)
 
-        # Move to TPU device
-        self.model.to(self.device)
+def setup_lora_config():
+    """
+    Set up LoRA configuration for efficient fine-tuning.
 
-        # Print trainable parameters info
-        self.model.print_trainable_parameters()
+    Returns:
+        LoraConfig object
+    """
+    return LoraConfig(
+        r=16,
+        lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        lora_dropout=0.1,
+        bias="none",
+        task_type="CAUSAL_LM"
+    )
 
-        logger.info("Model and tokenizer loaded with LoRA configuration")
 
-    def load_dataset(self):
-        """Load and preprocess the training dataset."""
-        logger.info(f"Loading dataset from {self.dataset_path}")
+def setup_training_args(output_dir: str = "models/generalist_model_lora_adapters"):
+    """
+    Set up training arguments optimized for TPU with LoRA.
 
-        # Load the JSONL dataset
-        dataset = load_dataset("json", data_files=self.dataset_path)
+    Args:
+        output_dir: Directory to save the LoRA adapters
 
-        def preprocess_function(examples):
-            # Combine prompt and completion for training
-            texts = []
-            for prompt, completion in zip(examples["prompt"], examples["completion"]):
-                # Format as instruction-response pair
-                text = f"<s>[INST] {prompt} [/INST] {completion}</s>"
-                texts.append(text)
+    Returns:
+        TrainingArguments object
+    """
+    return TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=1,
+        per_device_train_batch_size=2,  # Smaller batch size for larger model
+        gradient_accumulation_steps=4,
+        learning_rate=1e-4,
+        save_strategy="epoch",
+        logging_steps=10,
+        bf16=True,  # Use bfloat16 for TPU
+        dataloader_pin_memory=False,  # Not needed for TPU
+        # TPU-specific settings
+        dataloader_num_workers=0,  # TPU doesn't benefit from multiple workers
+        remove_unused_columns=False,
+        # Evaluation
+        evaluation_strategy="no",
+        save_total_limit=1,
+    )
 
-            # Tokenize
-            tokenized = self.tokenizer(
-                texts,
-                truncation=True,
-                padding="max_length",
-                max_length=2048,  # Adjust based on your data
-                return_tensors="pt"
-            )
 
-            return {
-                "input_ids": tokenized["input_ids"],
-                "attention_mask": tokenized["attention_mask"],
-                "labels": tokenized["input_ids"].clone()  # For causal LM, labels = input_ids
-            }
+def apply_lora_to_model(model, lora_config):
+    """
+    Apply LoRA configuration to the model.
 
-        # Apply preprocessing
-        self.dataset = dataset.map(
-            preprocess_function,
-            batched=True,
-            remove_columns=dataset["train"].column_names,
-            num_proc=4  # Adjust based on available CPU cores
-        )
+    Args:
+        model: The base model
+        lora_config: LoRA configuration
 
-        logger.info(f"Dataset loaded with {len(self.dataset['train'])} examples")
+    Returns:
+        Model with LoRA applied
+    """
+    print("Applying LoRA configuration to model...")
+    lora_model = get_peft_model(model, lora_config)
+    lora_model.print_trainable_parameters()
+    return lora_model
 
-    def create_data_collator(self):
-        """Create TPU-optimized data collator."""
-        return DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm=False  # Causal LM, not masked LM
-        )
 
-    def get_training_arguments(self) -> TrainingArguments:
-        """Get TPU-optimized training arguments for LoRA."""
-        return TrainingArguments(
-            output_dir=self.output_dir,
-            num_train_epochs=3,
-            per_device_train_batch_size=2,  # Small batch size for TPU memory with LoRA
-            per_device_eval_batch_size=2,
-            gradient_accumulation_steps=4,  # Less accumulation needed with LoRA
-            learning_rate=5e-5,  # Higher learning rate for LoRA
-            weight_decay=0.01,
-            warmup_steps=50,
-            logging_steps=10,
-            save_steps=500,
-            save_total_limit=3,
-            evaluation_strategy="steps",
-            eval_steps=500,
-            load_best_model_at_end=True,
-            metric_for_best_model="loss",
-            greater_is_better=False,
+def fine_tune_generalist(
+    model,
+    tokenizer,
+    train_dataset,
+    training_args,
+    lora_config,
+    max_seq_length: int = 2048
+):
+    """
+    Fine-tune the generalist model with LoRA.
 
-            # TPU-specific settings
-            dataloader_pin_memory=False,  # TPU doesn't use pinned memory
-            dataloader_num_workers=0,     # TPU handles parallelism internally
+    Args:
+        model: The model to fine-tune
+        tokenizer: The tokenizer
+        train_dataset: Training dataset
+        training_args: Training arguments
+        lora_config: LoRA configuration
+        max_seq_length: Maximum sequence length
+    """
+    print("--> Starting PEFT (LoRA) fine-tuning of the Generalist model on TPU...")
 
-            # Distributed training
-            local_rank=-1,  # Let torch_xla handle rank
-            ddp_find_unused_parameters=False,
+    # Apply LoRA
+    model = apply_lora_to_model(model, lora_config)
 
-            # Memory optimization
-            fp16=False,  # TPU uses bfloat16
-            bf16=True,   # Enable bfloat16 for TPU
-            gradient_checkpointing=False,  # Less needed with LoRA
+    # Initialize trainer
+    trainer = SFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        peft_config=lora_config,
+        dataset_text_field="text",
+        max_seq_length=max_seq_length,
+        tokenizer=tokenizer,
+        packing=False,  # Disable packing for TPU
+    )
 
-            # Logging and monitoring
-            report_to=["tensorboard"],
-            run_name=f"generalist_lora_{self.model_name.split('/')[-1]}"
-        )
+    # Start training
+    trainer.train()
 
-    def create_trainer(self):
-        """Create the SFT trainer with TPU and LoRA optimizations."""
-        training_args = self.get_training_arguments()
-        data_collator = self.create_data_collator()
+    print("--> Fine-tuning complete.")
+    return trainer
 
-        # Custom loss function for TPU
-        def compute_loss(model, inputs, return_outputs=False):
-            outputs = model(**inputs)
-            loss_fct = TPUCrossEntropyLoss()
 
-            # Compute loss - handle LoRA outputs properly
-            logits = outputs.logits
-            labels = inputs["labels"]
+def save_model(trainer, output_dir: str):
+    """
+    Save the LoRA adapters.
 
-            # Shift for causal LM
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
+    Args:
+        trainer: The trained trainer
+        output_dir: Output directory
+    """
+    os.makedirs(output_dir, exist_ok=True)
 
-            # Compute loss
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+    trainer.save_model(output_dir)
+    print(f"--> Generalist LoRA adapters saved to {output_dir}")
 
-            return (loss, outputs) if return_outputs else loss
-
-        self.trainer = SFTTrainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=self.dataset["train"],
-            eval_dataset=self.dataset["train"].select(range(min(1000, len(self.dataset["train"])))),  # Small eval set
-            data_collator=data_collator,
-            compute_loss_func=compute_loss,  # Use our TPU-optimized loss
-            tokenizer=self.tokenizer,
-        )
-
-        logger.info("Trainer created with TPU and LoRA optimizations")
-
-    def train(self):
-        """Execute the training loop."""
-        logger.info("Starting LoRA training...")
-
-        # Start training
-        self.trainer.train()
-
-        # Save the LoRA adapters and tokenizer
-        logger.info(f"Saving LoRA model to {self.output_dir}")
-        self.trainer.save_model(self.output_dir)
-
-        # Save tokenizer
-        self.tokenizer.save_pretrained(self.output_dir)
-
-        # Save LoRA config
-        self.lora_config.save_pretrained(self.output_dir)
-
-        logger.info("LoRA training completed successfully!")
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Generalist model with LoRA on TPU")
-    parser.add_argument(
-        "--model-name",
-        type=str,
-        default="mistralai/Mixtral-8x7B-Instruct-v0.1",
-        help="HuggingFace model name"
-    )
-    parser.add_argument(
-        "--dataset-path",
-        type=str,
-        default="training_data/generalist_data.jsonl",
-        help="Path to training dataset"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="models/generalist_model_lora",
-        help="Output directory for trained LoRA model"
-    )
-    parser.add_argument(
-        "--huggingface-token",
-        type=str,
-        help="HuggingFace token for accessing gated models"
-    )
-    parser.add_argument(
-        "--lora-r",
-        type=int,
-        default=16,
-        help="LoRA rank"
-    )
-    parser.add_argument(
-        "--lora-alpha",
-        type=int,
-        default=32,
-        help="LoRA scaling parameter"
-    )
+    """Main function to run the generalist model fine-tuning."""
+    print("🚀 Starting Generalist Model Fine-Tuning on TPU")
 
-    args = parser.parse_args()
+    # Configuration
+    MODEL_ID = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    DATASET_PATH = "training_data/generalist_data.jsonl"
+    OUTPUT_DIR = "models/generalist_model_lora_adapters"
 
-    # Set HuggingFace token if provided
-    if args.huggingface_token:
-        os.environ["HF_TOKEN"] = args.huggingface_token
-    elif os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_TOKEN'):
-        # Token already set in environment
-        pass
-    else:
-        logger.warning("No HuggingFace token provided. Some models may not be accessible.")
+    try:
+        # Setup TPU
+        device = setup_tpu()
 
-    # Initialize TPU trainer
-    trainer = TPUGeneralistTrainer(
-        model_name=args.model_name,
-        dataset_path=args.dataset_path,
-        output_dir=args.output_dir
-    )
+        # Load model and tokenizer
+        model, tokenizer = load_model_and_tokenizer(MODEL_ID)
 
-    # Update LoRA config if specified
-    if hasattr(trainer, 'lora_config'):
-        trainer.lora_config.r = args.lora_r
-        trainer.lora_config.lora_alpha = args.lora_alpha
+        # Prepare dataset
+        train_dataset = prepare_dataset(DATASET_PATH, tokenizer)
 
-    # Execute training pipeline
-    trainer.load_model_and_tokenizer()
-    trainer.load_dataset()
-    trainer.create_trainer()
-    trainer.train()
+        # Setup LoRA config
+        lora_config = setup_lora_config()
+
+        # Setup training arguments
+        training_args = setup_training_args(OUTPUT_DIR)
+
+        # Fine-tune the model
+        trainer = fine_tune_generalist(
+            model, tokenizer, train_dataset, training_args, lora_config
+        )
+
+        # Save the model
+        save_model(trainer, OUTPUT_DIR)
+
+        print("✅ Generalist model fine-tuning completed successfully!")
+
+    except Exception as e:
+        print(f"❌ Error during fine-tuning: {e}")
+        raise
+
 
 if __name__ == "__main__":
     main()

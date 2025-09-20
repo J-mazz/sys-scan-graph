@@ -1,192 +1,175 @@
-#!/usr/bin/env python3
 """
-Data preparation pipeline for ML training.
-Loads synthetic data from massive_datasets.tar.gz and creates training datasets.
+Data preparation utilities for fine-tuning models.
+
+This module handles unpacking the massive datasets and preparing
+training data for specialist and generalist models.
 """
 
 import tarfile
 import gzip
 import json
-import argparse
+import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-import logging
+from typing import Dict, List, Any, Optional
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-class DataLoader:
-    """Handles loading and processing of synthetic training data."""
+def unpack_massive_datasets(tar_path: str, extract_to: str = "massive_datasets") -> None:
+    """
+    Unpack the massive_datasets.tar.gz file.
 
-    def __init__(self, archive_path: Path):
-        self.archive_path = archive_path
-        self.training_data_dir = Path("training_data")
-        self.specialist_file = self.training_data_dir / "specialist_data.jsonl"
-        self.generalist_file = self.training_data_dir / "generalist_data.jsonl"
+    Args:
+        tar_path: Path to the tar.gz file
+        extract_to: Directory to extract to
+    """
+    if not os.path.exists(tar_path):
+        raise FileNotFoundError(f"Dataset file not found: {tar_path}")
 
-    def decompress_and_load_data(self):
-        """Generator that yields decompressed JSON records from the archive."""
-        if not self.archive_path.exists():
-            raise FileNotFoundError(f"Dataset archive not found at {self.archive_path}")
+    os.makedirs(extract_to, exist_ok=True)
 
-        logger.info(f"Loading data from {self.archive_path}")
+    print(f"Unpacking {tar_path} to {extract_to}...")
+    with tarfile.open(tar_path, 'r:gz') as tar:
+        tar.extractall(extract_to)
+    print("✅ Dataset unpacked successfully.")
 
-        with tarfile.open(self.archive_path, "r:gz") as tar:
-            for member in tar.getmembers():
-                if member.isfile() and member.name.endswith(".json"):
-                    logger.debug(f"Processing batch: {member.name}")
-                    file_content = tar.extractfile(member).read()
 
-                    try:
-                        # The data inside might be gzipped
-                        if file_content.startswith(b'\x1f\x8b'):  # gzip magic bytes
-                            decompressed = gzip.decompress(file_content)
-                            record = json.loads(decompressed)
-                        else:
-                            record = json.loads(file_content)
+def prepare_training_data(dataset_dir: str, output_dir: str = "training_data") -> None:
+    """
+    Prepare training data for specialist and generalist models.
 
-                        yield record
-                    except Exception as e:
-                        logger.warning(f"Failed to process {member.name}: {e}")
-                        continue
+    This function processes the unpacked dataset and creates JSONL files
+    for fine-tuning.
 
-    def extract_raw_scan_from_ground_truth(self, ground_truth: dict) -> dict:
-        """Extract raw scanner output from enriched ground truth."""
-        # This simulates the "before" state for the Specialist model
-        # Remove enrichment fields and keep only basic findings
-        raw_scan = {
-            "timestamp": ground_truth.get("timestamp"),
-            "version": ground_truth.get("version", "5.0.0"),
-            "hostname": ground_truth.get("hostname", "localhost"),
-            "data": {
-                "findings": ground_truth.get("data", {}).get("findings", []),
-                "summary": {
-                    "total_findings": len(ground_truth.get("data", {}).get("findings", [])),
-                    "severity_breakdown": ground_truth.get("data", {}).get("summary", {}).get("severity_breakdown", {})
-                }
-            }
-        }
-        return raw_scan
+    Args:
+        dataset_dir: Directory containing unpacked dataset
+        output_dir: Directory to save prepared data
+    """
+    os.makedirs(output_dir, exist_ok=True)
 
-    def create_agentic_training_example(self, enriched_report: dict) -> tuple[str, str]:
-        """Create a training example for the Generalist model."""
-        # Generate a prompt based on the enriched report
-        prompt = f"""Given the following enriched security report, determine the next logical step for an agent to take:
+    specialist_data = []
+    generalist_data = []
 
-REPORT:
-{json.dumps(enriched_report, indent=2)}
+    # Process files in the dataset directory
+    for root, dirs, files in os.walk(dataset_dir):
+        for file in files:
+            if file.endswith('.json'):
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, 'r') as f:
+                        data = json.load(f)
 
-What is the most appropriate next action? Consider:
-- Additional data collection needed
-- Tool execution required
-- Analysis refinement
-- Risk assessment updates
+                    # Process data based on content type
+                    if isinstance(data, list):
+                        for item in data:
+                            processed_item = process_data_item(item)
+                            if processed_item:
+                                # Categorize as specialist or generalist
+                                if is_security_related(processed_item):
+                                    specialist_data.append(processed_item)
+                                else:
+                                    generalist_data.append(processed_item)
+                    elif isinstance(data, dict):
+                        processed_item = process_data_item(data)
+                        if processed_item:
+                            if is_security_related(processed_item):
+                                specialist_data.append(processed_item)
+                            else:
+                                generalist_data.append(processed_item)
 
-NEXT ACTION:
-"""
+                except Exception as e:
+                    print(f"Error processing {file_path}: {e}")
+                    continue
 
-        # Generate a completion based on the report content
-        completion = self._generate_completion_from_report(enriched_report)
+    # Save to JSONL files
+    save_to_jsonl(specialist_data, os.path.join(output_dir, "specialist_data.jsonl"))
+    save_to_jsonl(generalist_data, os.path.join(output_dir, "generalist_data.jsonl"))
 
-        return prompt, completion
+    print(f"✅ Prepared {len(specialist_data)} specialist samples")
+    print(f"✅ Prepared {len(generalist_data)} generalist samples")
 
-    def _generate_completion_from_report(self, report: dict) -> str:
-        """Generate a realistic completion based on report analysis."""
-        findings = report.get("data", {}).get("findings", [])
-        correlations = report.get("data", {}).get("correlations", [])
 
-        # Analyze findings to determine next action
-        high_severity = [f for f in findings if f.get("severity") == "high"]
-        critical_findings = [f for f in findings if f.get("severity") == "critical"]
+def process_data_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """
+    Process a single data item into training format.
 
-        if critical_findings:
-            return '{"tool_call": "get_file_hash", "parameters": {"path": "/etc/shadow"}, "reason": "Critical finding requires immediate file integrity check"}'
-        elif high_severity:
-            return '{"tool_call": "check_process_details", "parameters": {"pid": "1234"}, "reason": "High severity finding needs process investigation"}'
-        elif correlations:
-            return '{"action": "analyze_correlations", "parameters": {"correlation_ids": ["corr_001"]}, "reason": "Correlations detected requiring deeper analysis"}'
-        else:
-            return '{"action": "generate_report", "parameters": {"format": "detailed"}, "reason": "Analysis complete, generate comprehensive report"}'
+    Args:
+        item: Raw data item
 
-    def create_training_sets(self):
-        """Main method to create both training datasets."""
-        self.training_data_dir.mkdir(exist_ok=True)
+    Returns:
+        Processed item with 'text' field for training
+    """
+    # This is a placeholder - adapt based on actual data structure
+    # Assuming the data has fields that can be converted to text
 
-        specialist_count = 0
-        generalist_count = 0
+    text_parts = []
 
-        with open(self.specialist_file, "w", encoding="utf-8") as f_specialist, \
-             open(self.generalist_file, "w", encoding="utf-8") as f_generalist:
+    # Extract relevant fields
+    if 'title' in item:
+        text_parts.append(f"Title: {item['title']}")
+    if 'description' in item:
+        text_parts.append(f"Description: {item['description']}")
+    if 'content' in item:
+        text_parts.append(f"Content: {item['content']}")
+    if 'findings' in item:
+        text_parts.append(f"Findings: {json.dumps(item['findings'])}")
 
-            for record in self.decompress_and_load_data():
-                # Create Specialist training example
-                raw_scan = self.extract_raw_scan_from_ground_truth(record)
+    if text_parts:
+        return {"text": "\n".join(text_parts)}
+    return None
 
-                specialist_prompt = f"""Analyze the following raw sys-scan JSON output and transform it into a fully enriched and correlated security report.
 
-INPUT:
-{json.dumps(raw_scan, indent=2)}
+def is_security_related(item: Dict[str, str]) -> bool:
+    """
+    Determine if a data item is security-related for specialist model.
 
-OUTPUT:
-"""
+    Args:
+        item: Processed data item
 
-                specialist_record = {
-                    "prompt": specialist_prompt,
-                    "completion": json.dumps(record, indent=2)
-                }
+    Returns:
+        True if security-related
+    """
+    text = item.get('text', '').lower()
+    security_keywords = [
+        'security', 'vulnerability', 'exploit', 'attack', 'malware',
+        'threat', 'risk', 'compliance', 'audit', 'scan', 'intrusion'
+    ]
 
-                f_specialist.write(json.dumps(specialist_record, ensure_ascii=False) + "\n")
-                specialist_count += 1
+    return any(keyword in text for keyword in security_keywords)
 
-                # Create Generalist training example
-                generalist_prompt, generalist_completion = self.create_agentic_training_example(record)
 
-                generalist_record = {
-                    "prompt": generalist_prompt,
-                    "completion": generalist_completion
-                }
+def save_to_jsonl(data: List[Dict[str, Any]], filepath: str) -> None:
+    """
+    Save data to JSONL format.
 
-                f_generalist.write(json.dumps(generalist_record, ensure_ascii=False) + "\n")
-                generalist_count += 1
+    Args:
+        data: List of data items
+        filepath: Output file path
+    """
+    with open(filepath, 'w') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
 
-                if specialist_count % 100 == 0:
-                    logger.info(f"Processed {specialist_count} training examples...")
 
-        logger.info(f"Created {specialist_count} specialist training examples")
-        logger.info(f"Created {generalist_count} generalist training examples")
-        logger.info(f"Training data saved to {self.training_data_dir}")
+def create_training_files(dataset_path: str = "massive_datasets.tar.gz",
+                         extract_dir: str = "massive_datasets",
+                         output_dir: str = "training_data") -> None:
+    """
+    Main function to create training files from dataset.
 
-def main():
-    parser = argparse.ArgumentParser(description="Prepare training data from synthetic datasets")
-    parser.add_argument(
-        "--archive-path",
-        type=Path,
-        default=Path("../../massive_datasets.tar.gz"),
-        help="Path to the massive datasets archive"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("training_data"),
-        help="Output directory for training data"
-    )
+    Args:
+        dataset_path: Path to the dataset tar.gz file
+        extract_dir: Directory to extract dataset
+        output_dir: Directory to save training data
+    """
+    print("🚀 Starting data preparation...")
 
-    args = parser.parse_args()
+    # Unpack dataset
+    unpack_massive_datasets(dataset_path, extract_dir)
 
-    # Adjust archive path if running from ml_pipeline directory
-    if not args.archive_path.exists():
-        # Try relative to agent directory
-        alt_path = Path(__file__).parent.parent / "massive_datasets.tar.gz"
-        if alt_path.exists():
-            args.archive_path = alt_path
-        else:
-            logger.error(f"Could not find archive at {args.archive_path} or {alt_path}")
-            return 1
+    # Prepare training data
+    prepare_training_data(extract_dir, output_dir)
 
-    loader = DataLoader(args.archive_path)
-    loader.create_training_sets()
+    print("✅ Data preparation complete!")
 
-    return 0
 
 if __name__ == "__main__":
-    exit(main())
+    create_training_files()
