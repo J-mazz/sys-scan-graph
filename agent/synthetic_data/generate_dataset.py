@@ -362,10 +362,11 @@ def main():
     )
 
     parser.add_argument(
-        "--ultra",
-        action="store_true",
-        default=False,
-        help="Ultra mode: Balanced performance settings (35k findings/batch, 120 batches, 11.5h runtime, 20 workers, 20GB memory). Enables full LangChain enrichment and GPU optimization."
+        "mode",
+        nargs="?",
+        choices=["default", "ultra"],
+        default="ultra",  # Default to ultra mode for Colab
+        help="Generation mode: 'default' (conservative) or 'ultra' (optimized)"
     )
 
     parser.add_argument(
@@ -475,21 +476,28 @@ def main():
 
     args = parser.parse_args()
 
-    # Handle ultra mode - override conservative defaults
-    if args.ultra:
+    # Handle mode selection - default to ultra for Colab performance
+    if args.mode == "ultra" or args.ultra:  # Support both positional and flag
         print("🚀 ULTRA MODE ACTIVATED - OPTIMIZED FOR COLAB PERFORMANCE")
         print("=" * 60)
         args.batch_size = 35000  # Reduced from 50k for faster batches
         args.max_batches = 120   # Reduced from 200 for reasonable completion time
         args.max_hours = 11.5
         args.max_memory_gb = 20.0
-        args.parallel_workers = 20
+        args.parallel_workers = 1  # Sequential execution for stability
         args.gpu = True
         args.fast_mode = False  # Ultra mode uses full enrichment
         args.no_langchain = False  # Ultra mode uses LangChain
-        print("Settings: 35k findings/batch, 120 batches, 11.5h runtime, 20 workers, 20GB memory")
+        print("Settings: 35k findings/batch, 120 batches, 11.5h runtime, 1 worker (sequential)")
         print("GPU: Enabled, Fast Mode: Disabled, LangChain: Enabled")
         print("=" * 60)
+        print()
+    else:
+        print("📊 DEFAULT MODE - CONSERVATIVE SETTINGS")
+        print("=" * 40)
+        print("Settings: 5k findings/batch, 20 batches, 2h runtime")
+        print("Use 'ultra' mode for optimized performance")
+        print("=" * 40)
         print()
 
     # Configure logging based on verbosity
