@@ -157,7 +157,7 @@ def main():
     parser.add_argument(
         "--huggingface-token",
         type=str,
-        help="HuggingFace token for accessing gated models"
+        help="HuggingFace token for accessing gated models (can also be set via HF_TOKEN env var)"
     )
     parser.add_argument(
         "--skip-setup",
@@ -182,8 +182,22 @@ def main():
 
     args = parser.parse_args()
 
+    # Handle HuggingFace token from environment variable or argument
+    hf_token = args.huggingface_token or os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_TOKEN')
+
+    if not hf_token:
+        print("⚠️  WARNING: No HuggingFace token provided!")
+        print("   Set via --huggingface-token argument or HF_TOKEN environment variable")
+        print("   Some models may not be accessible without authentication")
+        print()
+
     print("🤖 Security ML Training Pipeline for Google Colab TPU")
     print("=" * 60)
+    if hf_token:
+        print("🔐 HuggingFace token: Configured ✓")
+    else:
+        print("🔐 HuggingFace token: Not configured ⚠️")
+    print()
 
     # Setup phase
     if not args.skip_setup:
@@ -207,11 +221,11 @@ def main():
     success = True
 
     if not args.generalist_only:
-        if not train_specialist_model(args.huggingface_token):
+        if not train_specialist_model(hf_token):
             success = False
 
     if not args.specialist_only:
-        if not train_generalist_model(args.huggingface_token):
+        if not train_generalist_model(hf_token):
             success = False
 
     if success:

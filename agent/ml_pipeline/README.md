@@ -41,7 +41,21 @@ Ensure `massive_datasets.tar.gz` is available in the project root directory.
 !python ml_pipeline/colab_train.py --huggingface-token YOUR_HF_TOKEN
 ```
 
-### 2. Individual Training Steps
+### 2. Secure Token Setup (Recommended)
+For security, set your tokens as environment variables:
+
+```python
+import os
+os.environ['HF_TOKEN'] = 'your_huggingface_token_here'
+os.environ['HUGGINGFACE_TOKEN'] = 'your_huggingface_token_here'  # Alternative
+```
+
+Then run without exposing tokens:
+```bash
+!python ml_pipeline/colab_train.py
+```
+
+### 3. Individual Training Steps
 
 #### Data Preparation Only
 ```bash

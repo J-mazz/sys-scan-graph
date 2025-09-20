@@ -269,6 +269,11 @@ def main():
     # Set HuggingFace token if provided
     if args.huggingface_token:
         os.environ["HF_TOKEN"] = args.huggingface_token
+    elif os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_TOKEN'):
+        # Token already set in environment
+        pass
+    else:
+        logger.warning("No HuggingFace token provided. Some models may not be accessible.")
 
     # Initialize TPU trainer
     trainer = TPUGeneralistTrainer(
