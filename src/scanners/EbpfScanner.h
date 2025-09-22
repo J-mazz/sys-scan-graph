@@ -1,5 +1,4 @@
-#ifndef SYS_SCAN_EBPF_SCANNER_H
-#define SYS_SCAN_EBPF_SCANNER_H
+#pragma once
 
 #include "../core/Scanner.h"
 #include <memory>
@@ -40,5 +39,3 @@ private:
 std::unique_ptr<Scanner> make_ebpf_scanner();
 
 } // namespace sys_scan
-
-#endif // SYS_SCAN_EBPF_SCANNER_H

@@ -3,8 +3,28 @@
 #include <fstream>
 #include <algorithm>
 #include <stdexcept>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace sys_scan {
+
+// Helper function to check if a file exists and is readable
+static bool file_exists_and_readable(const std::string& path, bool print_errors = true) {
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) {
+        if (print_errors) std::cerr << "File does not exist: " << path << "\n";
+        return false;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        if (print_errors) std::cerr << "Path is not a regular file: " << path << "\n";
+        return false;
+    }
+    if (access(path.c_str(), R_OK) != 0) {
+        if (print_errors) std::cerr << "File is not readable: " << path << "\n";
+        return false;
+    }
+    return true;
+}
 
 bool ConfigValidator::validate(Config& cfg) {
     // Normalize ioc_exec_trace default duration
@@ -75,6 +95,10 @@ bool ConfigValidator::validate(Config& cfg) {
         std::cerr << "--container-id requires --containers\n";
         return false;
     }
+
+    // Validate external file paths - only check if files are specified and will be loaded
+    // Note: We don't check existence here as files might be created later or tests might use mock paths
+    // Existence is checked when actually loading the files in load_external_files()
 
     return true;
 }

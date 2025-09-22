@@ -182,6 +182,10 @@ TEST_F(ComplianceTest, EmptyComplianceScanner) {
 }
 
 TEST_F(ComplianceTest, ComplianceScannerExceptionHandling) {
+    // Use a fresh report for this test
+    Report fresh_report;
+    ScanContext context(config, fresh_report);
+    
     class ExceptionThrowingScanner : public ComplianceScanner {
     public:
         std::string name() const override { return "exception_compliance"; }
@@ -189,19 +193,18 @@ TEST_F(ComplianceTest, ComplianceScannerExceptionHandling) {
         void register_checks() override {
             checks_.push_back({
                 "test_standard", "1.1", "Exception test", Severity::Low,
-                []() { throw std::runtime_error("Test exception"); return true; },
-                []() { return true; }
+                [](){ throw std::runtime_error("Test exception"); return true; },
+                [](){ return true; }
             });
         }
     };
 
     ExceptionThrowingScanner scanner;
-    ScanContext context(config, report);
 
     // Should not crash despite exception in test function
     EXPECT_NO_THROW(scanner.scan(context));
 
-    const auto& results = report.results();
+    const auto& results = fresh_report.results();
     auto exception_result = std::find_if(results.begin(), results.end(),
         [](const ScanResult& r) { return r.scanner_name == "exception_compliance"; });
 
@@ -212,6 +215,8 @@ TEST_F(ComplianceTest, ComplianceScannerExceptionHandling) {
     EXPECT_EQ(finding.metadata.at("passed"), "false");
     EXPECT_EQ(finding.metadata.at("rationale"), "test_exception");
 }
+
+
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);

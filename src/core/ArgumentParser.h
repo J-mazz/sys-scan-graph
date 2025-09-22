@@ -12,7 +12,6 @@ public:
     struct FlagSpec {
         const char* name;
         enum class ArgKind { None, String, Int, CSV, OptionalInt } kind;
-        std::function<void(const std::string&)> apply;
     };
 
     ArgumentParser();

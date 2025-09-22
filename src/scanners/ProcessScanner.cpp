@@ -3,6 +3,7 @@
 #include "../core/Config.h"
 #include "../core/ScanContext.h"  // Added ScanContext include
 #include "../core/Logging.h"
+#include "../core/Utils.h"
 #include <unordered_map>
 #include <dirent.h>
 #include <unistd.h>
@@ -187,6 +188,12 @@ static size_t list_proc_pids(int* pid_buffer, size_t max_pids) {
         }
     }
     closedir(dir);
+    
+    // Warn if we hit the limit
+    if (count == max_pids) {
+        Logger::instance().warn("Reached maximum process limit (" + std::to_string(max_pids) + "), some processes may be missed");
+    }
+    
     return count;
 }
 
@@ -197,11 +204,10 @@ static size_t build_container_mapping(const int* pid_buffer, size_t pid_count,
 
     for (size_t i = 0; i < pid_count && container_count < max_containers; ++i) {
         int pid = pid_buffer[i];
-        char cgroup_path[64];
-        snprintf(cgroup_path, sizeof(cgroup_path), "/proc/%d/cgroup", pid);
+        std::string cgroup_path = utils::get_proc_path(pid, "cgroup");
 
         char cgroup_data[2048];
-        ssize_t len = read_file_to_buffer(cgroup_path, cgroup_data, sizeof(cgroup_data) - 1);
+        ssize_t len = read_file_to_buffer(cgroup_path.c_str(), cgroup_data, sizeof(cgroup_data) - 1);
         if (len > 0) {
             cgroup_data[len] = '\0';
             if (extract_container_id_lean(cgroup_data, len, container_map[container_count], 13)) {
@@ -218,10 +224,9 @@ static size_t build_container_mapping(const int* pid_buffer, size_t pid_count,
 static bool read_process_files(int pid, char* status_data, size_t status_size,
                               std::string& cmd, const std::string& scanner_name, ScanContext& context) {
     // Read status file
-    char status_path[64];
-    snprintf(status_path, sizeof(status_path), "/proc/%d/status", pid);
+    std::string status_path = utils::get_proc_path(pid, "status");
 
-    ssize_t status_len = read_file_to_buffer(status_path, status_data, status_size - 1);
+    ssize_t status_len = read_file_to_buffer(status_path.c_str(), status_data, status_size - 1);
     if (status_len <= 0) {
         context.report.add_warning(scanner_name, WarnCode::ProcUnreadableStatus, status_path);
         return false;
@@ -229,11 +234,10 @@ static bool read_process_files(int pid, char* status_data, size_t status_size,
     status_data[status_len] = '\0';
 
     // Read cmdline file
-    char cmdline_path[64];
-    snprintf(cmdline_path, sizeof(cmdline_path), "/proc/%d/cmdline", pid);
+    std::string cmdline_path = utils::get_proc_path(pid, "cmdline");
 
     char cmd_buffer[4096];
-    ssize_t cmd_len = read_file_to_buffer(cmdline_path, cmd_buffer, sizeof(cmd_buffer) - 1);
+    ssize_t cmd_len = read_file_to_buffer(cmdline_path.c_str(), cmd_buffer, sizeof(cmd_buffer) - 1);
     if (cmd_len > 0) {
         cmd_buffer[cmd_len] = '\0';
         cmd = cmd_buffer;
@@ -283,11 +287,10 @@ static void parse_process_uid_gid(const char* status_data, size_t status_len,
 // Analyze process executable and compute hash
 static void analyze_process_exe(int pid, std::map<std::string, std::string>& metadata,
                               const std::string& scanner_name, ScanContext& context) {
-    char exe_path[64];
-    snprintf(exe_path, sizeof(exe_path), "/proc/%d/exe", pid);
+    std::string exe_path = utils::get_proc_path(pid, "exe");
 
     char exe_link_path[PATH_MAX];
-    ssize_t exe_len = readlink(exe_path, exe_link_path, sizeof(exe_link_path) - 1);
+    ssize_t exe_len = readlink(exe_path.c_str(), exe_link_path, sizeof(exe_link_path) - 1);
     if (exe_len > 0) {
         exe_link_path[exe_len] = '\0';
         metadata["exe_path"] = exe_link_path;

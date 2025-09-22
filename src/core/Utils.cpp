@@ -44,4 +44,17 @@ std::string read_file_trim(const std::string& path) {
     return s;
 }
 
+// Path abstraction implementations
+std::string get_proc_path(int pid, const std::string& file) {
+    std::string path = "/proc/" + std::to_string(pid);
+    if (!file.empty()) path += "/" + file;
+    return path;
+}
+
+std::string get_sys_path(const std::string& file) {
+    std::string path = "/sys";
+    if (!file.empty()) path += "/" + file;
+    return path;
+}
+
 }} // namespaces

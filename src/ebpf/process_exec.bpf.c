@@ -99,11 +99,16 @@ int handle_sys_enter_connect(struct minimal_sys_enter *ctx){
     void *uservaddr = (void*)ctx->args[1];
     int addrlen = (int)ctx->args[2];
     
+    // Bounds checking for safety
+    if (!uservaddr || addrlen <= 0 || addrlen > 128) {
+        bpf_ringbuf_discard(e, 0);
+        return 0;
+    }
+    
     // Try IPv4 first
     if(addrlen >= (int)sizeof(struct minimal_sockaddr_in)){
         struct minimal_sockaddr_in sin = {};
-        bpf_probe_read_user(&sin, sizeof(sin), uservaddr);
-        if(sin.sin_family == 2 /* AF_INET */){
+        if (bpf_probe_read_user(&sin, sizeof(sin), uservaddr) == 0 && sin.sin_family == 2 /* AF_INET */){
             e->daddr = sin.sin_addr; // already network order
             e->dport = sin.sin_port; // network order
             goto submit;
@@ -113,8 +118,7 @@ int handle_sys_enter_connect(struct minimal_sys_enter *ctx){
     // Try IPv6
     if(addrlen >= (int)sizeof(struct minimal_sockaddr_in6)){
         struct minimal_sockaddr_in6 sin6 = {};
-        bpf_probe_read_user(&sin6, sizeof(sin6), uservaddr);
-        if(sin6.sin6_family == 10 /* AF_INET6 */){
+        if (bpf_probe_read_user(&sin6, sizeof(sin6), uservaddr) == 0 && sin6.sin6_family == 10 /* AF_INET6 */){
             e->is_ipv6 = 1;
             e->daddr = 0; // IPv4 field not used for IPv6
             e->dport = sin6.sin6_port; // network order

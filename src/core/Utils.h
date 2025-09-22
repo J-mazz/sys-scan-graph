@@ -10,5 +10,9 @@ namespace utils {
     bool is_world_writable(const std::string& path);
     std::string trim(const std::string& s);
     std::string read_file_trim(const std::string& path);
+    
+    // Path abstraction for filesystem access
+    std::string get_proc_path(int pid, const std::string& file = "");
+    std::string get_sys_path(const std::string& file = "");
 }
 }
