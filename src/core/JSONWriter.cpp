@@ -39,6 +39,21 @@ namespace {
         explicit CanonVal(Type t): type(t) {}
     };
 
+    struct SummaryMetrics {
+        size_t finding_total_all = 0;
+        size_t emitted_total = 0;
+        size_t scanners_with_findings = 0;
+        long long total_risk_all = 0;
+        long long emitted_risk = 0;
+        long long duration_ms = 0;
+        long long slowest_ms = 0;
+        std::string slowest_name;
+        std::chrono::system_clock::time_point earliest_start{};
+        std::chrono::system_clock::time_point latest_end{};
+        std::map<std::string, size_t> severity_counts_all;
+        std::map<std::string, size_t> severity_counts_emitted;
+    };
+
     // Forward decls
     static void canon_emit(const CanonVal& v, std::ostream& os);
 
@@ -480,9 +495,26 @@ namespace {
         return res_arr;
     }
 
+    static CanonVal build_generic_message_array(const std::vector<std::pair<std::string, std::string>>& messages) {
+        CanonVal arr{CanonVal::T_ARR};
+
+        auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
+            o.obj[k].type = CanonVal::T_STR;
+            o.obj[k].str = v;
+        };
+
+        for (const auto& msg : messages) {
+            CanonVal item{CanonVal::T_OBJ};
+            put_str(item, "scanner", msg.first);
+            put_str(item, "message", msg.second);
+            arr.arr.push_back(std::move(item));
+        }
+        return arr;
+    }
+
     static CanonVal build_warnings_array(const Report& report) {
         CanonVal warns{CanonVal::T_ARR};
-        
+
         auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
             o.obj[k].type = CanonVal::T_STR;
             o.obj[k].str = v;
@@ -506,39 +538,11 @@ namespace {
     }
 
     static CanonVal build_partial_warnings_array(const Report& report) {
-        CanonVal pwarns{CanonVal::T_ARR};
-        
-        auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
-            o.obj[k].type = CanonVal::T_STR;
-            o.obj[k].str = v;
-        };
-
-        for (const auto& w : report.partial_warnings()) {
-            CanonVal wv{CanonVal::T_OBJ};
-            put_str(wv, "message", w.second);
-            put_str(wv, "scanner", w.first);
-            pwarns.arr.push_back(std::move(wv));
-        }
-
-        return pwarns;
+        return build_generic_message_array(report.partial_warnings());
     }
 
     static CanonVal build_errors_array(const Report& report) {
-        CanonVal errs{CanonVal::T_ARR};
-        
-        auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
-            o.obj[k].type = CanonVal::T_STR;
-            o.obj[k].str = v;
-        };
-
-        for (const auto& e : report.errors()) {
-            CanonVal ev{CanonVal::T_OBJ};
-            put_str(ev, "message", e.second);
-            put_str(ev, "scanner", e.first);
-            errs.arr.push_back(std::move(ev));
-        }
-
-        return errs;
+        return build_generic_message_array(report.errors());
     }
 
     static CanonVal build_summary_extension(long long total_risk_all, long long emitted_risk) {
@@ -601,46 +605,86 @@ static CanonVal build_canonical(const Report& report, long long total_risk_all, 
 } // end anonymous namespace
 
 // Move write implementation outside anonymous namespace to correctly match class scope
-    static void calculate_summary_metrics(const std::vector<ScanResult>& results, const Config& cfg,
-                                         size_t& finding_total_all, std::map<std::string, size_t>& severity_counts_all,
-                                         std::map<std::string, size_t>& severity_counts_emitted,
-                                         long long& total_risk_all, long long& emitted_risk,
-                                         std::chrono::system_clock::time_point& earliest,
-                                         std::chrono::system_clock::time_point& latest,
-                                         size_t& scanners_with_findings, long long& slowest_ms,
-                                         std::string& slowest_name) {
+    static SummaryMetrics calculate_summary_metrics(const std::vector<ScanResult>& results, const Config& cfg) {
+        SummaryMetrics metrics;
         for (const auto& r : results) {
-            finding_total_all += r.findings.size();
-            if (!r.findings.empty()) scanners_with_findings++;
-            
-            if (earliest.time_since_epoch().count() == 0 || 
-                (r.start_time.time_since_epoch().count() && r.start_time < earliest)) {
-                earliest = r.start_time;
+            metrics.finding_total_all += r.findings.size();
+            if (!r.findings.empty()) metrics.scanners_with_findings++;
+
+            if (metrics.earliest_start.time_since_epoch().count() == 0 ||
+                (r.start_time.time_since_epoch().count() && r.start_time < metrics.earliest_start)) {
+                metrics.earliest_start = r.start_time;
             }
-            
-            if (r.end_time.time_since_epoch().count() && 
-                (latest.time_since_epoch().count() == 0 || r.end_time > latest)) {
-                latest = r.end_time;
+
+            if (r.end_time.time_since_epoch().count() &&
+                (metrics.latest_end.time_since_epoch().count() == 0 || r.end_time > metrics.latest_end)) {
+                metrics.latest_end = r.end_time;
             }
-            
+
             auto elapsed = (r.end_time.time_since_epoch().count() && r.start_time.time_since_epoch().count()) ?
                           std::chrono::duration_cast<std::chrono::milliseconds>(r.end_time - r.start_time).count() : 0;
-            if (elapsed > slowest_ms) {
-                slowest_ms = elapsed;
-                slowest_name = r.scanner_name;
+            if (elapsed > metrics.slowest_ms) {
+                metrics.slowest_ms = elapsed;
+                metrics.slowest_name = r.scanner_name;
             }
-            
+
             for (const auto& f : r.findings) {
-                severity_counts_all[severity_to_string(f.severity)]++;
+                metrics.severity_counts_all[severity_to_string(f.severity)]++;
                 if (!f.operational_error) {
-                    total_risk_all += f.base_severity_score;
+                    metrics.total_risk_all += f.base_severity_score;
                     if (severity_rank(cfg.min_severity) <= severity_rank_enum(f.severity)) {
-                        severity_counts_emitted[severity_to_string(f.severity)]++;
-                        emitted_risk += f.base_severity_score;
+                        metrics.severity_counts_emitted[severity_to_string(f.severity)]++;
+                        metrics.emitted_risk += f.base_severity_score;
                     }
                 }
             }
         }
+
+        // Calculate duration
+        if (metrics.earliest_start.time_since_epoch().count() && metrics.latest_end.time_since_epoch().count() &&
+            metrics.latest_end >= metrics.earliest_start) {
+            metrics.duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                metrics.latest_end - metrics.earliest_start).count();
+        }
+
+        // Calculate emitted total
+        for (const auto& pair : metrics.severity_counts_emitted) {
+            metrics.emitted_total += pair.second;
+        }
+
+        return metrics;
+    }
+
+    static void append_mitre_techniques(std::ostringstream& s, const Finding& f) {
+        auto it = f.metadata.find("mitre_techniques");
+        if (it == f.metadata.end()) return;
+
+        s << ",\"mitreTechniqueIds\":[";
+        std::string v = it->second;
+        size_t pos = 0;
+        bool firstId = true;
+        while (pos < v.size()) {
+            size_t comma = v.find(',', pos);
+            std::string tok = v.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+            if (!tok.empty()) {
+                if (!firstId) s << ",";
+                firstId = false;
+                s << "\"" << escape(tok) << "\"";
+            }
+            if (comma == std::string::npos) break;
+            pos = comma + 1;
+        }
+        s << "]";
+    }
+
+    static void append_sarif_finding(std::ostringstream& s, const Finding& f) {
+        s << "{\"ruleId\":\"" << escape(f.id) << "\",\"level\":\"" << escape(severity_to_string(f.severity))
+          << "\",\"message\":{\"text\":\"" << escape(f.title) << " - " << escape(f.description)
+          << "\"},\"properties\":{\"baseSeverityScore\":" << f.base_severity_score;
+
+        append_mitre_techniques(s, f);
+
+        s << "}}";
     }
 
     static std::string generate_sarif_output(const std::vector<ScanResult>& results, const Config& cfg) {
@@ -648,44 +692,20 @@ static CanonVal build_canonical(const Report& report, long long total_risk_all, 
         s << "{\"$schema\":\"https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json\",\"version\":\"2.1.0\",\"runs\":[{";
         s << "\"tool\":{\"driver\":{\"name\":\"sys-scan\",\"informationUri\":\"https://github.com/J-mazz/sys-scan\"}},";
         s << "\"results\":[";
-        
+
         bool first = true;
         int minRank = severity_rank(cfg.min_severity);
-        
+
         for (const auto& r : results) {
             for (const auto& f : r.findings) {
                 if (severity_rank_enum(f.severity) < minRank) continue;
-                
+
                 if (!first) s << ",";
                 first = false;
-                
-                s << "{\"ruleId\":\"" << escape(f.id) << "\",\"level\":\"" << escape(severity_to_string(f.severity))
-                  << "\",\"message\":{\"text\":\"" << escape(f.title) << " - " << escape(f.description)
-                  << "\"},\"properties\":{\"baseSeverityScore\":" << f.base_severity_score;
-                
-                auto it = f.metadata.find("mitre_techniques");
-                if (it != f.metadata.end()) {
-                    s << ",\"mitreTechniqueIds\":[";
-                    std::string v = it->second;
-                    size_t pos = 0;
-                    bool firstId = true;
-                    while (pos < v.size()) {
-                        size_t comma = v.find(',', pos);
-                        std::string tok = v.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
-                        if (!tok.empty()) {
-                            if (!firstId) s << ",";
-                            firstId = false;
-                            s << "\"" << escape(tok) << "\"";
-                        }
-                        if (comma == std::string::npos) break;
-                        pos = comma + 1;
-                    }
-                    s << "]";
-                }
-                s << "}}";
+                append_sarif_finding(s, f);
             }
         }
-        
+
         s << "]}]}";
         return s.str();
     }
@@ -769,116 +789,93 @@ static CanonVal build_canonical(const Report& report, long long total_risk_all, 
         return nd.str();
     }
 
+    static void handle_json_formatting(std::string& out, char c, int& depth, bool& in_string, bool& esc) {
+        if (esc) {
+            esc = false;
+            return;
+        }
+        if (c == '\\') {
+            esc = true;
+            return;
+        }
+        if (c == '"') {
+            in_string = !in_string;
+            return;
+        }
+        if (in_string) return;
+
+        switch (c) {
+            case '{':
+            case '[':
+                out.push_back('\n');
+                depth++;
+                for (int i = 0; i < depth; i++) out.append("  ");
+                break;
+            case '}':
+            case ']':
+                out.push_back('\n');
+                depth--;
+                if (depth < 0) depth = 0;
+                for (int i = 0; i < depth; i++) out.append("  ");
+                break;
+            case ',':
+                out.push_back('\n');
+                for (int i = 0; i < depth; i++) out.append("  ");
+                break;
+            case ':':
+                out.push_back(' ');
+                break;
+            default:
+                break;
+        }
+    }
+
     static std::string pretty_print_json(const std::string& compact_json) {
         std::string out;
         out.reserve(compact_json.size() * 2);
         int depth = 0;
         bool in_string = false;
         bool esc = false;
-        
-        auto indent = [&](int d) {
-            for (int i = 0; i < d; i++) out.append("  ");
-        };
-        
+
         for (size_t i = 0; i < compact_json.size(); ++i) {
             char c = compact_json[i];
             out.push_back(c);
-            
-            if (esc) {
-                esc = false;
-                continue;
-            }
-            if (c == '\\') {
-                esc = true;
-                continue;
-            }
-            if (c == '"') {
-                in_string = !in_string;
-                continue;
-            }
-            if (in_string) continue;
-            
-            switch (c) {
-                case '{':
-                case '[':
-                    out.push_back('\n');
-                    depth++;
-                    indent(depth);
-                    break;
-                case '}':
-                case ']':
-                    out.push_back('\n');
-                    depth--;
-                    if (depth < 0) depth = 0;
-                    indent(depth);
-                    break;
-                case ',':
-                    out.push_back('\n');
-                    indent(depth);
-                    break;
-                case ':':
-                    out.push_back(' ');
-                    break;
-                default:
-                    break;
-            }
+            handle_json_formatting(out, c, depth, in_string, esc);
         }
         out.push_back('\n');
         return out;
     }
 
 std::string JSONWriter::write(const Report& report, const Config& cfg) const {
-    // Summary metrics
-    const auto& results = report.results(); 
-    size_t finding_total_all = 0; 
-    std::map<std::string, size_t> severity_counts_all; 
-    std::map<std::string, size_t> severity_counts_emitted; 
-    long long total_risk_all = 0; 
-    long long emitted_risk = 0; 
-    std::chrono::system_clock::time_point earliest{}; 
-    std::chrono::system_clock::time_point latest{}; 
-    size_t scanners_with_findings = 0; 
-    long long slowest_ms = 0; 
-    std::string slowest_name;
-    
-    calculate_summary_metrics(results, cfg, finding_total_all, severity_counts_all, severity_counts_emitted,
-                             total_risk_all, emitted_risk, earliest, latest, scanners_with_findings,
-                             slowest_ms, slowest_name);
-    
-    long long duration_ms = 0; 
-    if (earliest.time_since_epoch().count() && latest.time_since_epoch().count() && latest >= earliest) {
-        duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(latest - earliest).count();
-    }
-    
-    auto host = collect_host_meta(); 
-    apply_meta_overrides(host); 
-    
-    size_t emitted_total = 0; 
-    for (const auto& pair : severity_counts_emitted) {
-        emitted_total += pair.second;
-    }
-    
-    CanonVal root = build_canonical(report, total_risk_all, emitted_risk, finding_total_all, scanners_with_findings,
-                                   duration_ms, slowest_name, slowest_ms, earliest, latest, severity_counts_all,
-                                   severity_counts_emitted, host, cfg);
-    
+    // Calculate all metrics in one clean object
+    SummaryMetrics metrics = calculate_summary_metrics(report.results(), cfg);
+
+    auto host = collect_host_meta();
+    apply_meta_overrides(host);
+
+    CanonVal root = build_canonical(report, metrics.total_risk_all, metrics.emitted_risk, metrics.finding_total_all,
+                                   metrics.scanners_with_findings, metrics.duration_ms, metrics.slowest_name,
+                                   metrics.slowest_ms, metrics.earliest_start, metrics.latest_end,
+                                   metrics.severity_counts_all, metrics.severity_counts_emitted, host, cfg);
+
     if (cfg.sarif) {
-        return generate_sarif_output(results, cfg);
+        return generate_sarif_output(report.results(), cfg);
     }
-    
+
     if (cfg.ndjson) {
-        return generate_ndjson_output(results, cfg, host, duration_ms, finding_total_all, emitted_total,
-                                     scanners_with_findings, slowest_name, slowest_ms, total_risk_all, emitted_risk);
+        return generate_ndjson_output(report.results(), cfg, host, metrics.duration_ms, metrics.finding_total_all,
+                                     metrics.emitted_total, metrics.scanners_with_findings, metrics.slowest_name,
+                                     metrics.slowest_ms, metrics.total_risk_all, metrics.emitted_risk);
     }
-    
-    std::ostringstream os; 
-    canon_emit(root, os); 
+
+    std::ostringstream os;
+    canon_emit(root, os);
     std::string compact = os.str();
-    
+
     if (cfg.pretty && !cfg.compact) {
         return pretty_print_json(compact);
     }
-    
+
     return compact;
 }
 
