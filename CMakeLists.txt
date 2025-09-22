@@ -14,8 +14,55 @@ option(BUILD_FUZZERS "Build libFuzzer harnesses (Clang only)" OFF)
 option(WITH_EBPF "Enable eBPF-based scanners (requires bpftool and BTF)" OFF)
 option(WITH_EBPF_STRICT "Require eBPF skeleton generation (fail if bpftool not found or incompatible)" OFF)
 option(ENABLE_COMPRESSION "Enable optional compression libraries (ZLIB, LZMA)" ON)
+option(ENABLE_CLANG_TIDY "Enable Clang-Tidy static analysis" OFF)
+option(ENABLE_COVERAGE "Enable code coverage analysis" OFF)
 
 set(SYS_SCAN_SLSA_LEVEL "0" CACHE STRING "Declared SLSA build level for provenance metadata (informational only)")
+
+# Enable ccache if available for faster builds
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "ccache enabled: ${CCACHE_PROGRAM}")
+endif()
+
+# Enable fuzzing if requested
+if(BUILD_FUZZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(FATAL_ERROR "Fuzzing requires Clang compiler")
+  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=fuzzer,address")
+  add_executable(fuzz_config fuzz/fuzz_config.cpp)
+  target_link_libraries(fuzz_config PRIVATE sys_scan_core)
+endif()
+
+# Generate BuildInfo.h from template
+
+# Enable Clang-Tidy if requested
+if(ENABLE_CLANG_TIDY)
+  find_program(CLANG_TIDY_EXE clang-tidy)
+  if(CLANG_TIDY_EXE)
+    set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
+    message(STATUS "Clang-Tidy enabled: ${CLANG_TIDY_EXE}")
+  else()
+    message(WARNING "Clang-Tidy requested but not found")
+  endif()
+endif()
+
+# Enable code coverage if requested
+if(ENABLE_COVERAGE)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
+    message(STATUS "Code coverage enabled with Clang instrumentation")
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+    message(STATUS "Code coverage enabled with GCC gcov")
+  else()
+    message(WARNING "Code coverage requested but compiler ${CMAKE_CXX_COMPILER_ID} not supported")
+  endif()
+endif()
 
 # Generate BuildInfo.h from template
 find_package(Git QUIET)
@@ -136,6 +183,16 @@ endif()
 
 target_include_directories(sys_scan_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/third_party ${CMAKE_BINARY_DIR}/generated)
 
+# Precompiled headers for faster compilation
+target_precompile_headers(sys_scan_core PUBLIC
+    <vector>
+    <string>
+    <iostream>
+    <memory>
+    <optional>
+    <filesystem>
+)
+
 find_package(Threads REQUIRED)
 
 target_link_libraries(sys_scan_core PUBLIC Threads::Threads)
@@ -205,6 +262,11 @@ endif()
 add_executable(sys-scan src/main.cpp)
 
 target_link_libraries(sys-scan PRIVATE sys_scan_core)
+
+# Strip symbols in release builds for smaller binary size
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_link_options(sys-scan PRIVATE -s)
+endif()
 
 # Benchmark executable
 add_executable(sys-scan-benchmark src/benchmark.cpp)
@@ -366,6 +428,18 @@ if(BUILD_TESTS)
   target_link_libraries(test_privilege PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME privilege COMMAND test_privilege)
   
+  add_executable(test_privilege_simple tests/test_privilege_simple.cpp)
+  target_link_libraries(test_privilege_simple PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME privilege_simple COMMAND test_privilege_simple)
+  
+  add_executable(test_privilege_extended tests/test_privilege_extended.cpp)
+  target_link_libraries(test_privilege_extended PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME privilege_extended COMMAND test_privilege_extended)
+
+  add_executable(test_privilege_comprehensive tests/test_privilege_comprehensive.cpp)
+  target_link_libraries(test_privilege_comprehensive PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME privilege_comprehensive COMMAND test_privilege_comprehensive)
+  
   add_executable(test_utils tests/test_utils.cpp)
   target_link_libraries(test_utils PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME utils COMMAND test_utils)
@@ -390,9 +464,21 @@ if(BUILD_TESTS)
   target_link_libraries(test_module_utils PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME module_utils COMMAND test_module_utils)
   
+  add_executable(test_auditd_scanner tests/test_auditd_scanner.cpp)
+  target_link_libraries(test_auditd_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME auditd_scanner COMMAND test_auditd_scanner)
+  
+  add_executable(test_auditd_scanner_extended tests/test_auditd_scanner_extended.cpp)
+  target_link_libraries(test_auditd_scanner_extended PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME auditd_scanner_extended COMMAND test_auditd_scanner_extended)
+  
   add_executable(test_systemd_unit_scanner tests/test_systemd_unit_scanner.cpp)
   target_link_libraries(test_systemd_unit_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME systemd_unit_scanner COMMAND test_systemd_unit_scanner)
+  
+  add_executable(test_systemd_unit_scanner_extended tests/test_systemd_unit_scanner_extended.cpp)
+  target_link_libraries(test_systemd_unit_scanner_extended PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME systemd_unit_scanner_extended COMMAND test_systemd_unit_scanner_extended)
   
 add_executable(test_mount_scanner tests/test_mount_scanner.cpp)
 target_link_libraries(test_mount_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
@@ -406,6 +492,10 @@ add_executable(test_container_scanner tests/test_container_scanner.cpp)
 target_link_libraries(test_container_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME container_scanner COMMAND test_container_scanner)
 
+add_executable(test_module_scanner_extended tests/test_module_scanner_extended.cpp)
+target_link_libraries(test_module_scanner_extended PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME module_scanner_extended COMMAND test_module_scanner_extended)
+
 add_executable(test_suid_scanner tests/test_suid_scanner.cpp)
 target_link_libraries(test_suid_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME suid_scanner COMMAND test_suid_scanner)
@@ -417,6 +507,59 @@ add_test(NAME ioc_scanner COMMAND test_ioc_scanner)
 add_executable(test_rule_engine tests/test_rule_engine.cpp)
   target_link_libraries(test_rule_engine PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME rule_engine COMMAND test_rule_engine)
+endif()
+
+# Code coverage targets
+if(ENABLE_COVERAGE AND BUILD_TESTS)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    add_custom_target(coverage
+      COMMAND ${CMAKE_COMMAND} -E make_directory coverage
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_config.profraw $<TARGET_FILE:test_config_validator>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_arg.profraw $<TARGET_FILE:test_argument_parser>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_utils.profraw $<TARGET_FILE:test_utils>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_scanner.profraw $<TARGET_FILE:test_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_registry.profraw $<TARGET_FILE:test_scanner_registry>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_integration.profraw $<TARGET_FILE:test_integration>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_rules.profraw $<TARGET_FILE:test_rules_engine>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_rules_unit.profraw $<TARGET_FILE:test_rules_engine_unit>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_rules_warn.profraw $<TARGET_FILE:test_rules_engine_warnings_structured>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_rules_init.profraw $<TARGET_FILE:test_rule_engine_initializer_extended>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_integrity.profraw $<TARGET_FILE:test_integrity_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_gpg.profraw $<TARGET_FILE:test_gpg_signer>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_yara.profraw $<TARGET_FILE:test_yara_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_module.profraw $<TARGET_FILE:test_module_utils>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_compliance.profraw $<TARGET_FILE:test_compliance>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_privilege.profraw $<TARGET_FILE:test_privilege>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_privilege_extended.profraw $<TARGET_FILE:test_privilege_extended>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_privilege_comprehensive.profraw $<TARGET_FILE:test_privilege_comprehensive>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_auditd.profraw $<TARGET_FILE:test_auditd_scanner_extended>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_systemd.profraw $<TARGET_FILE:test_systemd_unit_scanner_extended>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_kernel_hardening.profraw $<TARGET_FILE:test_kernel_hardening_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_container.profraw $<TARGET_FILE:test_container_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_module_scanner_extended.profraw $<TARGET_FILE:test_module_scanner_extended>
+      COMMAND llvm-profdata merge coverage/coverage_*.profraw -o coverage/coverage.profdata
+      COMMAND llvm-cov show $<TARGET_FILE:sys-scan> -instr-profile=coverage/coverage.profdata -format=html -output-dir=coverage/html -sources=${CMAKE_SOURCE_DIR}/src
+      COMMAND llvm-cov report $<TARGET_FILE:sys-scan> -instr-profile=coverage/coverage.profdata -sources=${CMAKE_SOURCE_DIR}/src
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      COMMENT "Generating code coverage report for scanner components"
+    )
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_custom_target(coverage
+      COMMAND ${CMAKE_COMMAND} -E make_directory coverage
+      COMMAND $<TARGET_FILE:test_config_validator>
+      COMMAND $<TARGET_FILE:test_argument_parser>
+      COMMAND $<TARGET_FILE:test_utils>
+      COMMAND $<TARGET_FILE:test_scanner>
+      COMMAND $<TARGET_FILE:test_scanner_registry>
+      COMMAND $<TARGET_FILE:test_integration>
+      COMMAND lcov --capture --directory . --output-file coverage/coverage.info --include "${CMAKE_SOURCE_DIR}/src/*"
+      COMMAND lcov --remove coverage/coverage.info "/usr/*" "*/third_party/*" "*/_deps/*" --output-file coverage/coverage_filtered.info
+      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
+      COMMAND lcov --list coverage/coverage_filtered.info
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      COMMENT "Generating code coverage report for scanner components"
+    )
+  endif()
 endif()
 
 install(TARGETS sys-scan RUNTIME DESTINATION bin) # debian/rules will stage into debian/sys-scan/usr/bin automatically

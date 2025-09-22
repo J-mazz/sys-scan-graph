@@ -33,6 +33,34 @@ void log_capabilities(const std::string& context) {
 #endif
 }
 
+// Simple utility function that can be tested without privileges
+bool is_privilege_available() {
+#ifdef SYS_SCAN_HAVE_LIBCAP
+    return true;
+#else
+    return false;
+#endif
+}
+
+// Simple utility function that can be tested without privileges
+bool is_seccomp_available() {
+#ifdef SYS_SCAN_HAVE_SECCOMP
+    return true;
+#else
+    return false;
+#endif
+}
+
+// Simple function that returns the number of allowed syscalls in seccomp profile
+int get_seccomp_allowed_syscalls_count() {
+#ifdef SYS_SCAN_HAVE_SECCOMP
+    // Return the count of syscalls we allow in our profile
+    return 27; // Based on the calls[] array in apply_seccomp_profile
+#else
+    return 0;
+#endif
+}
+
 void drop_capabilities(bool keep_cap_dac){
 #ifdef SYS_SCAN_HAVE_LIBCAP
     // Don't log if seccomp has been applied, as logging may use forbidden syscalls

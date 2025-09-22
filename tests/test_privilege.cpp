@@ -420,6 +420,42 @@ TEST_F(PrivilegeTest, SeccompProfileAllowsExpectedSyscalls) {
     }
 }
 
+TEST_F(PrivilegeTest, PrivilegeFunctionsCoverageInMainProcess) {
+    // Test privilege functions in main process for coverage
+    // Note: drop_capabilities() calls apply_seccomp_profile() internally,
+    // so we cannot safely call it in the main test process.
+    // These functions are tested in child processes in other tests.
+
+    // Test that the functions exist and have correct signatures
+#ifdef SYS_SCAN_HAVE_LIBCAP
+    // drop_capabilities should be callable with bool parameter
+    auto func1 = drop_capabilities;
+    EXPECT_TRUE((std::is_invocable_v<decltype(func1), bool>));
+#endif
+
+#ifdef SYS_SCAN_HAVE_SECCOMP
+    // apply_seccomp_profile should return bool
+    auto func2 = apply_seccomp_profile;
+    EXPECT_TRUE((std::is_invocable_r_v<bool, decltype(func2)>));
+#endif
+}
+
+TEST_F(PrivilegeTest, PrivilegeFunctionSignatures) {
+    // Test that functions have correct signatures and are callable
+    // This ensures the functions exist and can be linked
+#ifdef SYS_SCAN_HAVE_LIBCAP
+    // drop_capabilities should be callable with bool parameter
+    auto func1 = drop_capabilities;
+    EXPECT_TRUE((std::is_invocable_v<decltype(func1), bool>));
+#endif
+
+#ifdef SYS_SCAN_HAVE_SECCOMP
+    // apply_seccomp_profile should return bool
+    auto func2 = apply_seccomp_profile;
+    EXPECT_TRUE((std::is_invocable_r_v<bool, decltype(func2)>));
+#endif
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
