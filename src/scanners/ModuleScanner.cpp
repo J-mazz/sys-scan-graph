@@ -349,10 +349,10 @@ void add_taint_metadata(Finding& f, const std::string& test_root) {
         }
         if (!tainted_content.empty()) {
             f.metadata["taint_value"] = tainted_content;
-            // Decode bits
+            // Decode bits using lookup table
             unsigned long val = std::strtoul(tainted_content.c_str(), nullptr, 10);
             if (val) {
-                static const struct { unsigned long bit; const char* name; } bits[] = {
+                static const std::map<unsigned long, std::string> taint_bit_names = {
                     {0, "PROPRIETARY_MODULE"}, {1, "FORCED_MODULE"}, {2, "UNSAFE_SMP"},
                     {3, "FORCED_RMMOD"}, {4, "MACHINE_CHECK"}, {5, "BAD_PAGE"},
                     {6, "USER"}, {7, "DIE"}, {8, "OVERRIDDEN_ACPI_TABLE"},
@@ -362,10 +362,10 @@ void add_taint_metadata(Finding& f, const std::string& test_root) {
                     {17, "PANIC"}
                 };
                 std::string flags;
-                for (const auto& b : bits) {
-                    if (val & (1UL << b.bit)) {
+                for (const auto& [bit, name] : taint_bit_names) {
+                    if (val & (1UL << bit)) {
                         if (!flags.empty()) flags += ",";
-                        flags += b.name;
+                        flags += name;
                     }
                 }
                 if (!flags.empty()) f.metadata["taint_flags"] = std::move(flags);
@@ -414,6 +414,58 @@ void add_sample_metadata(Finding& f, const std::string& key, const std::vector<s
             sample_list += "," + samples[i];
         }
         f.metadata[key + "_list"] = sample_list;
+    }
+}
+
+// Helper to add details about a specific anomaly to a Finding
+static void add_anomaly_details(Finding& f, const std::string& key, const std::string& description) {
+    f.metadata[key] = "true";
+    if (f.severity < Severity::High) f.severity = Severity::High;
+    f.description = description;
+}
+
+// Helper specifically for the complex ELF heuristics
+static void check_elf_heuristics(Finding& f, const ModuleInfo& module, ModuleScanData& data, ModuleScanSummary& summary) {
+    if (module.full_path.empty() || module.is_missing_file) {
+        return; // Guard clause
+    }
+
+    auto sections = ElfModuleHeuristics::parse_sections(module.full_path);
+    if (sections.empty()) {
+        return; // Guard clause
+    }
+
+    if (ElfModuleHeuristics::has_wx_section(sections)) {
+        f.metadata["wx_section"] = "true";
+        if (f.severity < Severity::High) f.severity = Severity::High;
+        ++summary.wx_section_modules;
+        data.add_wx_section_sample(module.name);
+    }
+
+    if (ElfModuleHeuristics::has_large_text_section(sections)) {
+        uint64_t text_size = 0;
+        for (const auto& s : sections) {
+            if (s.name == ".text") {
+                text_size = s.size;
+                break;
+            }
+        }
+        f.metadata["large_text_section"] = std::to_string(text_size);
+        if (f.severity < Severity::High) f.severity = Severity::High;
+        ++summary.large_text_section_modules;
+        data.add_large_text_section_sample(module.name);
+    }
+
+    if (ElfModuleHeuristics::has_suspicious_section_name(sections)) {
+        for (const auto& s : sections) {
+            if (ElfModuleHeuristics::has_suspicious_section_name({s})) {
+                f.metadata["suspicious_section_name"] = s.name;
+                if (f.severity < Severity::High) f.severity = Severity::High;
+                ++summary.suspicious_name_section_modules;
+                data.add_suspicious_section_name_sample(module.name);
+                break;
+            }
+        }
     }
 }
 
@@ -584,73 +636,21 @@ void detect_hidden_module(const std::string& name, const ModuleScanData& data, b
 void process_module_anomalies(ScanContext& context, const std::string& scanner_name,
                             const ModuleInfo& module, ModuleScanData& data,
                             ModuleScanSummary& summary) {
+    // Guard clause: if there are no anomalies, do nothing.
     if (!module.is_oot && !module.is_unsigned && !module.is_missing_file && !module.is_hidden) {
-        return; // No anomalies to report
+        return;
     }
 
-    Finding f;
-    f.id = module.name;
-    f.title = "Module anomaly: " + module.name;
-    f.severity = Severity::Medium;
-    f.description = "Kernel module anomaly";
+    Finding f(module.name, "Module anomaly: " + module.name, Severity::Medium, "Kernel module anomaly");
 
-    if (module.is_unsigned) {
-        f.metadata["unsigned"] = "true";
-        f.severity = Severity::High;
-        f.description = "Unsigned kernel module detected";
-    }
-    if (module.is_oot) {
-        f.metadata["out_of_tree"] = "true";
-        if (f.severity < Severity::High) f.severity = Severity::High;
-        f.description = "Out-of-tree kernel module";
-    }
-    if (module.is_missing_file) {
-        f.metadata["missing_file"] = "true";
-        f.severity = Severity::High;
-        f.description = "Module file missing on disk";
-    }
-    if (module.is_hidden) {
-        f.metadata["hidden_sysfs"] = "true";
-        f.severity = Severity::High;
-        f.description = "Module present in /proc/modules but missing in /sys/module";
-    }
+    // Add details for each specific anomaly
+    if (module.is_unsigned) add_anomaly_details(f, "unsigned", "Unsigned kernel module detected");
+    if (module.is_oot) add_anomaly_details(f, "out_of_tree", "Out-of-tree kernel module");
+    if (module.is_missing_file) add_anomaly_details(f, "missing_file", "Module file missing on disk");
+    if (module.is_hidden) add_anomaly_details(f, "hidden_sysfs", "Module in /proc but not /sys");
 
-    // ELF section heuristics (only if file exists)
-    if (!module.full_path.empty() && !module.is_missing_file) {
-        auto sections = ElfModuleHeuristics::parse_sections(module.full_path);
-        if (!sections.empty()) {
-            if (ElfModuleHeuristics::has_wx_section(sections)) {
-                f.metadata["wx_section"] = "true";
-                if (f.severity < Severity::High) f.severity = Severity::High;
-                ++summary.wx_section_modules;
-                data.add_wx_section_sample(module.name);
-            }
-            if (ElfModuleHeuristics::has_large_text_section(sections)) {
-                uint64_t text_size = 0;
-                for (const auto& s : sections) {
-                    if (s.name == ".text") {
-                        text_size = s.size;
-                        break;
-                    }
-                }
-                f.metadata["large_text_section"] = std::to_string(text_size);
-                if (f.severity < Severity::High) f.severity = Severity::High;
-                ++summary.large_text_section_modules;
-                data.add_large_text_section_sample(module.name);
-            }
-            if (ElfModuleHeuristics::has_suspicious_section_name(sections)) {
-                for (const auto& s : sections) {
-                    if (ElfModuleHeuristics::has_suspicious_section_name({s})) {
-                        f.metadata["suspicious_section_name"] = s.name;
-                        if (f.severity < Severity::High) f.severity = Severity::High;
-                        ++summary.suspicious_name_section_modules;
-                        data.add_suspicious_section_name_sample(module.name);
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    // Perform the complex ELF check
+    check_elf_heuristics(f, module, data, summary);
 
 #ifdef SYS_SCAN_HAVE_OPENSSL
     if (context.config.modules_hash && !module.full_path.empty() && !module.is_missing_file) {
