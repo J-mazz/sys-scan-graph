@@ -296,14 +296,36 @@ class NullLLMProvider:
 # ----------------- Provider registry / injection -----------------
 _PROVIDER: ILLMProvider = NullLLMProvider()
 
+# ----------------- Provider registry / injection -----------------
+# ZERO TRUST: Only local deterministic providers allowed
+_PROVIDER: ILLMProvider = NullLLMProvider()
+
 def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     global _PROVIDER
-    prov = os.environ.get('AGENT_LLM_PROVIDER','null').lower()
-    if prov in {'langchain','openai','lc'}:
+    prov = os.environ.get('AGENT_LLM_PROVIDER','local').lower()  # Default to local for zero trust
+
+    # ONLY allow local or null providers - NO external APIs for security
+    if prov in {'local', 'llama', 'local-llama'}:
         try:
-            from providers.langchain_provider import LangChainLLMProvider
-            _PROVIDER = LangChainLLMProvider()
-        except Exception:
+            from providers.local_llama_provider import LocalLlamaLLMProvider
+            _PROVIDER = LocalLlamaLLMProvider()
+            print("✓ Zero-trust: Using local LoRA model for deterministic analysis")
+        except Exception as e:
+            print(f"⚠️  Local LoRA model failed to load: {e}")
+            print("✓ Fallback: Using deterministic null provider")
+            _PROVIDER = NullLLMProvider()
+    elif prov == 'null':
+        # Explicit null provider for testing/debugging
+        _PROVIDER = NullLLMProvider()
+        print("✓ Using deterministic null provider (no LLM)")
+    else:
+        # Any other provider request defaults to local for zero trust
+        print(f"⚠️  External LLM providers not allowed in zero-trust mode. Defaulting to local LoRA model.")
+        try:
+            from providers.local_llama_provider import LocalLlamaLLMProvider
+            _PROVIDER = LocalLlamaLLMProvider()
+        except Exception as e:
+            print(f"⚠️  Local LoRA model failed: {e}. Using null provider.")
             _PROVIDER = NullLLMProvider()
 
 

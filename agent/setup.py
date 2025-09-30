@@ -37,7 +37,7 @@ def read_requirements():
 setup(
     name='sys-scan-graph-agent',
     version='5.0.0',
-    description='AI Intelligence Layer for Sys-Scan-Graph Security Scanner',
+    description='Zero-Trust AI Intelligence Layer for Sys-Scan-Graph Security Scanner',
     long_description=read_readme(),
     long_description_content_type='text/markdown',
     author='Joseph Mazzini',
@@ -45,6 +45,13 @@ setup(
     url='https://github.com/Mazzlabs/sys-scan-graph',
     packages=find_packages(),
     include_package_data=True,
+    package_data={
+        'sys_scan_graph_agent': [
+            'models/llama-security-scanner/*',
+            'models/llama-security-scanner/*.safetensors',
+            'models/llama-security-scanner/*.json',
+        ],
+    },
     install_requires=read_requirements(),
     extras_require={
         'dev': [
