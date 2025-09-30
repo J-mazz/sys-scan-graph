@@ -1,11 +1,10 @@
 ---
-base_model: meta-llama/Meta-Llama-3-8B
+base_model: mistralai/Mistral-7B-Instruct-v0.3
 library_name: peft
 pipeline_tag: text-generation
 tags:
-- base_model:adapter:meta-llama/Meta-Llama-3-8B
+- base_model:adapter:mistralai/Mistral-7B-Instruct-v0.3
 - lora
-- transformers
 ---
 
 # Model Card for Model ID

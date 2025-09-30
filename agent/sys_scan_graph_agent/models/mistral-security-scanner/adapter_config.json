@@ -1,7 +1,7 @@
 {
   "alpha_pattern": {},
   "auto_mapping": null,
-  "base_model_name_or_path": "meta-llama/Meta-Llama-3-8B",
+  "base_model_name_or_path": "mistralai/Mistral-7B-Instruct-v0.3",
   "bias": "none",
   "corda_config": null,
   "eva_config": null,

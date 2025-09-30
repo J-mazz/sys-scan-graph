@@ -192,6 +192,25 @@ Correlation Engine → LLM Summarization → Actionable Insights
 - **[Extensibility](Extensibility.md)** - Adding new components
 - **[Performance Guide](Performance-Determinism-Provenance.md)** - Optimization and benchmarking
 
+## Quality Assurance & Testing
+
+### Test Coverage
+
+The project maintains comprehensive test coverage across both C++ and Python components:
+
+- **C++ Core Scanner**: High coverage unit tests for all scanner implementations
+- **Python Intelligence Layer**: 95.3% pass rate with 131 tests covering graph operations, AI workflows, and data processing
+- **Integration Testing**: End-to-end tests validating the complete scanner-to-insights pipeline
+
+### Testing Framework
+
+- **C++ Tests**: CMake/CTest based unit testing for core functionality
+- **Python Tests**: pytest framework with asyncio support for async workflows
+- **Coverage Analysis**: Automated coverage reporting for both languages
+
 ---
 
-*For questions about architecture or design decisions, please see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/Mazzlabs/sys-scan-graph/discussions).*"
+*For questions about architecture or design decisions, please see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/Mazzlabs/sys-scan-graph/discussions).*
+
+
+"

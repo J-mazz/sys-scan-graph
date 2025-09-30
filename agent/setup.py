@@ -47,9 +47,9 @@ setup(
     include_package_data=True,
     package_data={
         'sys_scan_graph_agent': [
-            'models/llama-security-scanner/*',
-            'models/llama-security-scanner/*.safetensors',
-            'models/llama-security-scanner/*.json',
+            'models/mistral-security-scanner/*',
+            'models/mistral-security-scanner/*.safetensors',
+            'models/mistral-security-scanner/*.json',
         ],
     },
     install_requires=read_requirements(),

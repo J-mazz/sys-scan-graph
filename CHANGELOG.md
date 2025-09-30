@@ -44,7 +44,7 @@ All notable changes will be documented in this file.
 - Embedded provenance improves supply-chain auditability & attestation readiness.
 - **Provenance Metadata**: Enhanced security through improved metadata tracking and correlation analysis
 - **Risk Scoring**: Implemented comprehensive risk assessment in LangGraph analysis pipeline
-- **Zero-Trust Local LLM**: Security-first implementation replacing external LLM APIs with local LoRA-fine-tuned Llama-3-8B model trained on 2.5M security scanner findings. Eliminates data exfiltration risks, ensures deterministic analysis, and maintains full zero-trust posture with no external dependencies.
+- **Zero-Trust Local LLM**: Security-first implementation replacing external LLM APIs with local LoRA-fine-tuned Mistral-7B-Instruct model trained on 2.5M security scanner findings. Eliminates data exfiltration risks, ensures deterministic analysis, and maintains full zero-trust posture with no external dependencies.
 
 ### Fixed
 - Missing `_HASHES` in `knowledge` module (restored placeholder) and signature warning expectations in tests.

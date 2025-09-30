@@ -38,7 +38,7 @@ def _import_pd():
         return None
 
 _JSONL_PATH = "hf://datasets/Trendyol/Trendyol-Cybersecurity-Instruction-Tuning-Dataset/CyberSec-Dataset_escaped.jsonl"
-_PARQUET_PATH = "hf://datasets/Yemmy1000/cybersec_embedding_llama_chat/data/train-00000-of-00001-0f80939cab7cd7c6.parquet"
+_PARQUET_PATH = "hf://datasets/Yemmy1000/cybersec_embedding_mistral_chat/data/train-00000-of-00001-0f80939cab7cd7c6.parquet"
 
 def load_cybersec_jsonl(lines: bool = True):
     pd = _import_pd()

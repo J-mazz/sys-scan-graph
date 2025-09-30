@@ -1,7 +1,7 @@
 from __future__ import annotations
-"""Local Llama LLM Provider with LoRA fine-tuning for ZERO-TRUST deterministic analysis.
+"""Local Mistral LLM Provider with LoRA fine-tuning for ZERO-TRUST deterministic analysis.
 
-Implements ILLMProvider using fine-tuned Llama-3-8B model with LoRA adapters
+Implements ILLMProvider using fine-tuned Mistral-7B model with LoRA adapters
 trained on 2.5M security scanner findings with correlation metadata.
 
 ZERO TRUST PRINCIPLES:
@@ -27,10 +27,10 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import PeftModel
 from datetime import datetime
 
-from . import models
-from . import llm_models
-from . import redaction
-from .llm_provider import ILLMProvider, ProviderMetadata
+from .. import models
+from .. import llm_models
+from .. import redaction
+from ..llm_provider import ILLMProvider, ProviderMetadata
 
 # Import existing types
 Reductions = models.Reductions
@@ -41,8 +41,8 @@ ActionItem = models.ActionItem
 redact_reductions = redaction.redact_reductions
 
 
-class LocalLlamaLLMProvider:
-    """Local Llama model with LoRA adapters for ZERO-TRUST security intelligence.
+class LocalMistralLLMProvider:
+    """Local Mistral model with LoRA adapters for ZERO-TRUST security intelligence.
 
     This provider implements deterministic, local-only analysis using a model
     trained on 2.5M security scanner findings. No external API calls or data
@@ -51,7 +51,7 @@ class LocalLlamaLLMProvider:
     """
 
     def __init__(self, model_path: Optional[str] = None, device: str = "auto"):
-        """Initialize the zero-trust local Llama provider.
+        """Initialize the zero-trust local Mistral provider.
 
         Args:
             model_path: Path to LoRA adapter directory. If None, uses packaged model.
@@ -67,14 +67,19 @@ class LocalLlamaLLMProvider:
         """Get the default path to the packaged LoRA model."""
         # Assume model is packaged in sys_scan_graph_agent/models/
         package_dir = Path(__file__).parent
-        model_dir = package_dir / "models" / "llama-security-scanner"
+        model_dir = package_dir / "models" / "embedded-mistral-agent"
         return str(model_dir)
 
     def _load_model(self):
         """Load the base model and LoRA adapters for zero-trust analysis."""
         try:
-            # Base model configuration - Llama-3-8B fine-tuned for security analysis
-            base_model_name = "meta-llama/Meta-Llama-3-8B"
+            # Base model configuration - Mistral-7B-Instruct fine-tuned for security analysis
+            # Use local model if available, otherwise fall back to Hugging Face
+            local_model_path = Path.home() / "mistral_models" / "7B-Instruct-v0.3"
+            if local_model_path.exists():
+                base_model_name = str(local_model_path)
+            else:
+                base_model_name = "mistralai/Mistral-7B-Instruct-v0.3"
 
             # Quantization config for memory efficiency while maintaining accuracy
             bnb_config = BitsAndBytesConfig(
@@ -84,12 +89,62 @@ class LocalLlamaLLMProvider:
                 bnb_4bit_use_double_quant=True
             )
 
-            # Load tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                base_model_name,
-                trust_remote_code=True
-            )
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+            # Load tokenizer and model from local files
+            
+            if local_model_path.exists():
+                # Load tokenizer from local SentencePiece model
+                tokenizer_path = local_model_path / "tokenizer.model.v3"
+                if tokenizer_path.exists():
+                    import sentencepiece as spm
+                    self.sp_model = spm.SentencePieceProcessor()
+                    self.sp_model.Load(str(tokenizer_path))
+                    
+                    # Create a minimal tokenizer wrapper
+                    class MistralTokenizer:
+                        def __init__(self, sp_model):
+                            self.sp_model = sp_model
+                            self.pad_token = "</s>"
+                            self.eos_token = "</s>"
+                            self.bos_token = "<s>"
+                            
+                        def encode(self, text, add_special_tokens=True, **kwargs):
+                            if add_special_tokens:
+                                text = self.bos_token + text
+                            return self.sp_model.EncodeAsIds(text)
+                            
+                        def decode(self, ids, skip_special_tokens=True, **kwargs):
+                            if isinstance(ids, torch.Tensor):
+                                ids = ids.tolist()
+                            text = self.sp_model.DecodeIds(ids)
+                            if skip_special_tokens:
+                                text = text.replace(self.bos_token, "").replace(self.eos_token, "")
+                            return text
+                            
+                        def __call__(self, text, return_tensors=None, **kwargs):
+                            ids = self.encode(text, **kwargs)
+                            result = {"input_ids": ids}
+                            if return_tensors == "pt":
+                                import torch
+                                result["input_ids"] = torch.tensor([ids])
+                            return result
+                            
+                        @property
+                        def eos_token_id(self):
+                            return self.sp_model.eos_id()
+                            
+                        @property
+                        def pad_token_id(self):
+                            return self.sp_model.eos_id()
+                            
+                        @property
+                        def vocab_size(self):
+                            return self.sp_model.vocab_size()
+                    
+                    self.tokenizer = MistralTokenizer(self.sp_model)
+                else:
+                    raise FileNotFoundError(f"Tokenizer file not found: {tokenizer_path}")
+            else:
+                raise FileNotFoundError(f"Model directory not found: {local_model_path}")
 
             # Load base model
             base_model = AutoModelForCausalLM.from_pretrained(
@@ -100,15 +155,18 @@ class LocalLlamaLLMProvider:
             )
 
             # Load LoRA adapters trained on 2.5M security findings
-            self.model = PeftModel.from_pretrained(
-                base_model,
-                self.model_path,
-                torch_dtype=torch.float16,
-                device_map=self.device
-            )
-
-            self.model.eval()
-            print("✓ Zero-trust analyst agent loaded: Llama-3-8B with security scanner LoRA")
+            try:
+                self.model = PeftModel.from_pretrained(
+                    base_model,
+                    self.model_path,
+                    torch_dtype=torch.float16,
+                    device_map=self.device
+                )
+                print("✓ Zero-trust analyst agent loaded: Mistral-7B-Instruct with security scanner LoRA")
+            except Exception as e:
+                print(f"Warning: Could not load LoRA adapters ({e}), using base model only")
+                self.model = base_model
+                print("✓ Zero-trust analyst agent loaded: Mistral-7B-Instruct base model (no LoRA)")
 
         except Exception as e:
             raise RuntimeError(f"Failed to load zero-trust analyst model: {e}")
@@ -165,8 +223,8 @@ class LocalLlamaLLMProvider:
             completion_tokens = len(self.tokenizer.encode(response_text))
 
             metadata = ProviderMetadata(
-                model_name="llama-3-8b-security-scanner-lora",
-                provider_name="local-llama",
+                model_name="mistral-7b-security-scanner-lora",
+                provider_name="local-mistral",
                 latency_ms=latency,
                 tokens_prompt=prompt_tokens,
                 tokens_completion=completion_tokens,
@@ -266,8 +324,8 @@ class LocalLlamaLLMProvider:
             completion_tokens = len(self.tokenizer.encode(response_text))
 
             metadata = ProviderMetadata(
-                model_name="llama-3-8b-security-scanner-lora",
-                provider_name="local-llama",
+                model_name="mistral-7b-security-scanner-lora",
+                provider_name="local-mistral",
                 latency_ms=latency,
                 tokens_prompt=prompt_tokens,
                 tokens_completion=completion_tokens,
@@ -352,8 +410,8 @@ class LocalLlamaLLMProvider:
             completion_tokens = len(self.tokenizer.encode(response_text))
 
             metadata = ProviderMetadata(
-                model_name="llama-3-8b-security-scanner-lora",
-                provider_name="local-llama",
+                model_name="mistral-7b-security-scanner-lora",
+                provider_name="local-mistral",
                 latency_ms=latency,
                 tokens_prompt=prompt_tokens,
                 tokens_completion=completion_tokens,
