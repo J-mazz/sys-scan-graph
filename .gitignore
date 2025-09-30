@@ -249,3 +249,7 @@ debug_*
 
 # Legacy directory (deprecated - no longer used)
 /legacy
+ enriched_*.json
+ enriched_*.html 
+
+ /artifacts/*

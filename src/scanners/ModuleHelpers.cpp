@@ -77,7 +77,7 @@ std::vector<ElfModuleHeuristics::SectionInfo> ElfModuleHeuristics::parse_section
                 ef.seekg(stroff, std::ios::beg);
                 if (ef.read(strtab.data(), strsize)) {
                     ef.seekg(e_shoff, std::ios::beg);
-                    for (uint16_t si = 0; si < sections.size(); ++si) {
+                    for (size_t  si = 0; si < sections.size(); ++si) {
                         if (!ef.read((char*)shbuf.data(), e_shentsize)) break;
                         uint32_t name_off = rd32(&shbuf[0]);
                         if (name_off < strtab.size()) sections[si].name = std::string(&strtab[name_off]);

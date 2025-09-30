@@ -20,12 +20,12 @@
   </a>
 </div>
 
-It combines a high-performance C++ scanning engine with a Python-based intelligence layer to deliver deterministic, reproducible results. The core engine gathers data and outputs it in multiple formats (JSON, NDJSON, SARIF, HTML). This report is then ingested by a robust LangGraph agent that analyzes, organizes, and enriches the findings, providing deep insights with unprecedented speed.
+It combines a high-performance C++ scanning engine with a Python-based intelligence layer to deliver deterministic, reproducible results. The core engine gathers data and outputs it in multiple formats (JSON, NDJSON, SARIF, HTML). This report is then ingested by a zero-trust local, embedded LLM agent that analyzes, organizes, and enriches the findings, providing deep insights with unprecedented speed and security; no external dependencies. Offline capabilities.
 
 ### Key Features
 
 - **Blazing-fast scanning** built in C++ with deterministic results
-- **Advanced intelligence layer** powered by Python and LangGraph
+- **Advanced intelligence layer** powered by Python and LangGraph (Featuring embedded agent, NO external APIs)
 - **Multiple output formats** including JSON, NDJSON, SARIF, and HTML
 - **Comprehensive security coverage** across processes, network, kernel, and more
 - **Risk scoring and compliance assessment** with remediation guidance
