@@ -247,6 +247,9 @@ debug_*
 # Assets (tracked - contains documentation images)
 # assets/  # <- Intentionally NOT ignored - contains docs images
 
+# Large model files (download separately)
+*.safetensors
+
 # Legacy directory (deprecated - no longer used)
 /legacy
  enriched_*.json

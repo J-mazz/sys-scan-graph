@@ -58,4 +58,5 @@ agent/.venv/** linguist-vendored
 # *.tar.gz  filter=lfs diff=lfs merge=lfs -text
 # Handle specific model file with Git LFS
 agent/sys-scan-llama-agent-trainer/adapter_model.safetensors filter=lfs diff=lfs merge=lfs -text
+agent/sys_scan_graph_agent/models/llama-security-scanner/adapter_model.safetensors filter=lfs diff=lfs merge=lfs -text
 # End of .gitattributes
