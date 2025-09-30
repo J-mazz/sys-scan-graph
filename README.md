@@ -143,13 +143,7 @@ This repository contains:
 
 ## Licensing
 
-**Important:** This project uses dual licensing to balance open-source benefits with sustainable commercial development.
-
-- **Core Scanner**: MIT License (C++ components)
-- **Intelligence Layer**: Business Source License 1.1 (see [`agent/LICENSE`](agent/LICENSE))
-- **Commercial Use**: Intelligence Layer requires commercial license for production use
-
-See [`LICENSE`](LICENSE) for complete licensing details and [`docs/wiki/License-Overview.md`](docs/wiki/License-Overview.md) for comprehensive licensing information.
+This project is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE) for complete licensing details.
 
 ---
 

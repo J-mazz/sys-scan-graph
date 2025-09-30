@@ -157,11 +157,7 @@ python -m pytest tests/
 
 ## Licensing
 
-By contributing to sys-scan-graph, you agree that your contributions will be licensed under the same terms as the rest of the project:
-
-- **Core Scanner**: Proprietary (based on MIT original)
-- **Intelligence Layer**: Business Source License 1.1
-- **Documentation**: Creative Commons Attribution 4.0
+By contributing to sys-scan-graph, you agree that your contributions will be licensed under the Apache License 2.0, the same terms as the rest of the project.
 
 ## Code of Conduct
 

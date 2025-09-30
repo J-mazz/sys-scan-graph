@@ -76,7 +76,7 @@ setup(
         'Development Status :: 4 - Beta',
         'Intended Audience :: System Administrators',
         'Intended Audience :: Information Technology',
-        'License :: OSI Approved :: Business Source License',
+        'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',

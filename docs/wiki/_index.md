@@ -42,7 +42,6 @@ Welcome to the comprehensive documentation for sys-scan-graph. This index provid
 ## Licensing & Legal
 
 - **[License Overview](License-Overview.md)** - Complete licensing structure and terms
-- **[BSL FAQ](../LEGAL/BSL-FAQ.md)** - Business Source License 1.1 explanation and usage guidelines
 - **[Contributing Guide](../../CONTRIBUTING.md)** - How to contribute to the project
 - **[Code of Conduct](../../CODE_OF_CONDUCT.md)** - Community standards and guidelines
 - **[Security Policy](../../SECURITY.md)** - Security disclosure and vulnerability reporting

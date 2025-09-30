@@ -2,22 +2,16 @@
 
 ## sys-scan-graph
 
-Copyright 2024 Joseph Mazzini
+Copyright 2025 Joseph Mazzini
 
-This repository contains the sys-scan-graph project, which includes:
-
-### Core Scanner Infrastructure
-The core scanner infrastructure (C++ source code, build system, rules, schemas, and basic tests) is proprietary software owned by Joseph Mazzini.
-
-### Intelligence Layer (agent/)
-The Intelligence Layer components located in the `agent/` directory are licensed under the Business Source License 1.1. See `agent/LICENSE` for full license text and terms.
+This repository contains the sys-scan-graph project, licensed under the Apache License 2.0.
 
 ## Upstream Attribution
 
 This project is based on and includes modifications to the original sys-scan project:
 
 - **Original sys-scan**: Copyright (c) J-mazz
-- **License**: MIT License
+- **License**: MIT License (original), now Apache License 2.0
 - **Source**: https://github.com/J-mazz/sys-scan
 - **Modifications**: Enhanced with intelligence layer, LangGraph orchestration, advanced analytics, and additional security scanners
 
@@ -52,18 +46,14 @@ This project includes or depends on the following third-party software:
 
 ## Contact
 
-For licensing inquiries or commercial agreements:
-- Email: Joseph@Mazzlabs.works
-- Project: https://github.com/Mazzlabs/sys-scan-graph
+For licensing inquiries: Joseph@Mazzlabs.works
 
 ## License Summary
 
-- **Core Scanner**: Proprietary (Joseph Mazzini)
-- **Intelligence Layer**: Business Source License 1.1 (transitions to Apache 2.0 on 2028-01-01)
+- **Entire Project**: Apache License 2.0
 - **Documentation**: Creative Commons Attribution 4.0 International
 - **Assets**: All rights reserved (Joseph Mazzini)
 
 See individual license files for complete terms:
-- `LICENSE` (top-level proprietary license)
-- `agent/LICENSE` (BSL 1.1 for intelligence layer)
+- `LICENSE` (Apache License 2.0)
 - `THIRD_PARTY_NOTICES` (detailed third-party attributions)
