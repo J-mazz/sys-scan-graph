@@ -1,3 +1,15 @@
+sys-scan-graph (6.0.0-1) unstable; urgency=medium
+
+  * Major version 6.0.0 release with enhanced features and improvements
+  * Updated core scanner with performance optimizations
+  * Enhanced Intelligence Layer with new AI capabilities
+  * Improved security hardening and compliance checks
+  * Added new scanner modules and output formats
+  * Updated dependencies and build system
+  * Comprehensive testing and bug fixes
+
+ -- Joseph Mazzini <joseph@mazzlabs.works>  Mon, 30 Sep 2025 12:00:00 +0000
+
 sys-scan-graph (5.0.1-1) unstable; urgency=medium
 
   * Release 5.0.1 with Debian packaging and apt repository support
