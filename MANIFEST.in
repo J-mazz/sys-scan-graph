@@ -1,0 +1,44 @@
+include README.md
+include LICENSE
+include NOTICE
+include THIRD_PARTY_NOTICES
+include CHANGELOG.md
+include SECURITY.md
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include ARCHITECTURE.md
+include CMakeLists.txt
+include config.yaml
+include manifest.json
+include scripts/build_unified.sh
+include scripts/release_validate.py
+recursive-include debian *
+recursive-include docs *
+recursive-include schema *
+recursive-include rules *
+recursive-include assets *
+recursive-include evaluation *
+recursive-include agent *
+exclude agent/.venv
+exclude agent/venv
+exclude agent/__pycache__
+exclude agent/*.egg-info
+exclude .venv
+exclude venv
+exclude __pycache__
+exclude *.swp
+exclude *.swo
+exclude *~
+exclude .git
+exclude .github
+exclude build
+exclude debian/*.deb
+exclude debian/*.ddeb
+exclude debian/*.buildinfo
+exclude debian/*.changes
+exclude debian/files
+exclude debug_test
+exclude debug_test.cpp
+exclude default.profraw
+exclude .DS_Store
+exclude Thumbs.db
