@@ -38,6 +38,14 @@ All notable changes will be documented in this file.
  - SELinux absence downgrade logic retained; README & schema expanded.
  - CI workflow formatting corrected and dependency installs clarified.
 - **System Scan Integration**: Confirmed full system scan functionality working with 145+ findings generated across multiple scanners (processes, network, kernel_params, modules, suid_sgid, mac, etc.)
+- **Licensing**: Changed entire project licensing from dual MIT/Business Source License to Apache License 2.0 for unified open-source licensing
+
+### Security
+- Added capability dropping and seccomp sandbox (deny-by-default allowlist) with optional strict mode.
+- Embedded provenance improves supply-chain auditability & attestation readiness.
+- **Provenance Metadata**: Enhanced security through improved metadata tracking and correlation analysis
+- **Risk Scoring**: Implemented comprehensive risk assessment in LangGraph analysis pipeline
+- **Zero-Trust Local LLM**: Security-first implementation replacing external LLM APIs with local LoRA-fine-tuned Mistral-7B-Instruct model trained on 2.5M security scanner findings. Eliminates data exfiltration risks, ensures deterministic analysis, and maintains full zero-trust posture with no external dependencies.
 
 ### Security
 - Added capability dropping and seccomp sandbox (deny-by-default allowlist) with optional strict mode.
