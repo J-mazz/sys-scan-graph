@@ -10,25 +10,34 @@ This project maintains a **zero-trust security architecture** with **absolute pr
 
 ### ✅ What We Do
 
-1. **Local Model Inference Only**
-   - Mistral-7B-Instruct-v0.3 with 168MB LoRA adapters runs entirely on-device
-   - PyTorch inference with no cloud dependencies
-   - All model weights stored locally or downloaded once from HuggingFace (optional)
+1. **Local ML Inference (Primary Mode)**
+   - **Default:** Mistral-7B-Instruct-v0.3 with 165MB LoRA adapters fine-tuned on 2.5M security findings
+   - Trained specifically for security scanner analysis, correlation, and triage
+   - PyTorch inference with 4-bit quantization for memory efficiency
+   - Zero external API calls - all processing on-device
+   - Model loaded from local storage (one-time HuggingFace download required)
 
-2. **Deterministic Processing**
-   - `LLMClient` class provides structured analysis without external calls
-   - All "LLM" operations are deterministic heuristics and rule-based transformations
+2. **Intelligent Fallback Architecture**
+   - **Primary:** `LocalMistralLLMProvider` (AGENT_LLM_PROVIDER='local', the default)
+   - **Fallback:** `NullLLMProvider` (deterministic heuristics if model load fails)
+   - Graceful degradation ensures analysis completes even without ML
+   - Fallback uses rule-based transformations and pattern matching
+
+3. **Zero-Trust Security Guarantees**
+   - No external LLM API calls in any mode (primary or fallback)
+   - All findings and analysis remain on-device
+   - Model inference deterministic (low temperature, no sampling randomness)
    - Simulated token counts for observability, no actual API metering
 
-3. **Workflow Orchestration Without APIs**
+4. **Workflow Orchestration Without APIs**
    - LangGraph/LangChain-core used solely for state machine orchestration
    - No `ChatOpenAI`, `ChatAnthropic`, or any cloud LLM provider imports
    - `langchain_core.messages` used only for local data structures
 
-4. **Air-Gapped Capable**
-   - Can operate in completely offline environments
-   - No internet connectivity required after initial model download
-   - All dependencies can be vendored/cached
+5. **Air-Gapped Capable**
+   - **Primary mode:** Offline after one-time HuggingFace model download
+   - **Fallback mode:** Fully offline, zero network requirements
+   - All dependencies can be vendored/cached for complete air-gap operation
 
 ### ❌ What We Never Do
 
@@ -52,7 +61,7 @@ This project maintains a **zero-trust security architecture** with **absolute pr
 
 ### Local Intelligence Stack
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  Sys-Scan C++ Core (Native Scanning)   │
 │  ✓ Process/Module/Network/File scans   │
@@ -62,8 +71,9 @@ This project maintains a **zero-trust security architecture** with **absolute pr
                │ JSON findings
                ↓
 ┌─────────────────────────────────────────┐
-│  Python Intelligence Layer (Local AI)   │
-│  ✓ Mistral-7B inference (torch)        │
+│  Python Intelligence Layer (Zero-Trust) │
+│  ✓ Mistral-7B LoRA (primary analyst)   │
+│  ✓ NullLLMProvider (fallback only)     │
 │  ✓ LangGraph orchestration (no APIs)   │
 │  ✓ Rule correlation engine              │
 │  ✓ SQLite baseline storage              │
@@ -75,14 +85,19 @@ This project maintains a **zero-trust security architecture** with **absolute pr
 ### Dependency Audit
 
 **Safe Dependencies (No API Calls):**
+
 - `langgraph>=0.2,<1` - Workflow state machine (local only)
 - `langchain-core>=0.3,<1` - Message types and tool decorators (no APIs)
-- `torch>=2.0.0` - Local tensor operations
+- `pydantic>=2.7,<3` - Data validation (always required)
+- `sqlalchemy>=2.0,<3` - Local baseline storage (always required)
+- `torch>=2.0.0` - Local tensor operations for Mistral inference
 - `transformers>=4.40.0` - Model loading and inference
-- `peft>=0.10.0` - LoRA adapter loading
-- `huggingface_hub>=0.20.0` - Optional for model download only
+- `peft>=0.10.0` - LoRA adapter loading for fine-tuned model
+- `accelerate>=0.29.0` - Optimized model loading and quantization
+- `huggingface_hub>=0.20.0` - One-time model download only
 
 **Explicitly Excluded:**
+
 - ❌ `openai` - OpenAI API client
 - ❌ `anthropic` - Anthropic API client
 - ❌ `langchain-openai` - OpenAI LangChain integration
@@ -112,17 +127,26 @@ grep -E "openai|anthropic|cohere|together" agent/requirements.txt
 ### Runtime Verification
 
 ```python
-# Test local-only operation
+# Test local-only operation with Mistral model
 import sys
+import os
 sys.path.insert(0, 'agent')
-from sys_scan_graph_agent.graph import build_workflow
 
-# Build workflow - should succeed without network
-workflow, app = build_workflow(enhanced=True)
+# Set default provider (local Mistral)
+os.environ['AGENT_LLM_PROVIDER'] = 'local'
+
+from sys_scan_graph_agent.graph import build_workflow
+from sys_scan_graph_agent.llm_provider import get_llm_provider
+
+# Build workflow - should load LocalMistralLLMProvider
+workflow, app = build_workflow()
 assert app is not None, "Workflow must compile without external dependencies"
 
+# Verify provider is local Mistral (or fallback to Null)
+provider = get_llm_provider()
+assert provider is not None, "Provider must initialize without external APIs"
+
 # Verify no API keys in environment
-import os
 assert 'OPENAI_API_KEY' not in os.environ
 assert 'ANTHROPIC_API_KEY' not in os.environ
 ```
@@ -139,12 +163,14 @@ assert 'ANTHROPIC_API_KEY' not in os.environ
 
 ### Residual Risks
 
-1. **HuggingFace Model Download** - One-time download if model not cached
-   - Mitigation: Download models in trusted environment, distribute offline
-   - Optional: Use `HUGGINGFACE_HUB_CACHE` to pre-populate models
+1. **HuggingFace Model Download (Primary Mode)** - One-time download (~7GB base + 165MB LoRA)
+   - Mitigation: Download in trusted environment, distribute offline
+   - Use `HUGGINGFACE_HUB_CACHE` to pre-populate models
+   - Alternative: Use local model path (`~/mistral_models/7B-Instruct-v0.3`)
 
 2. **PyTorch Vulnerabilities** - Standard software supply chain risk
    - Mitigation: Pin versions, vendor dependencies, regular CVE monitoring
+   - Note: Only required for primary Mistral mode, not for fallback heuristics
 
 ## Compliance Notes
 
@@ -156,9 +182,10 @@ assert 'ANTHROPIC_API_KEY' not in os.environ
 ## Maintainer Commitment
 
 We commit to:
+
 1. Never adding external LLM API dependencies
 2. Auditing all PRs for external API calls
-3. Maintaining local-first architecture
+3. Maintaining local-first architecture with Mistral LoRA as primary analyst
 4. Documenting any new network dependencies explicitly
 
 **If you discover any external API calls, please report immediately as a security vulnerability.**
