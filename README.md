@@ -20,17 +20,18 @@
   </a>
 </div>
 
-It combines a high-performance C++ scanning engine with a Python-based intelligence layer to deliver deterministic, reproducible results. The core engine gathers data and outputs it in multiple formats (JSON, NDJSON, SARIF, HTML). This report is then ingested by a zero-trust local, embedded LLM agent that analyzes, organizes, and enriches the findings, providing deep insights with unprecedented speed and security; no external dependencies. Offline capabilities.
+It combines a high-performance C++20 scanning engine with a Python-based intelligence layer featuring an embedded, fine-tuned Mistral-7B LLM with LoRA adapters. The core engine uses modern dependency injection patterns and type-safe enums to gather security data across 16 specialized scanners, outputting canonical JSON, NDJSON, SARIF, or HTML. The intelligence layer uses LangGraph state machines for cyclical reasoning, baseline learning via SQLite, and 32-dimensional process embeddings for novelty detection—all running locally with zero external API calls.
 
 ### Key Features
 
-- **Blazing-fast scanning** built in C++ with deterministic results
-- **Advanced intelligence layer** powered by Python and LangGraph (Featuring embedded agent, NO external APIs)
-- **Multiple output formats** including JSON, NDJSON, SARIF, and HTML
-- **Comprehensive security coverage** across processes, network, kernel, and more
-- **Risk scoring and compliance assessment** with remediation guidance
-- **Fleet-wide analytics** and rarity analysis
-- **Extensible rules engine** with MITRE ATT&CK mapping
+- **Blazing-fast scanning** built in C++20 with deterministic, reproducible results
+- **Zero-trust AI intelligence** powered by embedded fine-tuned Mistral-7B with LoRA adapters (NO external APIs)
+- **16 specialized scanners** covering processes, network, kernel modules, SUID/SGID, IOC detection, and compliance
+- **Multiple output formats** including canonical JSON, NDJSON, SARIF, and self-contained HTML
+- **LangGraph-orchestrated analysis** with cyclical reasoning and baseline learning
+- **Risk scoring and compliance** with PCI DSS, HIPAA, and NIST CSF assessment
+- **Fleet-wide rarity analysis** using SQLite baseline database with process novelty detection
+- **MITRE ATT&CK integration** with native technique mapping and coverage analysis
 
 ---
 
@@ -76,22 +77,24 @@ pip install -e .
 #### Using Installed Package
 
 ```bash
-# Run a basic scan
-sys-scan --canonical --modules-summary --min-severity info > report.json
-
-# Run with intelligence layer
+# Run a basic scan with canonical JSON output
 sys-scan --canonical --output report.json
+
+# Run with intelligence layer for AI-powered analysis
 sys-scan-agent analyze --report report.json --out enriched_report.json
+
+# Generate HTML report with visualizations
+sys-scan-agent analyze --report report.json --out enriched_report.json --prev baseline.json
 ```
 
 #### Using Source Build
 
 ```bash
-# Run a basic scan
-./build/sys-scan --canonical --modules-summary --min-severity info > report.json
-
-# Run with intelligence layer
+# Run a basic scan with canonical JSON output
 ./build/sys-scan --canonical --output report.json
+
+# Run with intelligence layer for AI-powered analysis
+cd agent
 python -m sys_scan_graph_agent.cli analyze --report report.json --out enriched_report.json
 ```
 
@@ -134,10 +137,12 @@ This repository contains:
 
 ## Key Design Principles
 
-- **High-signal, low-noise findings** through aggregation and baseline analysis
-- **Deterministic, reproducible results** suitable for CI/CD and compliance
-- **Lightweight deployment** with minimal runtime dependencies
-- **Extensible architecture** via rules layer and optional intelligence enrichment
+- **Type-safe architecture** with C++20 enums and dependency injection via ScanContext
+- **Deterministic, reproducible results** with canonical JSON (RFC 8785 JCS) and stable ordering
+- **Zero-trust security** with embedded LLM, capability dropping, and seccomp sandboxing
+- **Thread-safe parallelization** with mutex-protected report aggregation
+- **Extensible plugin system** supporting custom scanners, rules, and LLM providers
+- **Comprehensive testing** with 919 test cases (698 C++, 221 Python)
 
 ---
 
