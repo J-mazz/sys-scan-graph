@@ -9,6 +9,9 @@ jsonschema>=4.21,<5
 pytest>=8.0,<9
 pytest-asyncio>=0.23,<0.24
 PyNaCl>=1.5,<2
+# Workflow orchestration (local only - no external API calls)
+langgraph>=0.2,<1
+langchain-core>=0.3,<1
 # Local ML dependencies for zero-trust deterministic analysis
 torch>=2.0.0
 transformers>=4.40.0
