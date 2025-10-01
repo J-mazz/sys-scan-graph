@@ -56,8 +56,11 @@ struct Config {
     bool integrity_ima = false; // include IMA measurement statistics
     bool integrity_pkg_verify = false; // attempt dpkg/rpm verify
     int integrity_pkg_limit = 200; // limit number of detailed mismatch findings (summary beyond)
-    bool integrity_pkg_rehash = false; // recompute SHA256 for mismatched package files (OpenSSL only)
+    bool integrity_pkg_rehash = false; // if enabled, compute SHA256 for mismatched files
     int integrity_pkg_rehash_limit = 50; // max files to rehash to control cost
+    bool integrity_critical_only = false; // verify only critical packages (fast mode)
+    int integrity_sample_pct = 0; // if >0, verify random N% of packages (0=all)
+    int integrity_max_mismatches = 0; // if >0, stop after N mismatches found (0=unlimited)
     // Rule engine
     bool rules_enable = false; // enable rule enrichment
     std::string rules_dir = ""; // directory containing rule definition files
