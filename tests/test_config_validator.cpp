@@ -1,6 +1,7 @@
 #include "core/ConfigValidator.h"
 #include "core/Config.h"
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <vector>
