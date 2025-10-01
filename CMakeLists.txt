@@ -31,8 +31,10 @@ if(BUILD_FUZZERS)
   if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(FATAL_ERROR "Fuzzing requires Clang compiler")
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=fuzzer,address")
+  # Don't apply fuzzer flags globally - apply only to fuzz targets
   add_executable(fuzz_config fuzz/fuzz_config.cpp)
+  target_compile_options(fuzz_config PRIVATE -fsanitize=fuzzer,address -fno-omit-frame-pointer)
+  target_link_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
   target_link_libraries(fuzz_config PRIVATE sys_scan_core)
 endif()
 
@@ -193,9 +195,16 @@ target_precompile_headers(sys_scan_core PUBLIC
     <filesystem>
 )
 
-find_package(Threads REQUIRED)
+# Find threads (optional for fuzzer-only builds)
+if(BUILD_FUZZERS)
+  find_package(Threads)
+else()
+  find_package(Threads REQUIRED)
+endif()
 
-target_link_libraries(sys_scan_core PUBLIC Threads::Threads)
+if(Threads_FOUND)
+  target_link_libraries(sys_scan_core PUBLIC Threads::Threads)
+endif()
 
 # nlohmann/json for JSON handling
 find_package(nlohmann_json QUIET)
