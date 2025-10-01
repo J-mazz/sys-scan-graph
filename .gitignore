@@ -238,9 +238,11 @@ fuzz-*.log
 fuzz-*.profraw
 fuzz-*.profdata
 
-# Test executables and debug files
-test_*
-debug_*
+# Test executables and debug files (in build directories)
+/build/test_*
+/build/debug_*
+/obj-*/test_*
+/obj-*/debug_*
 *_debug
 *_test
 
