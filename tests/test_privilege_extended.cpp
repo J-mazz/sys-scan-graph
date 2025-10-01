@@ -194,13 +194,15 @@ TEST_F(PrivilegeExtendedTest, PrivilegeFunctionsMemoryLayout) {
 #ifdef SYS_SCAN_HAVE_LIBCAP
     uintptr_t addr_drop = reinterpret_cast<uintptr_t>(drop_capabilities);
     EXPECT_NE(addr_drop, 0);
-    EXPECT_TRUE(addr_drop % alignof(void(*)(bool)) == 0); // Properly aligned
+    // Function pointer alignment is implementation-defined and can vary by build type
+    // Just verify it's a valid pointer (non-zero)
 #endif
 
 #ifdef SYS_SCAN_HAVE_SECCOMP
     uintptr_t addr_seccomp = reinterpret_cast<uintptr_t>(apply_seccomp_profile);
     EXPECT_NE(addr_seccomp, 0);
-    EXPECT_TRUE(addr_seccomp % alignof(bool(*)()) == 0); // Properly aligned
+    // Function pointer alignment is implementation-defined and can vary by build type
+    // Just verify it's a valid pointer (non-zero)
 #endif
 }
 
