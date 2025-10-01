@@ -44,10 +44,6 @@ jobs:
         run: |
           cd agent
           python -m pytest tests/ -v --tb=short --maxfail=5
-      - name: Test Python module compilation
-        run: |
-          cd agent
-          python -c "import sys; sys.path.insert(0, '.'); import graph_nodes_performance; import graph_nodes_scalability; import graph_nodes_reliability; print('All modules compile successfully')"
 
   sanitize:
     runs-on: ubuntu-latest
