@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from agent.pipeline import run_pipeline
+from sys_scan_graph_agent.pipeline import run_pipeline
 import json
 
 def test_home_dir_redaction(tmp_path):
@@ -21,7 +21,7 @@ def test_home_dir_redaction(tmp_path):
     rp.write_text(json.dumps(report))
     enriched = run_pipeline(rp)
     # Check reductions top findings redaction
-    titles = [t['title'] for t in (enriched.reductions.top_risks or [])]
+    titles = [t['title'] for t in (enriched.reductions.get('top_risks') or [])]
     assert any('/home/<user>/.cache/tool' in t for t in titles), titles
     # Ensure original raw finding still retains full path (raw data untouched) for internal reference
     raw_titles = [f.title for f in enriched.enriched_findings or []]

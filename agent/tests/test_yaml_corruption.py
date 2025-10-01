@@ -1,8 +1,8 @@
 from __future__ import annotations
 import textwrap, os, shutil
 from pathlib import Path
-from agent import knowledge as K
-from agent.models import AgentState, Report, Meta, Summary, SummaryExtension, ScannerResult, Finding
+from sys_scan_graph_agent import knowledge as K
+from sys_scan_graph_agent.models import AgentState, Report, Meta, Summary, SummaryExtension, ScannerResult, Finding
 
 def _state():
     # Provide one network finding so ports.yaml is actually loaded
@@ -31,9 +31,12 @@ def test_yaml_missing_signature_required(tmp_path, monkeypatch):
     kd = tmp_path / 'knowledge'
     kd.mkdir()
     (kd / 'ports.yaml').write_text('ports: {"22": {"service": "ssh"}}')
+    # Create a dummy pubkey file
+    pubkey_file = tmp_path / 'dummy_pubkey'
+    pubkey_file.write_text('dummy_pubkey_contents')
     monkeypatch.setattr(K, 'KNOWLEDGE_DIR', kd)
     monkeypatch.setenv('AGENT_KB_REQUIRE_SIGNATURES','1')
-    monkeypatch.setenv('AGENT_KB_PUBKEY','dummy_pubkey_contents')
+    monkeypatch.setenv('AGENT_KB_PUBKEY', str(pubkey_file))
     K._CACHE.clear(); K._HASHES.clear();
     st = _state()
     K.apply_external_knowledge(st)

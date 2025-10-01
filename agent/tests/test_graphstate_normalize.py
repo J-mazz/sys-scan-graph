@@ -11,7 +11,7 @@ import pytest
 from typing import Dict, Any, List
 from datetime import datetime
 
-from ..graph_state import normalize_graph_state, GraphStateSchema
+from sys_scan_graph_agent.graph_state import normalize_graph_state, GraphStateSchema
 
 
 class TestGraphStateNormalization:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
-from agent.integrity import generate_keypair, sign_file, verify_file
-from agent.pipeline import run_pipeline
+from sys_scan_graph_agent.integrity import generate_keypair, sign_file, verify_file
+from sys_scan_graph_agent.pipeline import run_pipeline
 import json
 
 def test_sign_and_verify(tmp_path):

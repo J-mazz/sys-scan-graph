@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json, tempfile, textwrap, pathlib
-from agent.pipeline import run_pipeline
+from sys_scan_graph_agent.pipeline import run_pipeline
 
 def make_report(compliance_summary=None, compliance_gaps=None):
     base = {

@@ -65,9 +65,10 @@ class LocalMistralLLMProvider:
 
     def _get_default_model_path(self) -> str:
         """Get the default path to the packaged LoRA model."""
-        # Assume model is packaged in sys_scan_graph_agent/models/
-        package_dir = Path(__file__).parent
-        model_dir = package_dir / "models" / "embedded-mistral-agent"
+        # The fine-tuned LoRA model is in the mistral-security-lora directory
+        import sys_scan_graph_agent
+        package_dir = Path(sys_scan_graph_agent.__file__).parent.parent
+        model_dir = package_dir / "mistral-security-lora"
         return str(model_dir)
 
     def _load_model(self):
@@ -89,62 +90,10 @@ class LocalMistralLLMProvider:
                 bnb_4bit_use_double_quant=True
             )
 
-            # Load tokenizer and model from local files
-            
-            if local_model_path.exists():
-                # Load tokenizer from local SentencePiece model
-                tokenizer_path = local_model_path / "tokenizer.model.v3"
-                if tokenizer_path.exists():
-                    import sentencepiece as spm
-                    self.sp_model = spm.SentencePieceProcessor()
-                    self.sp_model.Load(str(tokenizer_path))
-                    
-                    # Create a minimal tokenizer wrapper
-                    class MistralTokenizer:
-                        def __init__(self, sp_model):
-                            self.sp_model = sp_model
-                            self.pad_token = "</s>"
-                            self.eos_token = "</s>"
-                            self.bos_token = "<s>"
-                            
-                        def encode(self, text, add_special_tokens=True, **kwargs):
-                            if add_special_tokens:
-                                text = self.bos_token + text
-                            return self.sp_model.EncodeAsIds(text)
-                            
-                        def decode(self, ids, skip_special_tokens=True, **kwargs):
-                            if isinstance(ids, torch.Tensor):
-                                ids = ids.tolist()
-                            text = self.sp_model.DecodeIds(ids)
-                            if skip_special_tokens:
-                                text = text.replace(self.bos_token, "").replace(self.eos_token, "")
-                            return text
-                            
-                        def __call__(self, text, return_tensors=None, **kwargs):
-                            ids = self.encode(text, **kwargs)
-                            result = {"input_ids": ids}
-                            if return_tensors == "pt":
-                                import torch
-                                result["input_ids"] = torch.tensor([ids])
-                            return result
-                            
-                        @property
-                        def eos_token_id(self):
-                            return self.sp_model.eos_id()
-                            
-                        @property
-                        def pad_token_id(self):
-                            return self.sp_model.eos_id()
-                            
-                        @property
-                        def vocab_size(self):
-                            return self.sp_model.vocab_size()
-                    
-                    self.tokenizer = MistralTokenizer(self.sp_model)
-                else:
-                    raise FileNotFoundError(f"Tokenizer file not found: {tokenizer_path}")
-            else:
-                raise FileNotFoundError(f"Model directory not found: {local_model_path}")
+            # Load tokenizer and model using standard transformers
+            self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
 
             # Load base model
             base_model = AutoModelForCausalLM.from_pretrained(
@@ -237,7 +186,7 @@ class LocalMistralLLMProvider:
 
         except Exception as e:
             # Fallback to NullLLMProvider on failure
-            from .llm_provider import NullLLMProvider
+            from ..llm_provider import NullLLMProvider
             fallback_provider = NullLLMProvider()
             return fallback_provider.summarize(
                 reductions, correlations, actions,
@@ -283,25 +232,31 @@ class LocalMistralLLMProvider:
 
                 return models.Summaries(
                     executive_summary=data.get('EXECUTIVE_SUMMARY', 'Analysis completed'),
-                    key_findings=data.get('KEY_FINDINGS', []),
-                    risk_assessment=data.get('RISK_ASSESSMENT', {}),
-                    recommendations=data.get('RECOMMENDATIONS', [])
+                    analyst={
+                        'key_findings': data.get('KEY_FINDINGS', []),
+                        'risk_assessment': data.get('RISK_ASSESSMENT', {}),
+                        'recommendations': data.get('RECOMMENDATIONS', [])
+                    }
                 )
             else:
                 # Fallback to simple text parsing
                 return models.Summaries(
                     executive_summary=response[:500],
-                    key_findings=[],
-                    risk_assessment={},
-                    recommendations=[]
+                    analyst={
+                        'key_findings': [],
+                        'risk_assessment': {},
+                        'recommendations': []
+                    }
                 )
         except Exception:
             # Final fallback
             return models.Summaries(
                 executive_summary="Security analysis completed using local AI model",
-                key_findings=[],
-                risk_assessment={"level": "unknown"},
-                recommendations=[]
+                analyst={
+                    'key_findings': [],
+                    'risk_assessment': {"level": "unknown"},
+                    'recommendations': []
+                }
             )
 
     def refine_rules(self, suggestions: List[Dict[str, Any]],
@@ -338,7 +293,7 @@ class LocalMistralLLMProvider:
 
         except Exception as e:
             # Fallback to NullLLMProvider
-            from .llm_provider import NullLLMProvider
+            from ..llm_provider import NullLLMProvider
             fallback_provider = NullLLMProvider()
             return fallback_provider.refine_rules(suggestions, examples)
 
@@ -393,7 +348,7 @@ class LocalMistralLLMProvider:
         start_time = time.time()
 
         # Redact sensitive data
-        safe_reductions = redact_reductions(reductions)
+        safe_reductions = redact_reductions(reductions.model_dump())
 
         # Build triage prompt
         prompt = self._build_triage_prompt(safe_reductions, correlations)
@@ -424,11 +379,11 @@ class LocalMistralLLMProvider:
 
         except Exception as e:
             # Fallback to NullLLMProvider
-            from .llm_provider import NullLLMProvider
+            from ..llm_provider import NullLLMProvider
             fallback_provider = NullLLMProvider()
             return fallback_provider.triage(reductions, correlations)
 
-    def _build_triage_prompt(self, reductions: Reductions, correlations: List[Correlation]) -> str:
+    def _build_triage_prompt(self, reductions: dict, correlations: List[Correlation]) -> str:
         """Build prompt for triage analysis."""
 
         prompt_parts = [

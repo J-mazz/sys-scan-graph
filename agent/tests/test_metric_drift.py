@@ -1,6 +1,6 @@
 import json, os, tempfile, shutil
 from pathlib import Path
-from agent.pipeline import run_pipeline
+from sys_scan_graph_agent.pipeline import run_pipeline
 
 SAMPLE_REPORT_BASE = {
     "meta": {"hostname": "host1", "tool_version": "1.0", "json_schema_version": "v2"},

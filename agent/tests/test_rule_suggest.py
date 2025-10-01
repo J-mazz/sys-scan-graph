@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, tempfile
 from pathlib import Path
-from agent.rule_suggest import suggest_rules
+from sys_scan_graph_agent.rule_suggest import suggest_rules
 
 def make_report(path: Path, titles):
     findings = []

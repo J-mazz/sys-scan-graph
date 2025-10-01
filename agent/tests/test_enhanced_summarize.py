@@ -1,6 +1,6 @@
 from __future__ import annotations
 import asyncio
-from agent.graph_nodes_scaffold import enhanced_enrich_findings, enhanced_summarize_host_state
+from sys_scan_graph_agent.graph_nodes_scaffold import enhanced_enrich_findings, enhanced_summarize_host_state
 
 def test_enhanced_summarize_basic():
     state = {"raw_findings": [

@@ -282,77 +282,29 @@ def _generate_pdf_report(data: Dict[str, Any]) -> str:
     return f"PDF Report Placeholder - {len(data.get('findings', []))} findings"
 
 async def notify_stakeholders(state: Dict[str, Any], channels: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Send notifications to stakeholders via various channels."""
-    if channels is None:
-        channels = ['email']
+    """Stakeholder notification disabled for air-gapped deployment.
 
-    try:
-        notifications_sent = []
-
-        summary = state.get('summary', {})
-        high_findings = [f for f in state.get('enriched_findings', [])
-                        if str(f.get('severity', '')).lower() in ['high', 'critical']]
-
-        message = f"""
-        Security Analysis Complete
-
-        Session: {state.get('session_id', 'N/A')}
-        High/Critical Findings: {len(high_findings)}
-        Total Findings: {len(state.get('enriched_findings', []))}
-
-        Summary: {summary.get('executive_summary', 'N/A')[:200]}...
-        """
-
-        for channel in channels:
-            try:
-                if channel == 'email':
-                    await _send_email_notification(message)
-                elif channel == 'slack':
-                    await _send_slack_notification(message)
-                elif channel == 'webhook':
-                    await _send_webhook_notification(message)
-
-                notifications_sent.append({
-                    'channel': channel,
-                    'status': 'sent',
-                    'timestamp': datetime.now().isoformat()
-                })
-
-            except Exception as e:
-                logger.error(f"Failed to send {channel} notification: {e}")
-                notifications_sent.append({
-                    'channel': channel,
-                    'status': 'failed',
-                    'error': str(e),
-                    'timestamp': datetime.now().isoformat()
-                })
-
-        return {
-            'notification_type': 'stakeholder_alert',
-            'channels_used': channels,
-            'notifications': notifications_sent,
-            'message_preview': message[:100] + '...',
-            'timestamp': datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"Stakeholder notification failed: {e}")
-        return {'error': str(e), 'notification_type': 'stakeholder_alert'}
+    This function is disabled as the application is designed to run in air-gapped
+    environments without external communication capabilities.
+    """
+    return {
+        'notification_type': 'stakeholder_alert',
+        'status': 'disabled',
+        'reason': 'air_gapped_deployment',
+        'message': 'Stakeholder notifications are disabled in air-gapped environments'
+    }
 
 async def _send_email_notification(message: str) -> None:
-    """Send email notification (placeholder)."""
-    await asyncio.sleep(0.1)  # Simulate sending
-    logger.info("Email notification sent (simulated)")
+    """Email notification disabled for air-gapped deployment."""
+    raise NotImplementedError("Email notifications are disabled in air-gapped environments")
 
 async def _send_slack_notification(message: str) -> None:
-    """Send Slack notification (placeholder)."""
-    await asyncio.sleep(0.1)  # Simulate sending
-    logger.info("Slack notification sent (simulated)")
+    """Slack notification disabled for air-gapped deployment."""
+    raise NotImplementedError("Slack notifications are disabled in air-gapped environments")
 
 async def _send_webhook_notification(message: str) -> None:
-    """Send webhook notification (placeholder)."""
-    await asyncio.sleep(0.1)  # Simulate sending
-    logger.info("Webhook notification sent (simulated)")
+    """Webhook notification disabled for air-gapped deployment."""
+    raise NotImplementedError("Webhook notifications are disabled in air-gapped environments")
 
 __all__ = [
     'query_baseline_enhanced',

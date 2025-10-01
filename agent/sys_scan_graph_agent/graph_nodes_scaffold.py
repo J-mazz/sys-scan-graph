@@ -34,6 +34,9 @@ from . import util_normalization
 from . import models
 from . import rules
 
+# Import specific functions for re-export
+from .llm_provider import get_llm_provider
+
 # Pydantic model imports (data structures used across node logic)
 # Models imported at module level for absolute imports
 
@@ -380,15 +383,9 @@ __all__ = [
     "_append_warning",
     "WarningInfo",
     "SummarizationContext",
-    "_augment",
-    "apply_external_knowledge",
-    "reduce_all",
-    "mine_gap_candidates",
     "enrich_findings",
     "enhanced_enrich_findings",
-    "summarize_host_state",
     "enhanced_summarize_host_state",
-    "suggest_rules",
     "correlate_findings",
     "get_enhanced_llm_provider",
     "streaming_summarizer",
@@ -401,8 +398,6 @@ __all__ = [
     "integrate_baseline_results",
     "risk_analyzer",
     "compliance_checker",
-    "error_handler",
-    "human_feedback_node",
     "cache_manager",
     "metrics_collector",
     # Models
@@ -469,47 +464,61 @@ def enrich_findings(state: GraphState) -> GraphState:
     enriched_findings = []
 
     for finding_dict in raw_findings:
-        # Normalize raw finding data before creating model
-        normalized_dict = finding_dict.copy()
-        
-        # Convert base_severity_score to risk_score if needed
-        if 'base_severity_score' in normalized_dict and 'risk_score' not in normalized_dict:
-            try:
-                # Convert string to int, defaulting to 0 if conversion fails
-                normalized_dict['risk_score'] = int(float(normalized_dict['base_severity_score']))
-            except (ValueError, TypeError):
-                normalized_dict['risk_score'] = 0
-        
-        # Ensure risk_score is present
-        if 'risk_score' not in normalized_dict:
-            normalized_dict['risk_score'] = 0
+        try:
+            # Normalize raw finding data before creating model
+            normalized_dict = finding_dict.copy()
             
-        # Convert dict to Finding model if needed
-        if isinstance(finding_dict, dict):
-            finding = models.Finding(**normalized_dict)
-        else:
-            finding = finding_dict
+            # Convert base_severity_score to risk_score if needed
+            if 'base_severity_score' in normalized_dict and 'risk_score' not in normalized_dict:
+                try:
+                    # Convert string to int, defaulting to 0 if conversion fails
+                    normalized_dict['risk_score'] = int(float(normalized_dict['base_severity_score']))
+                except (ValueError, TypeError):
+                    normalized_dict['risk_score'] = 0
+            
+            # Ensure risk_score is present
+            if 'risk_score' not in normalized_dict:
+                normalized_dict['risk_score'] = 0
+            
+            # Provide defaults for required fields to handle incomplete data gracefully
+            if 'title' not in normalized_dict:
+                normalized_dict['title'] = f"Finding {normalized_dict.get('id', 'unknown')}"
+            if 'severity' not in normalized_dict:
+                normalized_dict['severity'] = 'info'
+            if 'metadata' not in normalized_dict:
+                normalized_dict['metadata'] = {}
+                
+            # Convert dict to Finding model if needed
+            if isinstance(finding_dict, dict):
+                finding = models.Finding(**normalized_dict)
+            else:
+                finding = finding_dict
 
-        # Add risk subscores based on severity and metadata
-        risk_subscores = _calculate_risk_subscores(finding)
+            # Add risk subscores based on severity and metadata
+            risk_subscores = _calculate_risk_subscores(finding)
 
-        # Determine baseline status (simplified - in real implementation would check baseline DB)
-        baseline_status = _determine_baseline_status(finding)
+            # Determine baseline status (simplified - in real implementation would check baseline DB)
+            baseline_status = _determine_baseline_status(finding)
 
-        # Calculate probability actionable
-        probability_actionable = _calculate_probability_actionable(finding, risk_subscores)
+            # Calculate probability actionable
+            probability_actionable = _calculate_probability_actionable(finding, risk_subscores)
 
-        # Add enrichment metadata
-        finding.risk_subscores = risk_subscores
-        finding.baseline_status = baseline_status
-        finding.probability_actionable = probability_actionable
-        finding.risk_total = finding.risk_score  # Ensure consistency
+            # Add enrichment metadata
+            finding.risk_subscores = risk_subscores
+            finding.baseline_status = baseline_status
+            finding.probability_actionable = probability_actionable
+            finding.risk_total = finding.risk_score  # Ensure consistency
 
-        # Add tags based on analysis
-        finding.tags = _generate_tags(finding)
+            # Add tags based on analysis
+            finding.tags = _generate_tags(finding)
 
-        if finding.severity.lower() != 'info':
-            enriched_findings.append(finding)
+            if finding.severity.lower() != 'info':
+                enriched_findings.append(finding)
+        except Exception as e:  # pragma: no cover
+            # Log validation errors but continue processing other findings
+            logger.warning(f"Skipping invalid finding {finding_dict.get('id', 'unknown')}: {e}")
+            _append_warning(state, WarningInfo('graph', 'enrich_findings', f"Invalid finding {finding_dict.get('id', 'unknown')}: {e}"))  # type: ignore
+            continue
 
     state['enriched_findings'] = [finding.model_dump() for finding in enriched_findings]
     return state
@@ -558,12 +567,22 @@ def _calculate_risk_subscores(finding: models.Finding) -> Dict[str, float]:
 
 def _determine_baseline_status(finding: models.Finding) -> str:
     """Determine if finding is new, existing, or unknown in baseline."""
-    # Simplified implementation - in real system would check baseline database
-    # For now, randomly assign status for demonstration
-    import random
-    statuses = ['new', 'existing', 'unknown']
-    weights = [0.3, 0.6, 0.1]  # 30% new, 60% existing, 10% unknown
-    return random.choices(statuses, weights=weights)[0]
+    # Use deterministic hash-based assignment instead of random for test reliability
+    import hashlib
+    
+    # Create a deterministic hash from finding properties
+    hash_input = f"{finding.id or ''}:{finding.title}:{finding.severity}"
+    hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
+    
+    # Use hash to deterministically select status with same weights as before
+    # 30% new, 60% existing, 10% unknown
+    normalized_hash = hash_value % 100
+    if normalized_hash < 30:
+        return 'new'
+    elif normalized_hash < 90:  # 30 + 60 = 90
+        return 'existing'
+    else:
+        return 'unknown'
 
 def _calculate_probability_actionable(finding: models.Finding, subscores: Dict[str, float]) -> float:
     """Calculate probability that this finding requires action."""
@@ -607,51 +626,6 @@ def _generate_tags(finding: models.Finding) -> List[str]:
         tags.append(f'baseline:{finding.baseline_status}')
 
     return tags
-
-
-def _build_enrichment_pipeline_models(state: StateType) -> List[models.Finding]:
-    """Build finding models from state for enrichment pipeline."""
-    return _findings_from_graph(state)
-
-
-def _create_enrichment_report(findings: List[models.Finding]) -> models.Report:
-    """Create a report object for enrichment processing."""
-    sr = models.ScannerResult(
-        scanner="mixed",
-        finding_count=len(findings),
-        findings=findings,
-    )
-    return models.Report(
-        meta=models.Meta(),
-        summary=models.Summary(
-            finding_count_total=len(findings),
-            finding_count_emitted=len(findings),
-        ),
-        results=[sr],
-        collection_warnings=[],
-        scanner_errors=[],
-        summary_extension=models.SummaryExtension(total_risk_score=0),
-    )
-
-
-def _run_enrichment_pipeline(astate: models.AgentState) -> models.AgentState:
-    """Run the enrichment pipeline on agent state."""
-    astate = pipeline.augment(astate)
-    astate = knowledge.apply_external_knowledge(astate)
-    return astate
-
-
-def _extract_enriched_findings(astate: models.AgentState) -> List[Dict[str, Any]]:
-    """Extract enriched findings from agent state."""
-    enriched: List[Dict[str, Any]] = []
-    if astate.report and astate.report.results:
-        for result in astate.report.results:
-            for finding in result.findings:
-                try:
-                    enriched.append(finding.model_dump())
-                except Exception:  # pragma: no cover
-                    continue
-    return enriched
 
 
 def _validate_correlation_inputs(findings_dicts: List[Dict[str, Any]], findings_models: List[models.Finding]) -> bool:
@@ -1516,8 +1490,15 @@ def integrate_baseline_results(state: StateType) -> StateType:
 # ---------------------------------------------------------------------------
 # High-level analysis async functions
 
+def _get_top_findings_by_risk(findings: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
+    """Get top findings by risk score."""
+    fields = _batch_extract_finding_fields(findings)
+    return _batch_get_top_findings_by_risk(fields, top_n)
+
+
 async def risk_analyzer(state: GraphState) -> GraphState:
     """Analyze overall risk profile of the system."""
+    start = time.monotonic()
     enriched_findings = state.get('enriched_findings', [])
     correlations = state.get('correlations', [])
 
@@ -1526,37 +1507,117 @@ async def risk_analyzer(state: GraphState) -> GraphState:
     high_severity_count = sum(1 for f in enriched_findings if f['severity'].lower() in ['high', 'critical'])
     correlation_bonus = sum(c.risk_score_delta for c in correlations)
 
+    # Calculate risk metrics using batch processing
+    fields = _batch_extract_finding_fields(enriched_findings)
+    risk_metrics = _batch_calculate_risk_metrics(fields)
+    sev_counters = risk_metrics['sev_counters']
+    avg_risk = risk_metrics['avg_risk']
+    qualitative_risk = risk_metrics['qualitative_risk']
+
     risk_assessment = {
+        'overall_risk_level': qualitative_risk,
+        'overall_risk': qualitative_risk,  # Unified field - use qualitative risk based on highest severity
+        'risk_factors': [],  # Placeholder
+        'recommendations': [],  # Placeholder
+        'confidence_score': 0.8,  # Placeholder
+        'counts': sev_counters,
         'total_risk_score': total_risk + correlation_bonus,
+        'average_risk_score': avg_risk,
         'finding_count': len(enriched_findings),
+        'top_findings': _get_top_findings_by_risk(enriched_findings),
+        # Legacy fields for backward compatibility
+        'risk_level': qualitative_risk,
+        'risk_trends': _analyze_risk_trends(enriched_findings),
         'high_severity_count': high_severity_count,
-        'correlation_count': len(correlations),
-        'risk_level': _calculate_risk_level(total_risk + correlation_bonus, len(enriched_findings)),
-        'risk_trends': _analyze_risk_trends(enriched_findings)
+        'correlation_count': len(correlations)
     }
 
     state['risk_assessment'] = risk_assessment
+    _update_metrics_counter(state, 'risk_analyzer_calls')
+    _update_metrics_duration(state, 'risk_analyzer_duration', start)
     return state
 
 async def compliance_checker(state: GraphState) -> GraphState:
     """Check compliance against security standards."""
+    start = time.monotonic()
     enriched_findings = state.get('enriched_findings', [])
 
+    # Build standards structure
+    standards = {}
+    
+    # PCI DSS compliance
+    pci_violations = []
+    for finding in enriched_findings:
+        if 'suid' in finding['title'].lower():
+            pci_violations.append(finding['id'])
+        if 'network' in finding['title'].lower() and 'unencrypted' in finding['title'].lower():
+            pci_violations.append(finding['id'])
+        # Also check for explicit PCI DSS mentions in title, tags, or metadata
+        title_lower = finding['title'].lower()
+        tags = finding.get('tags', [])
+        metadata = finding.get('metadata', {})
+        if ('pci' in title_lower or 
+            any('pci' in tag.lower() for tag in tags) or
+            metadata.get('compliance_standard', '').upper() == 'PCI'):
+            pci_violations.append(finding['id'])
+    
+    standards['PCI DSS'] = {
+        'finding_ids': pci_violations,
+        'count': len(pci_violations)
+    }
+    
+    # HIPAA compliance
+    hipaa_violations = []
+    for finding in enriched_findings:
+        if 'readable' in finding['title'].lower() and 'world' in str(finding.get('metadata', {})).lower():
+            hipaa_violations.append(finding['id'])
+        # Also check for explicit HIPAA mentions in title, tags, or metadata
+        title_lower = finding['title'].lower()
+        tags = finding.get('tags', [])
+        metadata = finding.get('metadata', {})
+        if ('hipaa' in title_lower or 
+            any('hipaa' in tag.lower() for tag in tags) or
+            metadata.get('compliance_standard', '').upper() == 'HIPAA'):
+            hipaa_violations.append(finding['id'])
+    
+    standards['HIPAA'] = {
+        'finding_ids': hipaa_violations,
+        'count': len(hipaa_violations)
+    }
+    
+    # ISO 27001 compliance
+    iso_violations = []
+    for finding in enriched_findings:
+        if 'permission' in finding['title'].lower():
+            iso_violations.append(finding['id'])
+    
+    standards['ISO27001'] = {
+        'finding_ids': iso_violations,
+        'count': len(iso_violations)
+    }
+
     compliance_check = {
-        'pci_dss_compliant': _check_pci_compliance(enriched_findings),
-        'hipaa_compliant': _check_hipaa_compliance(enriched_findings),
-        'iso27001_compliant': _check_iso27001_compliance(enriched_findings),
+        'standards': standards,
+        'total_compliance_findings': len(pci_violations) + len(hipaa_violations) + len(iso_violations),
+        # Legacy fields for backward compatibility
+        'pci_dss_compliant': len(pci_violations) == 0,
+        'hipaa_compliant': len(hipaa_violations) == 0,
+        'iso27001_compliant': len(iso_violations) == 0,
         'compliance_gaps': _identify_compliance_gaps(enriched_findings),
         'remediation_priority': _calculate_remediation_priority(enriched_findings)
     }
 
     state['compliance_check'] = compliance_check
+    _update_metrics_counter(state, 'compliance_checker_calls')
+    _update_metrics_duration(state, 'compliance_checker_duration', start)
     return state
 
 async def metrics_collector(state: GraphState) -> GraphState:
     """Collect performance and operational metrics."""
+    start = time.monotonic()
     enriched_findings = state.get('enriched_findings', [])
     correlations = state.get('correlations', [])
+    risk_assessment = state.get('risk_assessment', {})
 
     metrics = {
         'processing_timestamp': int(__import__('time').time()),
@@ -1567,10 +1628,13 @@ async def metrics_collector(state: GraphState) -> GraphState:
         'cpu_usage_percent': 12.5,  # Mock CPU usage
         'findings_by_severity': _count_findings_by_severity(enriched_findings),
         'findings_by_category': _count_findings_by_category(enriched_findings),
-        'correlation_effectiveness': _calculate_correlation_effectiveness(correlations)
+        'correlation_effectiveness': _calculate_correlation_effectiveness(correlations),
+        'overall_risk': risk_assessment.get('overall_risk', 'unknown'),
+        'cache_entries': len(state.get('cache', {})) + len(state.get('enrich_cache', {}))
     }
 
     state['final_metrics'] = metrics
+    _update_metrics_duration(state, 'metrics_collector_duration', start)
     return state
 
 
@@ -1591,7 +1655,7 @@ def _calculate_risk_level(total_risk: int, finding_count: int) -> str:
 
 def _analyze_risk_trends(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Analyze risk trends and patterns."""
-    high_priority = [f for f in findings if f.get('probability_actionable', 0) > 0.7]
+    high_priority = [f for f in findings if (f.get('probability_actionable') or 0) > 0.7]
     return {
         'high_priority_count': len(high_priority),
         'new_findings_count': sum(1 for f in findings if f.get('baseline_status') == 'new'),
@@ -1655,10 +1719,13 @@ def _calculate_remediation_priority(findings: List[Dict[str, Any]]) -> str:
 
 def _count_findings_by_severity(findings: List[Dict[str, Any]]) -> Dict[str, int]:
     """Count findings by severity level."""
-    counts = {}
+    counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0, 'unknown': 0}
     for finding in findings:
         severity = finding['severity'].lower()
-        counts[severity] = counts.get(severity, 0) + 1
+        if severity in counts:
+            counts[severity] += 1
+        else:
+            counts['unknown'] += 1
     return counts
 
 def _count_findings_by_category(findings: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -1761,3 +1828,23 @@ def _generate_reductions(enriched_findings: List[Dict[str, Any]]) -> Dict[str, A
     ]
 
     return reductions
+
+
+async def cache_manager(state: GraphState) -> GraphState:
+    """Cache risk assessment, compliance check, and enriched findings."""
+    cache = state.setdefault('cache', {})
+    
+    # Cache risk assessment
+    if 'risk_assessment' in state:
+        cache['risk:latest'] = state['risk_assessment']
+    
+    # Cache compliance check
+    if 'compliance_check' in state:
+        cache['compliance:latest'] = state['compliance_check']
+    
+    # Cache enriched findings with enrich: prefix
+    enriched = state.get('enriched_findings', [])
+    for finding in enriched:
+        cache[f'enrich:{finding["id"]}'] = finding
+    
+    return state

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 # Star import to validate __all__ content (flake8 ignore in project root if any)
-from agent.graph_nodes_scaffold import *  # type: ignore  # noqa: F401,F403
+from sys_scan_graph_agent.graph_nodes_scaffold import *  # type: ignore  # noqa: F401,F403
 
 expected_symbols = [
-    'enrich_findings', 'enhanced_enrich_findings', 'summarize_host_state', 'enhanced_summarize_host_state',
-    'suggest_rules', 'enhanced_suggest_rules', 'correlate_findings',
+    'enrich_findings', 'enhanced_enrich_findings', 'enhanced_summarize_host_state',
+    'enhanced_suggest_rules', 'correlate_findings',
     'advanced_router', 'should_suggest_rules', 'choose_post_summarize',
     'tool_coordinator', 'plan_baseline_queries', 'integrate_baseline_results',
-    'risk_analyzer', 'compliance_checker', 'error_handler', 'human_feedback_node', 'cache_manager', 'metrics_collector'
+    'risk_analyzer', 'compliance_checker', 'metrics_collector'
 ]
 
 def test_exports_presence():

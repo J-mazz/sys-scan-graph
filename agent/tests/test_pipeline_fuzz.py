@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, random, string
 from pathlib import Path
-from agent.pipeline import run_pipeline
+from sys_scan_graph_agent.pipeline import run_pipeline
 
 FIELDS = ['id','title','description','severity','risk_score']
 SEVERITIES = ['info','low','medium','high','critical']  # keep valid to avoid schema rejection

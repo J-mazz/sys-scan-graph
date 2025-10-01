@@ -1,8 +1,8 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from agent.pipeline import load_report, augment, correlate, baseline_rarity, sequence_correlation
-from agent.models import AgentState
+from sys_scan_graph_agent.pipeline import load_report, augment, correlate, baseline_rarity, sequence_correlation
+from sys_scan_graph_agent.models import AgentState
 
 
 def build_report():

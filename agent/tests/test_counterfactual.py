@@ -1,9 +1,9 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from agent.models import AgentState
-from agent.pipeline import load_report, augment, correlate, baseline_rarity, process_novelty, sequence_correlation, reduce, summarize
-from agent.counterfactual import what_if
+from sys_scan_graph_agent.models import AgentState
+from sys_scan_graph_agent.pipeline import load_report, augment, correlate, baseline_rarity, process_novelty, sequence_correlation, reduce, summarize
+from sys_scan_graph_agent.counterfactual import what_if
 
 
 def build_report():
@@ -48,7 +48,7 @@ def test_counterfactual_and_novelty(tmp_path):
     assert st.report and st.report.results
     enriched = {
         'correlations': [c.model_dump() for c in st.correlations],
-        'reductions': st.reductions.model_dump(),
+        'reductions': st.reductions,
         'summaries': st.summaries.model_dump() if st.summaries else {},
         'actions': [a.model_dump() for a in st.actions],
         'enriched_findings': [f.model_dump() for r in st.report.results for f in r.findings]

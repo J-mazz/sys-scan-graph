@@ -11,20 +11,20 @@ from typing import Dict, Any, List
 from unittest.mock import patch
 
 # Import types
-from ..graph import GraphState
-from ..graph_nodes_scaffold import StateType
+from sys_scan_graph_agent.graph import GraphState
+from sys_scan_graph_agent.graph_nodes_scaffold import StateType
 
 # Import both workflow variants
-from ..graph_nodes_scaffold import (
+from sys_scan_graph_agent.graph_nodes_scaffold import (
     enrich_findings,
     correlate_findings,
-    summarize_host_state as scaffold_summarize,
-    suggest_rules as scaffold_suggest_rules,
+    enhanced_summarize_host_state as scaffold_summarize,
+    enhanced_suggest_rules as scaffold_suggest_rules,
     risk_analyzer as scaffold_risk_analyzer,
     compliance_checker as scaffold_compliance_checker,
 )
 
-from ..graph_nodes_enhanced import (
+from sys_scan_graph_agent.graph_nodes_enhanced import (
     enhanced_enrich_findings,
     enhanced_summarize_host_state as enhanced_summarize,
     enhanced_suggest_rules as enhanced_suggest_rules,
@@ -32,8 +32,8 @@ from ..graph_nodes_enhanced import (
     compliance_checker as enhanced_compliance_checker,
 )
 
-from ..graph_state import normalize_graph_state
-from ..util_normalization import (
+from sys_scan_graph_agent.graph_state import normalize_graph_state
+from sys_scan_graph_agent.util_normalization import (
     normalize_rule_suggestions,
     unify_risk_assessment,
     unify_compliance_check,
@@ -151,8 +151,8 @@ class TestWorkflowEquivalence:
         # Run workflow steps
         state = enrich_findings(state)
         state = correlate_findings(state)
-        state = scaffold_summarize(state)
-        state = scaffold_suggest_rules(state)
+        state = await scaffold_summarize(state)
+        state = await scaffold_suggest_rules(state)
         state = await scaffold_risk_analyzer(state)
         state = await scaffold_compliance_checker(state)
 
@@ -231,7 +231,7 @@ class TestWorkflowEquivalence:
         enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         # Both should pass GraphState validation
-        from ..graph_state import validate_graph_state
+        from sys_scan_graph_agent.graph_state import validate_graph_state
 
         assert validate_graph_state(scaffold_state), "Scaffold state failed validation"
         assert validate_graph_state(enhanced_state), "Enhanced state failed validation"
@@ -459,7 +459,7 @@ class TestWorkflowEquivalence:
 
     def test_schema_validation_with_unified_fields(self, base_state):
         """Test that schema validation works with unified fields."""
-        from ..graph_state import validate_graph_state
+        from sys_scan_graph_agent.graph_state import validate_graph_state
 
         # Test with unified risk assessment
         unified_state = base_state.copy()
@@ -514,7 +514,7 @@ class TestContractVersioning:
 
     def test_schema_version_constants(self):
         """Test that schema version constants are properly defined."""
-        from ..graph_state import GRAPH_STATE_SCHEMA_VERSION, GRAPH_STATE_SCHEMA_LAST_UPDATED
+        from sys_scan_graph_agent.graph_state import GRAPH_STATE_SCHEMA_VERSION, GRAPH_STATE_SCHEMA_LAST_UPDATED
 
         assert GRAPH_STATE_SCHEMA_VERSION, "Schema version not defined"
         assert GRAPH_STATE_SCHEMA_LAST_UPDATED, "Schema last updated not defined"

@@ -1,11 +1,14 @@
 from __future__ import annotations
 import json
-from pathlib import Path
+from pathlib import Path as PathLibPath
 from typing import List, Dict
 from . import pipeline
 from . import models
 run_pipeline = pipeline.run_pipeline
 EnrichedOutput = models.EnrichedOutput
+
+# Expose Path for testing
+Path = PathLibPath
 
 INJECTED_INDICATORS = {
     "compromised_dev_host": [
@@ -17,7 +20,7 @@ INJECTED_INDICATORS = {
 }
 
 
-def load_fixture(name: str) -> Path:
+def load_fixture(name: str) -> PathLibPath:
     base = Path(__file__).parent / 'fixtures' / 'malicious'
     path = base / f'{name}.json'
     if not path.exists():
@@ -28,7 +31,7 @@ def load_fixture(name: str) -> Path:
 def evaluate_fixture(name: str) -> Dict:
     report_path = load_fixture(name)
     enriched: EnrichedOutput = run_pipeline(report_path)
-    top = enriched.reductions.top_risks or []
+    top = enriched.reductions.get('top_risks') or []
     top_titles = {t['title'] for t in top}
     indicators = INJECTED_INDICATORS.get(name, [])
     hits = [i for i in indicators if any(i in tt for tt in top_titles)]
@@ -59,7 +62,7 @@ def run_evaluation(fixtures: List[str]) -> Dict:
     }
 
 
-def write_report(fixtures: List[str], out_path: Path):
+def write_report(fixtures: List[str], out_path: PathLibPath):
     data = run_evaluation(fixtures)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2, sort_keys=True))

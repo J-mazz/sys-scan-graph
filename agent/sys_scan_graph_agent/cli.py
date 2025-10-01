@@ -69,20 +69,29 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     
     # Run intelligence workflow
     try:
-        state = graph_nodes_scaffold.enrich_findings(state)
-        state = graph_nodes_scaffold.correlate_findings(state)
-        # state = scaffold_summarize(state)  # TODO: implement
-        # state = scaffold_suggest_rules(state)  # TODO: implement
-        # Run async nodes
+        # Import telemetry for node timing
+        from .metrics_node import time_node
+        
+        # Run synchronous nodes with telemetry
+        with time_node(state, 'enrich_findings') as timed_state:
+            state = graph_nodes_scaffold.enrich_findings(timed_state)
+        
+        with time_node(state, 'correlate_findings') as timed_state:
+            state = graph_nodes_scaffold.correlate_findings(timed_state)
+        
+        # Run async nodes with telemetry
         import asyncio
-        async def run_async_nodes():
-            s = await graph_nodes_scaffold.risk_analyzer(state)
-            s = await graph_nodes_scaffold.compliance_checker(s)
-            s = await graph_nodes_scaffold.metrics_collector(s)
-            return s
+        async def run_async_nodes(current_state):
+            with time_node(current_state, 'risk_analyzer') as timed_state:
+                current_state = await graph_nodes_scaffold.risk_analyzer(timed_state)
+            with time_node(current_state, 'compliance_checker') as timed_state:
+                current_state = await graph_nodes_scaffold.compliance_checker(timed_state)
+            with time_node(current_state, 'metrics_collector') as timed_state:
+                current_state = await graph_nodes_scaffold.metrics_collector(timed_state)
+            return current_state
         
         # Run async workflow
-        final_state = asyncio.run(run_async_nodes())
+        final_state = asyncio.run(run_async_nodes(state))
         
         # Create enriched output (simplified version)
         from .models import EnrichedOutput, Reductions, Summaries
@@ -501,19 +510,16 @@ def verify_signature(report: Path = typer.Option(..., exists=True, help='Raw rep
                      verify_key: Path = typer.Option(..., exists=True, help='Base64 verify key file')):
     return verify(report=report, verify_key=verify_key)
 
-# Notification helper
+# Notification helper - DISABLED for air-gapped deployment
 
 def _notify(cfg, message: str):
-    payload = json.dumps({'text': message}).encode()
-    url = cfg.notifications.slack_webhook or cfg.notifications.webhook
-    if not url:
-        return
-    try:
-        req = urllib.request.Request(url, data=payload, headers={'Content-Type':'application/json'})
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            resp.read()
-    except Exception as e:
-        print(f"[red]Notification failed: {e}")
+    """Notification disabled for air-gapped deployment.
+
+    This function is disabled as the application is designed to run in air-gapped
+    environments without external communication capabilities.
+    """
+    print("[yellow]Notification disabled: Air-gapped deployment - external communications not allowed[/]")
+    return
 
 if __name__ == "__main__":
     app()

@@ -1,6 +1,6 @@
 import os, tempfile, sqlite3
 from pathlib import Path
-from agent.tools import query_baseline
+from sys_scan_graph_agent.tools import query_baseline
 
 def test_query_baseline_db_missing():
     with tempfile.TemporaryDirectory() as td:
