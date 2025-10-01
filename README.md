@@ -42,7 +42,7 @@ It combines a high-performance C++ scanning engine with a Python-based intellige
 
 ```bash
 # Add the Mazzlabs repository
-echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works/ stable main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
+echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works/ unstable main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
 
 # Import the GPG key
 curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
