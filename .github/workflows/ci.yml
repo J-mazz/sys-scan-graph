@@ -76,11 +76,14 @@ jobs:
       - name: Configure fuzz harness
         run: |
           cmake -B build -S . -DBUILD_FUZZERS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_CXX_FLAGS="-O1 -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=fuzzer,address,undefined"
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: Build fuzz target
-        run: cmake --build build -j$(nproc) --target fuzz_rules || true
+        run: |
+          cd build
+          # Apply fuzzer flags only to fuzz targets
+          make fuzz_rules VERBOSE=1 \
+            CXXFLAGS="-O1 -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer" \
+            LDFLAGS="-fsanitize=fuzzer,address,undefined" || true
       - name: Run fuzz smoke (30s)
         run: |
           if [ -f build/fuzz_rules ]; then
