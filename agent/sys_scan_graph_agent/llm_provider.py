@@ -307,7 +307,7 @@ def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     # ONLY allow local or null providers - NO external APIs for security
     if prov in {'local', 'mistral', 'local-mistral'}:
         try:
-            from providers.local_mistral_provider import LocalMistralLLMProvider
+            from .providers.local_mistral_provider import LocalMistralLLMProvider
             _PROVIDER = LocalMistralLLMProvider()
             print("✓ Zero-trust: Using local LoRA model for deterministic analysis")
         except Exception as e:
@@ -322,7 +322,7 @@ def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
         # Any other provider request defaults to local for zero trust
         print(f"⚠️  External LLM providers not allowed in zero-trust mode. Defaulting to local LoRA model.")
         try:
-            from providers.local_mistral_provider import LocalMistralLLMProvider
+            from .providers.local_mistral_provider import LocalMistralLLMProvider
             _PROVIDER = LocalMistralLLMProvider()
         except Exception as e:
             print(f"⚠️  Local LoRA model failed: {e}. Using null provider.")

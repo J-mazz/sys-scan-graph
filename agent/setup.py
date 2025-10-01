@@ -25,12 +25,11 @@ def read_requirements():
             'click>=8.0.0',
             'rich>=10.0.0',
             'pydantic>=1.8.0',
-            'networkx>=2.5',
-            'langchain>=0.0.300',
-            'langgraph>=0.0.20',
-            'openai>=1.0.0',
-            'anthropic>=0.5.0',
-            'google-generativeai>=0.3.0'
+            'torch>=2.0.0',
+            'transformers>=4.40.0',
+            'peft>=0.10.0',
+            'accelerate>=0.29.0',
+            'huggingface_hub>=0.20.0'
         ]
     return requirements
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from agent.pipeline import run_pipeline
+from sys_scan_graph_agent.pipeline import run_pipeline
 
 
 def test_policy_escalation(tmp_path, monkeypatch):

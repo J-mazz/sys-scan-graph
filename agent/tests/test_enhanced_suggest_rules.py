@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 import copy
-from agent.graph_nodes_scaffold import enhanced_enrich_findings, enhanced_suggest_rules
+from sys_scan_graph_agent.graph_nodes_scaffold import enhanced_enrich_findings, enhanced_suggest_rules
 
 
 def test_enhanced_suggest_rules_monkeypatch(monkeypatch):
@@ -16,16 +16,16 @@ def test_enhanced_suggest_rules_monkeypatch(monkeypatch):
         return {"suggestions": [
             {"id":"rule1","title":"Process pattern","conditions":[{"field":"title","contains":"process"}],"rationale":"test rationale","tags":["candidate"]}
         ]}
-    import agent.graph_nodes_scaffold as scaffold
-    orig = scaffold.mine_gap_candidates
-    monkeypatch.setattr(scaffold, 'mine_gap_candidates', fake_mine)
+    import sys_scan_graph_agent.rule_gap_miner as miner
+    orig = miner.mine_gap_candidates
+    monkeypatch.setattr(miner, 'mine_gap_candidates', fake_mine)
 
     try:
         state = asyncio.run(enhanced_enrich_findings(state))
         state = asyncio.run(enhanced_suggest_rules(state))
     finally:
         # Restore (defensive)
-        monkeypatch.setattr(scaffold, 'mine_gap_candidates', orig)
+        monkeypatch.setattr(miner, 'mine_gap_candidates', orig)
 
     suggestions = state.get('suggested_rules') or []
     assert suggestions, 'Expected at least one suggestion'

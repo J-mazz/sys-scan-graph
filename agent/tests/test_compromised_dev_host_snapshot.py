@@ -1,8 +1,8 @@
 from __future__ import annotations
 import json, hashlib
 from pathlib import Path
-from agent.models import Finding
-from agent.reduction import reduce_all
+from sys_scan_graph_agent.models import Finding
+from sys_scan_graph_agent.reduction import reduce_all
 
 # Load the malicious compromised dev host raw fixture (pre-enrichment) and build a snapshot of reductions
 FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "malicious" / "compromised_dev_host.json"

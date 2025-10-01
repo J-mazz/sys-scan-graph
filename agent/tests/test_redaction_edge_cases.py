@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os, random, string
-from agent.data_governance import get_data_governor
-from agent.models import Finding
+from sys_scan_graph_agent.data_governance import get_data_governor
+from sys_scan_graph_agent.models import Finding
 
 # Helper to build random metadata containing secrets and paths
 

@@ -152,7 +152,7 @@ def refine_with_llm(suggestions: List[Dict[str,Any]], examples: Optional[Dict[st
     # Optional secondary LLM refinement layer (real model integration stub)
     if os.environ.get('AGENT_RULE_REFINER_USE_LLM') == '1':
         try:
-            import rule_refiner
+            from . import rule_refiner
             refined = rule_refiner.llm_refine(refined, examples or {})
         except Exception:
             pass

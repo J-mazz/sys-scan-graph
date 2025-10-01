@@ -2,8 +2,8 @@ from __future__ import annotations
 import os, tempfile, textwrap, subprocess, json, shutil
 from pathlib import Path
 import pytest
-from agent import knowledge as K
-from agent.models import AgentState, Report, Meta, ScannerResult, Summary, SummaryExtension
+from sys_scan_graph_agent import knowledge as K
+from sys_scan_graph_agent.models import AgentState, Report, Meta, ScannerResult, Summary, SummaryExtension
 
 
 def _write_yaml(dirp: Path, name: str, content: str):

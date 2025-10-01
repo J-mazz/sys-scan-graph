@@ -12,8 +12,10 @@ class Weights(BaseModel):
     anomaly: float = 1.0
 
 class Notifications(BaseModel):
-    slack_webhook: Optional[str] = None
-    webhook: Optional[str] = None  # generic HTTP POST endpoint
+    # Notifications disabled for air-gapped deployment
+    slack_webhook: Optional[str] = None  # Disabled - air-gapped environment
+    webhook: Optional[str] = None  # Disabled - air-gapped environment
+    enabled: bool = False  # Notifications disabled for air-gapped deployment
     actionable_delta_threshold: float = 0.15  # probability_actionable delta trigger
 
 class Reports(BaseModel):

@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, os
 from pathlib import Path
 import pytest
-from agent.pipeline import load_report, AgentState
+from sys_scan_graph_agent.pipeline import load_report, AgentState
 
 
 def write_temp(tmp_path: Path, obj, newline_variant: str = "\n") -> Path:

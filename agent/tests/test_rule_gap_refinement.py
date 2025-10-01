@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, os
 from pathlib import Path
-from agent.rule_gap_miner import mine_gap_candidates, refine_with_llm
+from sys_scan_graph_agent.rule_gap_miner import mine_gap_candidates, refine_with_llm
 
 
 def test_refine_with_llm_layers(tmp_path, monkeypatch):

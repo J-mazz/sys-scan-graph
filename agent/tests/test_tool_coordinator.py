@@ -3,7 +3,7 @@ import pytest
 import asyncio
 import json
 
-from agent.graph_nodes_scaffold import tool_coordinator, plan_baseline_queries, integrate_baseline_results
+from sys_scan_graph_agent.graph_nodes_scaffold import tool_coordinator, plan_baseline_queries, integrate_baseline_results
 
 try:
     from langchain_core.messages import AIMessage, ToolMessage  # type: ignore

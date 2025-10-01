@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from agent.rule_gap_miner import mine_gap_candidates
+from sys_scan_graph_agent.rule_gap_miner import mine_gap_candidates
 
 def make_file(p: Path, titles, sev='high', risk=90):
     findings = []

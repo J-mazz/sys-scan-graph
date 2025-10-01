@@ -7,8 +7,8 @@ when using normalized GraphState.
 import pytest
 from typing import Dict, Any, List
 
-from ..graph_state import normalize_graph_state
-from ..graph_nodes_enhanced import advanced_router
+from sys_scan_graph_agent.graph_state import normalize_graph_state
+from sys_scan_graph_agent.graph_nodes_enhanced import advanced_router
 
 
 class TestRouterDeterministicBehavior:

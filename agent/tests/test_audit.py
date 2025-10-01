@@ -1,8 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
 import json
-from agent.pipeline import run_pipeline
-from agent.audit import tail_since
+from sys_scan_graph_agent.pipeline import run_pipeline
+from sys_scan_graph_agent.audit import tail_since
 
 def test_audit_append_and_tail(tmp_path, monkeypatch):
     # Redirect audit log

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from agent.rule_redundancy import compute_redundancy
+from sys_scan_graph_agent.rule_redundancy import compute_redundancy
 
 def make_corr_report(path: Path, corrs):
     path.write_text(json.dumps({'correlations': corrs}))

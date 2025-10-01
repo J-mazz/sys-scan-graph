@@ -1,5 +1,5 @@
 from __future__ import annotations
-from agent.graph_nodes_scaffold import should_suggest_rules, choose_post_summarize
+from sys_scan_graph_agent.graph_nodes_scaffold import should_suggest_rules, choose_post_summarize
 
 
 def _end_symbol():

@@ -4,11 +4,12 @@ import pytest
 
 # Graph is optional; skip if not available
 try:
-    from agent.graph import app
+    from sys_scan_graph_agent.graph import app
 except Exception:  # pragma: no cover
     app = None
 
-pytestmark = pytest.mark.skipif(app is None, reason="LangGraph not available")
+# Remove the global skip - let individual tests handle availability
+# pytestmark = pytest.mark.skipif(app is None, reason="LangGraph not available")
 
 def run_graph(raw_findings):
     # Force baseline mode to use synchronous functions
@@ -16,13 +17,13 @@ def run_graph(raw_findings):
     old_mode = os.environ.get('AGENT_GRAPH_MODE')
     os.environ['AGENT_GRAPH_MODE'] = 'baseline'
     try:
-        # Rebuild the app with baseline mode
-        from agent import graph
-        graph.workflow, graph.app = graph.build_workflow(enhanced=False)
-        
+        # Build a local workflow with baseline mode - don't modify global state
+        from sys_scan_graph_agent.graph import build_workflow
+        local_workflow, local_app = build_workflow(enhanced=False)
+
         state = {"raw_findings": raw_findings}
-        assert graph.app is not None
-        out = graph.app.invoke(state)  # type: ignore[attr-defined]
+        assert local_app is not None
+        out = local_app.invoke(state)  # type: ignore[attr-defined]
         return out
     finally:
         # Restore original mode

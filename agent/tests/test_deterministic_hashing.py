@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os
-from agent.data_governance import _hash, _get_salt
+from sys_scan_graph_agent.data_governance import _hash, _get_salt
 
 def test_hash_determinism_env_salt(monkeypatch):
     monkeypatch.setenv('AGENT_HASH_SALT','cafebabe1234')
@@ -17,7 +17,7 @@ def test_hash_host_derivation(monkeypatch):
     if 'AGENT_HASH_SALT' in os.environ:
         monkeypatch.delenv('AGENT_HASH_SALT', raising=False)
     # Reset module global
-    from agent import data_governance as dg
+    from sys_scan_graph_agent import data_governance as dg
     dg._GLOBAL_SALT = None
     h1 = dg._hash('abc')
     dg._GLOBAL_SALT = None

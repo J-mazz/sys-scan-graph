@@ -1,5 +1,5 @@
 from __future__ import annotations
-from agent.graph_nodes_scaffold import advanced_router
+from sys_scan_graph_agent.graph_nodes_scaffold import advanced_router
 
 
 def test_router_human_feedback():
