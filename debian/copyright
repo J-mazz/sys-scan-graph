@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: sys-scan-graph
-Source: https://github.com/J-mazz/sys-scan-graph
+Source: https://github.com/Mazzlabs/sys-scan-graph
 
 Files: *
 Copyright: 2025 Joseph Mazzini <joseph@mazzlabs.works>

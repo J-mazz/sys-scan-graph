@@ -1,0 +1,110 @@
+Sys-Scan-Graph for Debian
+==========================
+
+This package provides a comprehensive Linux security scanner with optional
+local AI intelligence capabilities.
+
+Architecture
+------------
+
+The package consists of two main components:
+
+1. **C++ Core Scanner** (sys-scan)
+   - High-performance native security scanning
+   - No external dependencies beyond system libraries
+   - Outputs deterministic JSON findings
+
+2. **Python Intelligence Layer** (sys-scan-agent)
+   - Optional AI analysis layer
+   - Supports local Mistral-7B model (requires separate model download)
+   - Graph-based correlation and risk analysis
+   - Can operate in fallback mode with deterministic heuristics
+
+Intelligence Layer Modes
+-------------------------
+
+The Intelligence Layer supports two operational modes:
+
+### Primary Mode: Local Mistral-7B (Requires Manual Setup)
+
+Due to Debian Policy restrictions on network access during installation,
+the fine-tuned Mistral model (161MB LoRA adapters) is NOT included in this
+package and must be downloaded separately:
+
+```bash
+# Download the fine-tuned model (one-time, requires network access)
+cd /opt
+sudo mkdir -p sys-scan-graph-models
+sudo chown $USER sys-scan-graph-models
+cd sys-scan-graph-models
+
+# Clone the model repository
+git clone https://huggingface.co/Mazzlabs/sys-scan-security-lora
+export AGENT_LLM_PROVIDER=local
+export MISTRAL_MODEL_PATH=/opt/sys-scan-graph-models/sys-scan-security-lora
+```
+
+### Fallback Mode: Deterministic Heuristics (No Download Required)
+
+If the Mistral model is not available, the system automatically falls back
+to deterministic rule-based analysis:
+
+```bash
+# Explicitly use deterministic mode (no ML dependencies)
+export AGENT_LLM_PROVIDER=null
+```
+
+Configuration
+-------------
+
+Default configuration is created at `/etc/sys-scan-graph/config.yaml`.
+
+To use local Mistral (after downloading model):
+```yaml
+intelligence:
+  enabled: true
+  model_provider: "local"
+  model_path: "/opt/sys-scan-graph-models/sys-scan-security-lora"
+```
+
+To use fallback deterministic mode (no model required):
+```yaml
+intelligence:
+  enabled: true
+  model_provider: "null"
+```
+
+Usage
+-----
+
+Basic security scan:
+```bash
+sys-scan --canonical --output report.json
+```
+
+With intelligence analysis (requires model download or uses fallback):
+```bash
+sys-scan-agent analyze --report report.json --out enriched_report.json
+```
+
+Security Considerations
+-----------------------
+
+* **No External APIs**: The system never makes external LLM API calls
+* **Local Inference Only**: When Mistral model is available, all processing is local
+* **Fallback Mode**: Works without ML dependencies using deterministic heuristics
+* **Memory Requirements**: Mistral mode requires 8GB+ RAM (4-bit quantization)
+* **Model Size**: ~7GB base model + 161MB LoRA adapters (not included in package)
+* **Zero Data Exfiltration**: All findings remain on the local system
+
+Why Model Not Included
+-----------------------
+
+Debian Policy §4.9 prohibits network access during package installation.
+The Mistral base model (~7GB) and fine-tuned LoRA adapters (161MB) would
+need to be downloaded from HuggingFace during postinst, which violates
+this policy. Users must download the model separately if they want local
+AI capabilities.
+
+For more information, see:
+https://github.com/Mazzlabs/sys-scan-graph
