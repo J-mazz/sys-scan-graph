@@ -18,7 +18,7 @@ if [ ! -f /etc/sys-scan-graph/config.yaml ]; then
 # Intelligence Layer settings
 intelligence:
   enabled: true
-  model_provider: "openai"  # Options: openai, anthropic, google
+  model_provider: "local"  # Local Mistral-7B model with security LoRA
   temperature: 0.1
   max_tokens: 4096
 
@@ -50,21 +50,9 @@ if [ ! -d /var/log/sys-scan-graph ]; then
     chmod 755 /var/log/sys-scan-graph
 fi
 
-# Set up Python virtual environment for Intelligence Layer if needed
-if [ ! -d /opt/sys-scan-graph/venv ]; then
-    mkdir -p /opt/sys-scan-graph
-    python3 -m venv /opt/sys-scan-graph/venv
-    /opt/sys-scan-graph/venv/bin/pip install --upgrade pip setuptools wheel
-
-    # Install Intelligence Layer dependencies
-    /opt/sys-scan-graph/venv/bin/pip install \
-        langchain \
-        langgraph \
-        openai \
-        anthropic \
-        google-generativeai \
-        || echo "Warning: Some Intelligence Layer dependencies could not be installed"
-fi
+# Note: Intelligence Layer dependencies are now packaged with the system
+# No network access or pip installation required during postinst
+# Local Mistral model and LoRA adapters are included in the package
 
 #DEBHELPER#
 

@@ -23,7 +23,7 @@ Description: Advanced Linux Security Scanner with AI Intelligence Layer
  * Graph-based attack path modeling
  * Automated rule generation and refinement
  * Advanced anomaly detection
- * Integration with multiple LLM providers (OpenAI, Anthropic, Google)
+ * Zero-trust local inference with LoRA-adapted security intelligence
  * Comprehensive reporting and visualization
  .
  Features deterministic JSON output, noise reduction techniques, and CI-friendly
