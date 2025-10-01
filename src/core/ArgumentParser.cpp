@@ -28,6 +28,9 @@ ArgumentParser::ArgumentParser() {
         {"--integrity-pkg-limit", FlagSpec::ArgKind::Int},
         {"--integrity-pkg-rehash", FlagSpec::ArgKind::None},
         {"--integrity-pkg-rehash-limit", FlagSpec::ArgKind::Int},
+        {"--integrity-critical-only", FlagSpec::ArgKind::None},
+        {"--integrity-sample-pct", FlagSpec::ArgKind::Int},
+        {"--integrity-max-mismatches", FlagSpec::ArgKind::Int},
         {"--fs-hygiene", FlagSpec::ArgKind::None},
         {"--fs-world-writable-limit", FlagSpec::ArgKind::Int},
         {"--world-writable-dirs", FlagSpec::ArgKind::CSV},
@@ -164,6 +167,20 @@ bool ArgumentParser::parse(int argc, char** argv, Config& cfg) {
         } else if(arg == "--integrity-pkg-rehash-limit") {
             try {
                 cfg.integrity_pkg_rehash_limit = need_int(value, "--integrity-pkg-rehash-limit");
+            } catch(const std::invalid_argument&) {
+                return false;
+            }
+        } else if(arg == "--integrity-critical-only") {
+            cfg.integrity_critical_only = true;
+        } else if(arg == "--integrity-sample-pct") {
+            try {
+                cfg.integrity_sample_pct = need_int(value, "--integrity-sample-pct");
+            } catch(const std::invalid_argument&) {
+                return false;
+            }
+        } else if(arg == "--integrity-max-mismatches") {
+            try {
+                cfg.integrity_max_mismatches = need_int(value, "--integrity-max-mismatches");
             } catch(const std::invalid_argument&) {
                 return false;
             }
@@ -322,6 +339,9 @@ void ArgumentParser::print_help() const {
         {"--integrity-pkg-limit N", "Limit detailed package mismatch findings"},
         {"--integrity-pkg-rehash", "Recompute SHA256 for mismatched package files"},
         {"--integrity-pkg-rehash-limit N", "Cap package files rehashed"},
+        {"--integrity-critical-only", "Verify only critical packages (fast mode)"},
+        {"--integrity-sample-pct N", "Verify random N% of packages (1-100)"},
+        {"--integrity-max-mismatches N", "Stop after N mismatches found"},
         {"--fs-hygiene", "Filesystem hygiene checks"},
         {"--fs-world-writable-limit N", "Cap world-writable file findings"},
         {"--world-writable-dirs dirs", "Extra directories for world-writable scan"},

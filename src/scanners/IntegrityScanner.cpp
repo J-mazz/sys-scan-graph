@@ -12,6 +12,9 @@
 #include <array>
 #include <optional>
 #include <cstring>
+#include <cstdlib>
+#include <ctime>
+#include <algorithm>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -93,13 +96,71 @@ void IntegrityScanner::scan(ScanContext& context){
     if(cfg.integrity_pkg_verify){
         // Prefer dpkg -V (Debian) else rpm -Va (RPM-based)
         if(fs::exists("/usr/bin/dpkg")){
-            used_dpkg=true; std::string out = run_cmd_capture({"dpkg", "-V"}); std::istringstream iss(out); std::string line; // Lines: status flags then space then package or file
+            used_dpkg=true;
+            std::string out;
+            
+            // Fast path: critical packages only
+            if(cfg.integrity_critical_only){
+                // Verify only critical security packages
+                std::vector<std::string> critical_pkgs = {
+                    "coreutils", "bash", "sudo", "openssh-server", "openssl", "libpam",
+                    "systemd", "init", "login", "passwd", "libc6", "libc-bin"
+                };
+                for(const auto& pkg : critical_pkgs){
+                    std::string pkg_out = run_cmd_capture({"dpkg", "-V", pkg});
+                    out += pkg_out;
+                    if(cfg.integrity_max_mismatches > 0 && pkg_mismatch_count >= (size_t)cfg.integrity_max_mismatches){
+                        break; // Early termination
+                    }
+                }
+            } 
+            // Sample mode: verify random N% of packages
+            else if(cfg.integrity_sample_pct > 0 && cfg.integrity_sample_pct <= 100){
+                // Get installed package list
+                std::string pkg_list = run_cmd_capture({"dpkg", "-l"});
+                std::vector<std::string> packages;
+                std::istringstream plist(pkg_list);
+                std::string line;
+                while(std::getline(plist, line)){
+                    if(line.size() > 4 && line.substr(0,2) == "ii"){
+                        std::istringstream lss(line);
+                        std::string status, name;
+                        lss >> status >> name;
+                        if(!name.empty()) packages.push_back(name);
+                    }
+                }
+                // Sample random packages
+                size_t sample_count = (packages.size() * cfg.integrity_sample_pct) / 100;
+                if(sample_count > 0){
+                    std::srand(std::time(nullptr));
+                    std::random_shuffle(packages.begin(), packages.end());
+                    packages.resize(std::min(sample_count, packages.size()));
+                    for(const auto& pkg : packages){
+                        std::string pkg_out = run_cmd_capture({"dpkg", "-V", pkg});
+                        out += pkg_out;
+                        if(cfg.integrity_max_mismatches > 0 && pkg_mismatch_count >= (size_t)cfg.integrity_max_mismatches){
+                            break;
+                        }
+                    }
+                }
+            }
+            // Full verification (default, slow)
+            else {
+                out = run_cmd_capture({"dpkg", "-V"});
+            }
+            
+            std::istringstream iss(out); std::string line; // Lines: status flags then space then package or file
             while(std::getline(iss,line)){
                 if(line.empty()) continue; // lines starting with '??' or similar indicate mismatches
                 if(line.size()>0 && (line[0]==' ' || line[0]=='?')) continue; // skip blank prefix lines
                 // dpkg -V format: conffile mismatches lines start with '??' or multiple flag chars (MD5 sum mismatch => '5')
                 if(line[0] != ' '){ // mismatch line
-                    ++pkg_mismatch_count; if(mismatch_sample.size()<10) mismatch_sample.push_back(line.substr(0,40));
+                    ++pkg_mismatch_count;
+                    // Early termination check
+                    if(cfg.integrity_max_mismatches > 0 && pkg_mismatch_count >= (size_t)cfg.integrity_max_mismatches){
+                        break;
+                    }
+                    if(mismatch_sample.size()<10) mismatch_sample.push_back(line.substr(0,40));
                     // Attempt to extract filename (dpkg -V lines: flags  path)
                     std::string path; size_t pos = line.find(' '); if(pos!=std::string::npos){ path = line.substr(pos+1); }
                     if(!path.empty() && rehash_files.size() < (size_t)cfg.integrity_pkg_rehash_limit) rehash_files.push_back(path);
@@ -107,10 +168,61 @@ void IntegrityScanner::scan(ScanContext& context){
                 }
             }
         } else if(fs::exists("/usr/bin/rpm")) {
-            used_rpm=true; std::string out = run_cmd_capture({"rpm", "-Va"}); std::istringstream iss(out); std::string line; while(std::getline(iss,line)){
+            used_rpm=true;
+            std::string out;
+            
+            // Fast path: critical packages only
+            if(cfg.integrity_critical_only){
+                std::vector<std::string> critical_pkgs = {
+                    "coreutils", "bash", "sudo", "openssh-server", "openssl", "pam",
+                    "systemd", "glibc", "shadow-utils"
+                };
+                for(const auto& pkg : critical_pkgs){
+                    std::string pkg_out = run_cmd_capture({"rpm", "-V", pkg});
+                    out += pkg_out;
+                    if(cfg.integrity_max_mismatches > 0 && pkg_mismatch_count >= (size_t)cfg.integrity_max_mismatches){
+                        break;
+                    }
+                }
+            }
+            // Sample mode
+            else if(cfg.integrity_sample_pct > 0 && cfg.integrity_sample_pct <= 100){
+                std::string pkg_list = run_cmd_capture({"rpm", "-qa"});
+                std::vector<std::string> packages;
+                std::istringstream plist(pkg_list);
+                std::string line;
+                while(std::getline(plist, line)){
+                    if(!line.empty()) packages.push_back(line);
+                }
+                size_t sample_count = (packages.size() * cfg.integrity_sample_pct) / 100;
+                if(sample_count > 0){
+                    std::srand(std::time(nullptr));
+                    std::random_shuffle(packages.begin(), packages.end());
+                    packages.resize(std::min(sample_count, packages.size()));
+                    for(const auto& pkg : packages){
+                        std::string pkg_out = run_cmd_capture({"rpm", "-V", pkg});
+                        out += pkg_out;
+                        if(cfg.integrity_max_mismatches > 0 && pkg_mismatch_count >= (size_t)cfg.integrity_max_mismatches){
+                            break;
+                        }
+                    }
+                }
+            }
+            // Full verification (default)
+            else {
+                out = run_cmd_capture({"rpm", "-Va"});
+            }
+            
+            std::istringstream iss(out); std::string line; while(std::getline(iss,line)){
                 if(line.empty()) continue; // rpm verification lines: 8 chars of flags, space, path or package
                 if(line.size() < 2) continue; bool mismatch=false; for(char c: line.substr(0,8)){ if(c!='.' && c!=' '){ mismatch=true; break; } }
-                if(!mismatch) continue; ++pkg_mismatch_count; if(mismatch_sample.size()<10) mismatch_sample.push_back(line.substr(0,40));
+                if(!mismatch) continue;
+                ++pkg_mismatch_count;
+                // Early termination
+                if(cfg.integrity_max_mismatches > 0 && pkg_mismatch_count >= (size_t)cfg.integrity_max_mismatches){
+                    break;
+                }
+                if(mismatch_sample.size()<10) mismatch_sample.push_back(line.substr(0,40));
                 std::string path; if(line.size()>9) path = line.substr(9); if(!path.empty() && rehash_files.size() < (size_t)cfg.integrity_pkg_rehash_limit) rehash_files.push_back(path);
                 if(pkg_detail_emitted < (size_t)cfg.integrity_pkg_limit){ Finding f; f.id = std::string("pkg_mismatch:")+std::to_string(pkg_detail_emitted); f.title="Package file mismatch"; f.severity=Severity::Medium; f.description="rpm verification mismatch"; f.metadata["raw"] = line; if(!path.empty()) f.metadata["path"] = path; context.report.add_finding(this->name(), std::move(f)); ++pkg_detail_emitted; }
             }
@@ -142,6 +254,11 @@ void IntegrityScanner::scan(ScanContext& context){
     if(pkg_mismatch_count>0) summary.severity = Severity::Medium; if(ima_fail>0) summary.severity = Severity::High;
     if(used_dpkg) summary.metadata["pkg_tool"] = "dpkg"; else if(used_rpm) summary.metadata["pkg_tool"]="rpm"; else if(cfg.integrity_pkg_verify) summary.metadata["pkg_tool"]="none";
     summary.metadata["pkg_mismatch_count"] = std::to_string(pkg_mismatch_count);
+    // Document optimization mode used
+    if(cfg.integrity_critical_only) summary.metadata["scan_mode"] = "critical_only";
+    else if(cfg.integrity_sample_pct > 0) summary.metadata["scan_mode"] = "sample_" + std::to_string(cfg.integrity_sample_pct) + "pct";
+    else summary.metadata["scan_mode"] = "full";
+    if(cfg.integrity_max_mismatches > 0) summary.metadata["early_exit_threshold"] = std::to_string(cfg.integrity_max_mismatches);
     if(!mismatch_sample.empty()){ std::string s; for(size_t i=0;i<mismatch_sample.size(); ++i){ if(i) s+=","; s+=mismatch_sample[i]; } summary.metadata["pkg_mismatch_sample"] = s; }
     if(cfg.integrity_ima){ summary.metadata["ima_entries"] = std::to_string(ima_entries); if(ima_fail>0) summary.metadata["ima_fail"] = std::to_string(ima_fail); }
     context.report.add_finding(this->name(), std::move(summary));
