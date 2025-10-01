@@ -56,7 +56,7 @@ jobs:
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Sign checksums
-        if: env.GPG_FINGERPRINT
+        if: ${{ env.GPG_FINGERPRINT }}
         run: |
           gpg --batch --yes --armor --detach-sign -u "${GPG_FINGERPRINT}" dist/sha256sums.txt
 
