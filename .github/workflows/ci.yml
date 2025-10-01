@@ -72,11 +72,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install clang
-        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libbpf-dev linux-tools-common
+        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libbpf-dev linux-tools-common libseccomp-dev libcap-dev
       - name: Configure fuzz harness
         run: |
           cmake -B build -S . -DBUILD_FUZZERS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DENABLE_SECCOMP=OFF -DENABLE_CAPABILITIES=OFF
       - name: Build fuzz target
         run: |
           cd build
