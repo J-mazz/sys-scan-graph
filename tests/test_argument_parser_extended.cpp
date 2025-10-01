@@ -142,10 +142,13 @@ TEST_F(ArgumentParserExtendedTest, ParseManyArguments) {
 
     argv.push_back("sys-scan");
 
+    // Pre-allocate to prevent reallocation invalidating c_str() pointers
+    static std::vector<std::string> scanner_names;
+    scanner_names.clear(); // Clear for test isolation
+    scanner_names.reserve(num_args);
+    
     for (int i = 0; i < num_args; ++i) {
         argv.push_back("--enable");
-        // Create a static string that persists for the test
-        static std::vector<std::string> scanner_names;
         scanner_names.push_back("scanner" + std::to_string(i));
         argv.push_back(scanner_names.back().c_str());
     }
