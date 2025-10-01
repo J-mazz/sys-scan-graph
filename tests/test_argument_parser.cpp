@@ -1,6 +1,7 @@
 #include "core/ArgumentParser.h"
 #include "core/Config.h"
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <vector>
 #include <string>
 
