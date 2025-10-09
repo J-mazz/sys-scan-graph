@@ -415,4 +415,4 @@ baseline:
 
 ---
 
-*For questions about the Intelligence Layer implementation or configuration, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/Mazzlabs/sys-scan-graph/discussions).*
+*For questions about the Intelligence Layer implementation or configuration, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/J-mazz/sys-scan-graph/discussions).*

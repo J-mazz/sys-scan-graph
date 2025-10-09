@@ -367,4 +367,4 @@ sys-scan --process-hash --modules-summary --ioc-allow-file allowlist.txt
 
 ---
 
-*For questions about specific scanners or their implementation, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Issue](https://github.com/Mazzlabs/sys-scan-graph/issues).*"
+*For questions about specific scanners or their implementation, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Issue](https://github.com/J-mazz/sys-scan-graph/issues).*"

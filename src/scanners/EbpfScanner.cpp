@@ -1,3 +1,11 @@
+// ╔══════════════════════════════════╗
+// ║             MazzLabs             ║
+// ╟──────────────────────────────────╢
+// ║           Joseph Mazzini         ║
+// ╚══════════════════════════════════╝
+
+// ==============================================================================
+
 // Implementation file for EbpfScanner: provide method definitions only to avoid ODR violations.
 #include "EbpfScanner.h"
 #include "../core/ScanContext.h"

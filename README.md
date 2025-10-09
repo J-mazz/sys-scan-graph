@@ -1,3 +1,9 @@
+╔══════════════════════════════════╗
+║             MazzLabs             ║
+╟──────────────────────────────────╢
+║           Joseph Mazzini         ║
+╚══════════════════════════════════╝
+
 # sys-scan-graph
 
 <div align="center">
@@ -57,7 +63,7 @@ sudo apt install sys-scan-graph
 
 ```bash
 # Clone the repository
-git clone https://github.com/Mazzlabs/sys-scan-graph.git
+git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
 # Build the core scanner
@@ -154,9 +160,9 @@ This project is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE) 
 
 ## Support & Community
 
-- **Documentation**: [Wiki](docs/wiki/_index.md) | [GitHub Wiki](https://github.com/Mazzlabs/sys-scan-graph/wiki)
-- **Issues**: [GitHub Issues](https://github.com/Mazzlabs/sys-scan-graph/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Mazzlabs/sys-scan-graph/discussions)
+- **Documentation**: [Wiki](docs/wiki/_index.md) | [GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)
+- **Issues**: [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
 - **Security**: See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure
 
 ---

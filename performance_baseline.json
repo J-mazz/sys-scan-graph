@@ -1,0 +1,113 @@
+{
+  "timestamp": "1759302328084270180",
+  "system_info": {
+    "cpu_cores": 8,
+    "hostname": "SurfTop888"
+  },
+  "individual_scanners": [
+    {
+      "name": "ioc",
+      "duration_ms": 5,
+      "findings_count": 18,
+      "memory_kb": 4588,
+      "status": "success"
+    },
+    {
+      "name": "processes",
+      "duration_ms": 4,
+      "findings_count": 0,
+      "memory_kb": 4716,
+      "status": "success"
+    },
+    {
+      "name": "suid_sgid",
+      "duration_ms": 13,
+      "findings_count": 16,
+      "memory_kb": 6508,
+      "status": "success"
+    },
+    {
+      "name": "world_writable",
+      "duration_ms": 24,
+      "findings_count": 4,
+      "memory_kb": 8224,
+      "status": "success"
+    },
+    {
+      "name": "kernel_params",
+      "duration_ms": 0,
+      "findings_count": 4,
+      "memory_kb": 8224,
+      "status": "success"
+    },
+    {
+      "name": "modules",
+      "duration_ms": 0,
+      "findings_count": 213,
+      "memory_kb": 8224,
+      "status": "success"
+    },
+    {
+      "name": "mac",
+      "duration_ms": 3,
+      "findings_count": 2,
+      "memory_kb": 8224,
+      "status": "success"
+    },
+    {
+      "name": "mounts",
+      "duration_ms": 0,
+      "findings_count": 0,
+      "memory_kb": 8224,
+      "status": "success"
+    },
+    {
+      "name": "kernel_hardening",
+      "duration_ms": 0,
+      "findings_count": 12,
+      "memory_kb": 8224,
+      "status": "success"
+    },
+    {
+      "name": "systemd_units",
+      "duration_ms": 57,
+      "findings_count": 7449,
+      "memory_kb": 61344,
+      "status": "success"
+    },
+    {
+      "name": "auditd",
+      "duration_ms": 0,
+      "findings_count": 1,
+      "memory_kb": 61344,
+      "status": "success"
+    },
+    {
+      "name": "containers",
+      "duration_ms": 0,
+      "findings_count": 0,
+      "memory_kb": 61344,
+      "status": "success"
+    },
+    {
+      "name": "integrity",
+      "duration_ms": 0,
+      "findings_count": 1,
+      "memory_kb": 61344,
+      "status": "success"
+    },
+    {
+      "name": "yara",
+      "duration_ms": 0,
+      "findings_count": 0,
+      "memory_kb": 61344,
+      "status": "success"
+    }
+  ],
+  "full_scan": {
+    "duration_ms": 78,
+    "findings_count": 7720,
+    "memory_kb": 63948,
+    "status": "success"
+  }
+}

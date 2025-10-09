@@ -624,4 +624,4 @@ python -m agent.cli rule-profile \
 
 ---
 
-*For questions about the Rules Engine implementation or rule development, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/Mazzlabs/sys-scan-graph/discussions).*
+*For questions about the Rules Engine implementation or rule development, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/J-mazz/sys-scan-graph/discussions).*

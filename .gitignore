@@ -35,8 +35,9 @@ build.ninja
 .ninja_log
 .cmake/
 _deps/
+ml_env/
 
-# Object & binary artifacts
+-# Object & binary artifacts
 *.o
 *.obj
 *.lo

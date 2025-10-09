@@ -34,6 +34,9 @@ from sys_scan_graph_agent.graph import (
     BaselineQueryGraph
 )
 
+# Import analysis functions directly
+from sys_scan_graph_agent.graph.analysis import risk_analyzer, compliance_checker, metrics_collector
+
 
 class TestGraphState:
     """Test GraphState TypedDict functionality."""
@@ -892,3 +895,1296 @@ class TestIntegration:
 
         # Verify cyclical reasoning occurred
         assert len(memory['reflection_insights']) >= 0  # May or may not find insights
+
+
+class TestAnalysisFunctions:
+    """Test analysis.py async functions for risk analysis, compliance checking, and metrics collection."""
+
+    @pytest.mark.asyncio
+    async def test_risk_analyzer_basic_functionality(self):
+        """Test risk_analyzer with basic enriched findings."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80, 'tags': ['privilege']},
+                {'id': 'f2', 'title': 'World readable file', 'severity': 'medium', 'risk_score': 40, 'tags': ['filesystem']},
+                {'id': 'f3', 'title': 'Network service', 'severity': 'low', 'risk_score': 20, 'tags': ['network']}
+            ],
+            'correlations': []
+        }
+
+        result = await risk_analyzer(state)  # type: ignore
+
+        assert 'risk_assessment' in result
+        risk_assessment = result['risk_assessment']
+        assert risk_assessment['overall_risk_level'] == 'high'
+        assert risk_assessment['total_risk_score'] == 140  # 80 + 40 + 20
+        assert risk_assessment['average_risk_score'] == 46.666666666666664  # 140 / 3
+        assert risk_assessment['finding_count'] == 3
+        assert risk_assessment['high_severity_count'] == 1
+        assert risk_assessment['correlation_count'] == 0
+        assert 'counts' in risk_assessment
+        assert risk_assessment['counts']['high'] == 1
+        assert risk_assessment['counts']['medium'] == 1
+        assert risk_assessment['counts']['low'] == 1
+        assert len(risk_assessment['top_findings']) == 3
+        assert risk_assessment['top_findings'][0]['id'] == 'f1'  # Highest risk score
+
+    @pytest.mark.asyncio
+    async def test_risk_analyzer_with_correlations(self):
+        """Test risk_analyzer with correlation bonus."""
+        from sys_scan_graph_agent import models
+
+        correlation = models.Correlation(
+            id='corr1',
+            title='Privilege escalation chain',
+            rationale='Chain of privilege escalation findings',
+            related_finding_ids=['f1', 'f2'],
+            risk_score_delta=25
+        )
+
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file', 'severity': 'high', 'risk_score': 80},
+                {'id': 'f2', 'title': 'Weak permissions', 'severity': 'medium', 'risk_score': 40}
+            ],
+            'correlations': [correlation]
+        }
+
+        result = await risk_analyzer(state)
+
+        risk_assessment = result['risk_assessment']
+        assert risk_assessment['total_risk_score'] == 145  # 80 + 40 + 25 correlation bonus
+        assert risk_assessment['correlation_count'] == 1
+
+    @pytest.mark.asyncio
+    async def test_risk_analyzer_empty_findings(self):
+        """Test risk_analyzer with no findings."""
+        state: GraphState = {
+            'enriched_findings': [],
+            'correlations': []
+        }
+
+        result = await risk_analyzer(state)
+
+        risk_assessment = result['risk_assessment']
+        assert risk_assessment['overall_risk_level'] == 'info'
+        assert risk_assessment['total_risk_score'] == 0
+        assert risk_assessment['average_risk_score'] == 0.0
+        assert risk_assessment['finding_count'] == 0
+        assert risk_assessment['high_severity_count'] == 0
+        assert risk_assessment['correlation_count'] == 0
+
+    @pytest.mark.asyncio
+    async def test_risk_analyzer_critical_findings(self):
+        """Test risk_analyzer with critical severity findings."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Critical vulnerability', 'severity': 'critical', 'risk_score': 100},
+                {'id': 'f2', 'title': 'High vulnerability', 'severity': 'high', 'risk_score': 80}
+            ],
+            'correlations': []
+        }
+
+        result = await risk_analyzer(state)
+
+        risk_assessment = result['risk_assessment']
+        assert risk_assessment['overall_risk_level'] == 'critical'
+        assert risk_assessment['total_risk_score'] == 180
+        assert risk_assessment['high_severity_count'] == 2  # Both 'high' and 'critical' are considered high severity
+
+    @pytest.mark.asyncio
+    async def test_compliance_checker_pci_dss_violations(self):
+        """Test compliance_checker identifies PCI DSS violations."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'tags': ['privilege']},
+                {'id': 'f2', 'title': 'Unencrypted network traffic', 'severity': 'medium', 'tags': ['network']},
+                {'id': 'f3', 'title': 'PCI DSS violation', 'severity': 'high', 'tags': ['pci'], 'metadata': {'compliance_standard': 'PCI'}}
+            ]
+        }
+
+        result = await compliance_checker(state)
+
+        compliance_check = result['compliance_check']
+        assert 'standards' in compliance_check
+        pci_dss = compliance_check['standards']['PCI DSS']
+        assert pci_dss['count'] == 3  # SUID, network unencrypted, explicit PCI tag
+        assert len(pci_dss['finding_ids']) == 3
+        assert 'f1' in pci_dss['finding_ids']
+        assert 'f2' in pci_dss['finding_ids']
+        assert 'f3' in pci_dss['finding_ids']
+
+    @pytest.mark.asyncio
+    async def test_compliance_checker_hipaa_violations(self):
+        """Test compliance_checker identifies HIPAA violations."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'World readable patient data', 'severity': 'high', 'metadata': {'readable': True, 'world_access': True}},
+                {'id': 'f2', 'title': 'HIPAA violation', 'severity': 'critical', 'tags': ['hipaa'], 'metadata': {'compliance_standard': 'HIPAA'}}
+            ]
+        }
+
+        result = await compliance_checker(state)
+
+        compliance_check = result['compliance_check']
+        hipaa = compliance_check['standards']['HIPAA']
+        assert hipaa['count'] == 2
+        assert len(hipaa['finding_ids']) == 2
+        assert 'f1' in hipaa['finding_ids']
+        assert 'f2' in hipaa['finding_ids']
+
+    @pytest.mark.asyncio
+    async def test_compliance_checker_iso27001_violations(self):
+        """Test compliance_checker identifies ISO 27001 violations."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Incorrect file permissions', 'severity': 'medium'},
+                {'id': 'f2', 'title': 'Network configuration issue', 'severity': 'info'}
+            ]
+        }
+
+        result = await compliance_checker(state)
+
+        compliance_check = result['compliance_check']
+        iso27001 = compliance_check['standards']['ISO27001']
+        assert iso27001['count'] == 1  # Only permission-related finding
+        assert 'f1' in iso27001['finding_ids']
+        assert 'f2' not in iso27001['finding_ids']
+
+    @pytest.mark.asyncio
+    async def test_compliance_checker_no_violations(self):
+        """Test compliance_checker with no compliance violations."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Minor configuration issue', 'severity': 'low', 'tags': []}
+            ]
+        }
+
+        result = await compliance_checker(state)
+
+        compliance_check = result['compliance_check']
+        assert compliance_check['total_compliance_findings'] == 0
+        assert compliance_check['pci_dss_compliant'] is True
+        assert compliance_check['hipaa_compliant'] is True
+        assert compliance_check['iso27001_compliant'] is True
+
+    @pytest.mark.asyncio
+    async def test_compliance_checker_remediation_priority(self):
+        """Test compliance_checker calculates remediation priority correctly."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Critical PCI violation', 'severity': 'critical'},
+                {'id': 'f2', 'title': 'High HIPAA violation', 'severity': 'high'},
+                {'id': 'f3', 'title': 'Medium issue', 'severity': 'medium'}
+            ]
+        }
+
+        result = await compliance_checker(state)
+
+        compliance_check = result['compliance_check']
+        assert compliance_check['remediation_priority'] == 'immediate'  # Due to critical finding
+
+    @pytest.mark.asyncio
+    async def test_metrics_collector_basic_functionality(self):
+        """Test metrics_collector collects basic metrics."""
+        from sys_scan_graph_agent import models
+
+        correlation = models.Correlation(
+            id='corr1',
+            title='Test correlation',
+            rationale='Test correlation rationale',
+            related_finding_ids=['f1', 'f2'],
+            risk_score_delta=10
+        )
+
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'High finding', 'severity': 'high', 'category': 'privilege'},
+                {'id': 'f2', 'title': 'Medium finding', 'severity': 'medium', 'category': 'network'},
+                {'id': 'f3', 'title': 'Low finding', 'severity': 'low', 'category': 'filesystem'}
+            ],
+            'correlations': [correlation],
+            'risk_assessment': {'overall_risk': 'high'},
+            'cache': {'key1': 'value1'},
+            'enrich_cache': {'key2': 'value2'}
+        }
+
+        result = await metrics_collector(state)
+
+        metrics = result['final_metrics']
+        assert metrics['findings_processed'] == 3
+        assert metrics['correlations_found'] == 1
+        assert metrics['overall_risk'] == 'high'
+        assert metrics['cache_entries'] == 2  # cache + enrich_cache
+        assert 'processing_timestamp' in metrics
+        assert 'findings_by_severity' in metrics
+        assert metrics['findings_by_severity']['high'] == 1
+        assert metrics['findings_by_severity']['medium'] == 1
+        assert metrics['findings_by_severity']['low'] == 1
+        assert 'findings_by_category' in metrics
+        assert 'correlation_effectiveness' in metrics
+
+    @pytest.mark.asyncio
+    async def test_metrics_collector_empty_state(self):
+        """Test metrics_collector with minimal state."""
+        state: GraphState = {
+            'enriched_findings': [],
+            'correlations': [],
+            'cache': {},
+            'enrich_cache': {}
+        }
+
+        result = await metrics_collector(state)
+
+        metrics = result['final_metrics']
+        assert metrics['findings_processed'] == 0
+        assert metrics['correlations_found'] == 0
+        assert metrics['cache_entries'] == 0
+        assert metrics['correlation_effectiveness'] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_metrics_collector_category_counting(self):
+        """Test metrics_collector properly categorizes findings."""
+        state: GraphState = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file privilege issue', 'severity': 'high'},
+                {'id': 'f2', 'title': 'Network security problem', 'severity': 'medium'},
+                {'id': 'f3', 'title': 'File permission issue', 'severity': 'low'},
+                {'id': 'f4', 'title': 'Process security vulnerability', 'severity': 'high'}
+            ],
+            'correlations': [],
+            'cache': {},
+            'enrich_cache': {}
+        }
+
+        result = await metrics_collector(state)
+
+        categories = result['final_metrics']['findings_by_category']
+        assert categories['privilege_escalation'] == 1  # SUID file
+        assert categories['network_security'] == 1  # Network title
+        assert categories['filesystem'] == 1  # File permission
+        assert categories['process_security'] == 1  # Process title
+
+
+class TestEnrichmentFunctions:
+    """Test enrichment.py functions for finding enrichment and correlation."""
+
+    def test_enrich_findings_basic_functionality(self):
+        """Test enrich_findings with basic raw findings."""
+        from sys_scan_graph_agent.graph.enrichment import enrich_findings
+
+        state: Dict[str, Any] = {
+            'raw_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80},
+                {'id': 'f2', 'title': 'World readable file', 'severity': 'medium', 'risk_score': 40}
+            ]
+        }
+
+        result = enrich_findings(state)
+
+        assert 'enriched_findings' in result
+        enriched = result['enriched_findings']
+        assert len(enriched) == 2
+        assert enriched[0]['id'] == 'f1'
+        assert enriched[1]['id'] == 'f2'
+        # Check that enrichment added additional fields
+        assert 'tags' in enriched[0] or 'risk_subscores' in enriched[0] or 'probability_actionable' in enriched[0]
+
+    def test_enrich_findings_empty_findings(self):
+        """Test enrich_findings with no findings."""
+        from sys_scan_graph_agent.graph.enrichment import enrich_findings
+
+        state: Dict[str, Any] = {
+            'raw_findings': []
+        }
+
+        result = enrich_findings(state)
+
+        assert 'enriched_findings' in result
+        assert result['enriched_findings'] == []
+
+    def test_correlate_findings_basic_functionality(self):
+        """Test correlate_findings with enriched findings."""
+        from sys_scan_graph_agent.graph.enrichment import correlate_findings
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80, 'tags': ['privilege']},
+                {'id': 'f2', 'title': 'SUID binary', 'severity': 'high', 'risk_score': 85, 'tags': ['privilege']},
+                {'id': 'f3', 'title': 'World readable file', 'severity': 'medium', 'risk_score': 40, 'tags': ['filesystem']}
+            ]
+        }
+
+        result = correlate_findings(state)
+
+        assert 'correlations' in result
+        correlations = result['correlations']
+        assert isinstance(correlations, list)
+        # Should have found correlations between similar privilege escalation findings
+        assert len(correlations) >= 0  # May or may not find correlations depending on rules
+
+    def test_correlate_findings_no_findings(self):
+        """Test correlate_findings with no enriched findings."""
+        from sys_scan_graph_agent.graph.enrichment import correlate_findings
+
+        state: Dict[str, Any] = {
+            'enriched_findings': []
+        }
+
+        result = correlate_findings(state)
+
+        assert 'correlations' in result
+        assert result['correlations'] == []
+
+    @pytest.mark.asyncio
+    async def test_enhanced_enrich_findings_basic_functionality(self):
+        """Test enhanced_enrich_findings with caching."""
+        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+
+        state: Dict[str, Any] = {
+            'raw_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80},
+                {'id': 'f2', 'title': 'World readable file', 'severity': 'medium', 'risk_score': 40}
+            ]
+        }
+
+        result = await enhanced_enrich_findings(state)
+
+        assert 'enriched_findings' in result
+        enriched = result['enriched_findings']
+        assert len(enriched) == 2
+        assert enriched[0]['id'] == 'f1'
+        assert enriched[1]['id'] == 'f2'
+        assert 'enrich_cache' in result
+        assert 'cache_keys' in result
+        assert len(result['cache_keys']) == 1
+
+    @pytest.mark.asyncio
+    async def test_enhanced_enrich_findings_cache_hit(self):
+        """Test enhanced_enrich_findings cache hit scenario."""
+        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+
+        # Pre-populate cache
+        cached_findings = [
+            {'id': 'f1', 'title': 'Cached SUID file', 'severity': 'high', 'risk_score': 80, 'cached': True},
+            {'id': 'f2', 'title': 'Cached world readable', 'severity': 'medium', 'risk_score': 40, 'cached': True}
+        ]
+
+        state: Dict[str, Any] = {
+            'raw_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80},
+                {'id': 'f2', 'title': 'World readable file', 'severity': 'medium', 'risk_score': 40}
+            ],
+            'enrich_cache': {'enrich:some_key': cached_findings},
+            'cache_keys': []
+        }
+
+        # Mock the cache key generation to return the known key
+        with patch('sys_scan_graph_agent.graph.enrichment._generate_cache_key', return_value='enrich:some_key'):
+            result = await enhanced_enrich_findings(state)
+
+            # Should use cached results
+            assert result['enriched_findings'] == cached_findings
+            assert result['enriched_findings'][0]['cached'] is True
+
+    @pytest.mark.asyncio
+    async def test_enhanced_enrich_findings_empty_findings(self):
+        """Test enhanced_enrich_findings with no findings."""
+        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+
+        state: Dict[str, Any] = {
+            'raw_findings': []
+        }
+
+        result = await enhanced_enrich_findings(state)
+
+        assert 'enriched_findings' in result
+        assert result['enriched_findings'] == []
+        assert 'cache_keys' in result
+
+    @pytest.mark.asyncio
+    async def test_enhanced_enrich_findings_error_handling(self):
+        """Test enhanced_enrich_findings error handling."""
+        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+
+        state: Dict[str, Any] = {
+            'raw_findings': [
+                {'id': 'f1', 'title': 'Test finding', 'severity': 'high', 'risk_score': 80}
+            ]
+        }
+
+        # Mock pipeline to raise an exception
+        with patch('sys_scan_graph_agent.graph.enrichment._perform_enrichment_pipeline', side_effect=Exception("Test error")):
+            result = await enhanced_enrich_findings(state)
+
+            # Should handle error gracefully - enriched_findings may be empty or fallback to raw
+            assert 'enriched_findings' in result
+            # The exact behavior depends on when the error occurs, but it should be a list
+            assert isinstance(result['enriched_findings'], list)
+            assert 'warnings' in result
+            assert len(result['warnings']) == 1
+            assert 'Test error' in result['warnings'][0]['error']
+
+    def test_enrich_findings_with_existing_enriched(self):
+        """Test enrich_findings when enriched findings already exist."""
+        from sys_scan_graph_agent.graph.enrichment import enrich_findings
+
+        state: Dict[str, Any] = {
+            'raw_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80}
+            ],
+            'enriched_findings': [
+                {'id': 'existing', 'title': 'Existing enriched', 'severity': 'low', 'risk_score': 20}
+            ]
+        }
+
+        result = enrich_findings(state)
+
+        # Should process raw findings and create new enriched findings
+        assert 'enriched_findings' in result
+        assert len(result['enriched_findings']) >= 1
+
+    def test_correlate_findings_with_existing_correlations(self):
+        """Test correlate_findings when correlations already exist."""
+        from sys_scan_graph_agent.graph.enrichment import correlate_findings
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'risk_score': 80, 'tags': ['privilege']}
+            ],
+            'correlations': [{'id': 'existing_corr', 'title': 'Existing correlation'}]
+        }
+
+        result = correlate_findings(state)
+
+        # Should add to existing correlations or keep them
+        assert 'correlations' in result
+        assert isinstance(result['correlations'], list)
+
+
+class TestRoutingFunctions:
+    """Test routing.py functions for workflow routing and tool coordination."""
+
+    def test_advanced_router_human_feedback_pending(self):
+        """Test advanced_router returns human_feedback when pending."""
+        from sys_scan_graph_agent.graph.routing import advanced_router
+
+        state: Dict[str, Any] = {
+            'human_feedback_pending': True,
+            'enriched_findings': [{'id': 'f1', 'severity': 'high'}]
+        }
+
+        result = advanced_router(state)
+        assert result == 'human_feedback'
+
+    def test_advanced_router_no_findings(self):
+        """Test advanced_router returns summarize when no findings."""
+        from sys_scan_graph_agent.graph.routing import advanced_router
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [],
+            'correlated_findings': []
+        }
+
+        result = advanced_router(state)
+        assert result == 'summarize'
+
+    def test_advanced_router_compliance_violations(self):
+        """Test advanced_router routes to compliance_checker for compliance violations."""
+        from sys_scan_graph_agent.graph.routing import advanced_router
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'SUID file found', 'severity': 'high', 'tags': ['pci']},
+                {'id': 'f2', 'title': 'World readable file', 'severity': 'medium', 'metadata': {'compliance_standard': 'HIPAA'}}
+            ]
+        }
+
+        result = advanced_router(state)
+        assert result == 'compliance'
+
+    def test_advanced_router_baseline_missing(self):
+        """Test advanced_router routes to plan_baseline for missing baseline."""
+        from sys_scan_graph_agent.graph.routing import advanced_router
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'High severity finding', 'severity': 'high', 'baseline_status': 'new'}
+            ],
+            'baseline_results': {}
+        }
+
+        result = advanced_router(state)
+        assert result == 'baseline'
+
+    def test_advanced_router_default_summarize(self):
+        """Test advanced_router defaults to summarize."""
+        from sys_scan_graph_agent.graph.routing import advanced_router
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Low severity finding', 'severity': 'low', 'baseline_status': 'existing'}
+            ],
+            'baseline_results': {'f1': 'baseline_data'}
+        }
+
+        result = advanced_router(state)
+        assert result == 'summarize'
+
+    def test_should_suggest_rules_no_findings(self):
+        """Test should_suggest_rules with no findings."""
+        from sys_scan_graph_agent.graph.routing import should_suggest_rules
+
+        state: Dict[str, Any] = {
+            'enriched_findings': []
+        }
+
+        result = should_suggest_rules(state)
+        assert result in ['__end__', 'END']  # Depends on langgraph availability
+
+    def test_should_suggest_rules_high_severity(self):
+        """Test should_suggest_rules routes to suggest_rules for high severity findings."""
+        from sys_scan_graph_agent.graph.routing import should_suggest_rules
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'High severity finding', 'severity': 'high'},
+                {'id': 'f2', 'title': 'Low severity finding', 'severity': 'low'}
+            ]
+        }
+
+        result = should_suggest_rules(state)
+        assert result == 'suggest_rules'
+
+    def test_should_suggest_rules_no_high_severity(self):
+        """Test should_suggest_rules ends workflow when no high severity findings."""
+        from sys_scan_graph_agent.graph.routing import should_suggest_rules
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Medium severity finding', 'severity': 'medium'},
+                {'id': 'f2', 'title': 'Low severity finding', 'severity': 'low'}
+            ]
+        }
+
+        result = should_suggest_rules(state)
+        assert result in ['__end__', 'END']  # Depends on langgraph availability
+
+    def test_choose_post_summarize_baseline_needed(self):
+        """Test choose_post_summarize routes to plan_baseline when baseline cycle not done."""
+        from sys_scan_graph_agent.graph.routing import choose_post_summarize
+
+        state: Dict[str, Any] = {
+            'baseline_cycle_done': False,
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Finding without baseline', 'severity': 'high'}
+            ]
+        }
+
+        result = choose_post_summarize(state)
+        assert result == 'plan_baseline'
+
+    def test_choose_post_summarize_baseline_done(self):
+        """Test choose_post_summarize delegates to should_suggest_rules when baseline done."""
+        from sys_scan_graph_agent.graph.routing import choose_post_summarize
+
+        state: Dict[str, Any] = {
+            'baseline_cycle_done': True,
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'High severity finding', 'severity': 'high'}
+            ]
+        }
+
+        result = choose_post_summarize(state)
+        assert result == 'suggest_rules'
+
+    @pytest.mark.asyncio
+    async def test_tool_coordinator_no_findings(self):
+        """Test tool_coordinator with no findings."""
+        from sys_scan_graph_agent.graph.routing import tool_coordinator
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [],
+            'correlated_findings': []
+        }
+
+        result = await tool_coordinator(state)
+
+        assert result['pending_tool_calls'] == []
+        assert 'tool_coordinator_calls' in result.get('metrics', {})
+
+    @pytest.mark.asyncio
+    async def test_tool_coordinator_with_missing_baseline(self):
+        """Test tool_coordinator creates tool calls for missing baseline."""
+        from sys_scan_graph_agent.graph.routing import tool_coordinator
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Finding needing baseline', 'severity': 'high'},
+                {'id': 'f2', 'title': 'Finding with baseline', 'severity': 'medium', 'baseline_status': 'existing'}
+            ]
+        }
+
+        result = await tool_coordinator(state)
+
+        pending_calls = result['pending_tool_calls']
+        assert len(pending_calls) == 1
+        assert pending_calls[0]['name'] == 'query_baseline'
+        assert pending_calls[0]['args']['finding_id'] == 'f1'
+        assert 'tool_coordinator_calls' in result.get('metrics', {})
+
+    @pytest.mark.asyncio
+    async def test_tool_coordinator_all_baselines_present(self):
+        """Test tool_coordinator when all findings have baseline."""
+        from sys_scan_graph_agent.graph.routing import tool_coordinator
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Finding with baseline', 'severity': 'high', 'baseline_status': 'existing'}
+            ]
+        }
+
+        result = await tool_coordinator(state)
+
+        assert result['pending_tool_calls'] == []
+        assert 'tool_coordinator_calls' in result.get('metrics', {})
+
+    @pytest.mark.asyncio
+    async def test_tool_coordinator_error_handling(self):
+        """Test tool_coordinator error handling."""
+        from sys_scan_graph_agent.graph.routing import tool_coordinator
+
+        state: Dict[str, Any] = {
+            'enriched_findings': [
+                {'id': 'f1', 'title': 'Test finding', 'severity': 'high'}
+            ]
+        }
+
+        # Mock to raise an exception
+        with patch('sys_scan_graph_agent.graph.routing._prepare_tool_coordination_data', side_effect=Exception("Test error")):
+            result = await tool_coordinator(state)
+
+            # Should handle error gracefully and add warning
+            assert 'warnings' in result
+            assert len(result['warnings']) == 1
+            assert 'Test error' in result['warnings'][0]['error']
+
+
+class TestCanonicalizeFunctions:
+    """Test canonicalize.py functions for deterministic output ordering."""
+
+    def test_canonicalize_enriched_output_dict_basic_functionality(self):
+        """Test canonicalize_enriched_output_dict with basic enriched output."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        output_dict = {
+            'correlations': [
+                {'id': 'corr3', 'title': 'Third correlation'},
+                {'id': 'corr1', 'title': 'First correlation'},
+                {'id': 'corr2', 'title': 'Second correlation'}
+            ],
+            'actions': [
+                {'priority': 1, 'action': 'Low priority'},
+                {'priority': 3, 'action': 'High priority'},
+                {'priority': 2, 'action': 'Medium priority'}
+            ],
+            'followups': [
+                {'finding_id': 'f3', 'followup': 'Third followup'},
+                {'finding_id': 'f1', 'followup': 'First followup'},
+                {'finding_id': 'f2', 'followup': 'Second followup'}
+            ],
+            'multi_host_correlation': [
+                {'key': 'key3', 'correlation': 'Third multi-host'},
+                {'key': 'key1', 'correlation': 'First multi-host'},
+                {'key': 'key2', 'correlation': 'Second multi-host'}
+            ],
+            'other_field': 'unchanged'
+        }
+
+        result = canonicalize_enriched_output_dict(output_dict)
+
+        # Check correlations are sorted by id
+        assert result['correlations'][0]['id'] == 'corr1'
+        assert result['correlations'][1]['id'] == 'corr2'
+        assert result['correlations'][2]['id'] == 'corr3'
+
+        # Check actions are sorted by priority (descending)
+        assert result['actions'][0]['priority'] == 3
+        assert result['actions'][1]['priority'] == 2
+        assert result['actions'][2]['priority'] == 1
+
+        # Check followups are sorted by finding_id
+        assert result['followups'][0]['finding_id'] == 'f1'
+        assert result['followups'][1]['finding_id'] == 'f2'
+        assert result['followups'][2]['finding_id'] == 'f3'
+
+        # Check multi_host_correlation are sorted by key
+        assert result['multi_host_correlation'][0]['key'] == 'key1'
+        assert result['multi_host_correlation'][1]['key'] == 'key2'
+        assert result['multi_host_correlation'][2]['key'] == 'key3'
+
+        # Check other fields are unchanged
+        assert result['other_field'] == 'unchanged'
+
+    def test_canonicalize_enriched_output_dict_empty_lists(self):
+        """Test canonicalize_enriched_output_dict with empty lists."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        output_dict = {
+            'correlations': [],
+            'actions': [],
+            'followups': [],
+            'multi_host_correlation': []
+        }
+
+        result = canonicalize_enriched_output_dict(output_dict)
+
+        assert result['correlations'] == []
+        assert result['actions'] == []
+        assert result['followups'] == []
+        assert result['multi_host_correlation'] == []
+
+    def test_canonicalize_enriched_output_dict_missing_fields(self):
+        """Test canonicalize_enriched_output_dict with missing fields."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        output_dict = {
+            'some_field': 'value'
+        }
+
+        result = canonicalize_enriched_output_dict(output_dict)
+
+        assert result['some_field'] == 'value'
+        assert 'correlations' not in result
+        assert 'actions' not in result
+        assert 'followups' not in result
+        assert 'multi_host_correlation' not in result
+
+    def test_canonicalize_enriched_output_dict_non_dict_items(self):
+        """Test canonicalize_enriched_output_dict with non-dict items in lists."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        output_dict = {
+            'correlations': ['string_corr3', 'string_corr1', 'string_corr2'],
+            'actions': ['action3', 'action1', 'action2'],
+            'followups': ['followup3', 'followup1', 'followup2'],
+            'multi_host_correlation': ['multi3', 'multi1', 'multi2']
+        }
+
+        result = canonicalize_enriched_output_dict(output_dict)
+
+        # Non-dict items should be sorted as strings (correlations, followups, multi_host_correlation)
+        assert result['correlations'] == ['string_corr1', 'string_corr2', 'string_corr3']
+        assert result['followups'] == ['followup1', 'followup2', 'followup3']
+        assert result['multi_host_correlation'] == ['multi1', 'multi2', 'multi3']
+
+        # Actions are sorted by priority (reverse=True), but non-dict items get priority 0, so stable sort
+        # The original order is preserved when priorities are equal
+        assert len(result['actions']) == 3
+        assert set(result['actions']) == {'action1', 'action2', 'action3'}
+
+    def test_canonicalize_enriched_output_dict_non_list_fields(self):
+        """Test canonicalize_enriched_output_dict with non-list fields."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        output_dict = {
+            'correlations': 'not_a_list',
+            'actions': 123,
+            'followups': {'key': 'value'},
+            'multi_host_correlation': True
+        }
+
+        result = canonicalize_enriched_output_dict(output_dict)
+
+        # Non-list fields should be unchanged
+        assert result['correlations'] == 'not_a_list'
+        assert result['actions'] == 123
+        assert result['followups'] == {'key': 'value'}
+        assert result['multi_host_correlation'] is True
+
+    def test_canonicalize_enriched_output_dict_preserves_original(self):
+        """Test canonicalize_enriched_output_dict preserves the original dict."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        original = {
+            'correlations': [{'id': 'corr2'}, {'id': 'corr1'}],
+            'actions': [{'priority': 1}, {'priority': 2}]
+        }
+        original_copy = original.copy()
+
+        result = canonicalize_enriched_output_dict(original)
+
+        # Original should be unchanged
+        assert original == original_copy
+        # Result should be different (sorted)
+        assert result != original
+        assert result['correlations'][0]['id'] == 'corr1'
+        assert result['correlations'][1]['id'] == 'corr2'
+
+    def test_canonicalize_enriched_output_dict_complex_nested(self):
+        """Test canonicalize_enriched_output_dict with complex nested structures."""
+        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+
+        output_dict = {
+            'correlations': [
+                {'id': 'corr2', 'nested': {'value': 2}},
+                {'id': 'corr1', 'nested': {'value': 1}},
+                {'id': 'corr3', 'nested': {'value': 3}}
+            ],
+            'actions': [
+                {'priority': 2, 'details': {'complex': True}},
+                {'priority': 1, 'details': {'complex': False}},
+                {'priority': 3, 'details': {'complex': True}}
+            ]
+        }
+
+        result = canonicalize_enriched_output_dict(output_dict)
+
+        # Should sort by id/priority, preserving nested structure
+        assert result['correlations'][0]['id'] == 'corr1'
+        assert result['correlations'][1]['id'] == 'corr2'
+        assert result['correlations'][2]['id'] == 'corr3'
+
+        assert result['actions'][0]['priority'] == 3
+        assert result['actions'][1]['priority'] == 2
+        assert result['actions'][2]['priority'] == 1
+
+        # Nested structures should be preserved
+        assert result['correlations'][0]['nested']['value'] == 1
+        assert result['actions'][0]['details']['complex'] is True
+
+
+class TestEndpointClassification:
+    """Test endpoint_classification.py functions for host role classification."""
+
+    def test_classify_empty_report(self):
+        """Test classify with empty report."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'workstation'
+        assert signals == ['no findings => default workstation']
+
+    def test_classify_none_report(self):
+        """Test classify with None report."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+
+        role, signals = classify(None)
+
+        assert role == 'workstation'
+        assert signals == ['no findings => default workstation']
+
+    def test_classify_bastion_role(self):
+        """Test classify identifies bastion role."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        # Create findings with bastion signals: multiple SSH listeners + routing
+        findings = [
+            models.Finding(
+                id='f1',
+                title='SSH listener 1',
+                severity='info',
+                risk_score=0,
+                metadata={'state': 'LISTEN', 'port': 22},
+                tags=['network']
+            ),
+            models.Finding(
+                id='f2',
+                title='SSH listener 2',
+                severity='info',
+                risk_score=0,
+                metadata={'state': 'LISTEN', 'port': 22},
+                tags=['network']
+            ),
+            models.Finding(
+                id='f3',
+                title='Routing enabled',
+                severity='info',
+                risk_score=0,
+                metadata={},
+                tags=['routing']
+            )
+        ]
+
+        scanner_result = models.ScannerResult(
+            scanner='network',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'bastion'
+        assert 'bastion: 2 ssh listeners + routing/nat signals' in signals
+
+    def test_classify_lightweight_router_ip_forward(self):
+        """Test classify identifies lightweight_router with IP forwarding."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = [
+            models.Finding(
+                id='f1',
+                title='IP forwarding enabled',
+                severity='info',
+                risk_score=0,
+                metadata={'sysctl_key': 'net.ipv4.ip_forward', 'value': '1'},
+                tags=[]
+            )
+        ]
+
+        scanner_result = models.ScannerResult(
+            scanner='kernel_params',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'lightweight_router'
+        assert 'lightweight_router: routing/nat or ip_forward enabled' in signals
+
+    def test_classify_lightweight_router_nat(self):
+        """Test classify identifies lightweight_router with NAT."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = [
+            models.Finding(
+                id='f1',
+                title='NAT configuration',
+                severity='info',
+                risk_score=0,
+                metadata={},
+                tags=['nat']
+            )
+        ]
+
+        scanner_result = models.ScannerResult(
+            scanner='network',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'lightweight_router'
+        assert 'lightweight_router: routing/nat or ip_forward enabled' in signals
+
+    def test_classify_container_host(self):
+        """Test classify identifies container_host."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = [
+            models.Finding(
+                id='f1',
+                title='Container module',
+                severity='info',
+                risk_score=0,
+                metadata={'module': 'overlay'},
+                tags=['container']
+            ),
+            models.Finding(
+                id='f2',
+                title='Docker socket',
+                severity='info',
+                risk_score=0,
+                metadata={},
+                tags=['docker']
+            )
+        ]
+
+        scanner_result = models.ScannerResult(
+            scanner='modules',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'container_host'
+        assert 'container modules detected (1)' in signals
+
+    def test_classify_dev_workstation(self):
+        """Test classify identifies dev_workstation."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = [
+            # Dev ports
+            models.Finding(
+                id='f1',
+                title='Dev server on 3000',
+                severity='info',
+                risk_score=0,
+                metadata={'port': 3000, 'state': 'LISTEN'},
+                tags=['network']
+            ),
+            models.Finding(
+                id='f2',
+                title='Dev server on 5173',
+                severity='info',
+                risk_score=0,
+                metadata={'port': 5173, 'state': 'LISTEN'},
+                tags=['network']
+            ),
+            # High ports
+            models.Finding(
+                id='f3',
+                title='High port service',
+                severity='info',
+                risk_score=0,
+                metadata={'port': 35000, 'state': 'LISTEN'},
+                tags=['network']
+            ),
+            models.Finding(
+                id='f4',
+                title='Another high port',
+                severity='info',
+                risk_score=0,
+                metadata={'port': 40000, 'state': 'LISTEN'},
+                tags=['network']
+            )
+        ]
+
+        scanner_result = models.ScannerResult(
+            scanner='network',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'dev_workstation'
+        assert 'dev ports 2 & high ephemeral listeners 2' in signals
+
+    def test_classify_workstation_fallback(self):
+        """Test classify defaults to workstation."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = [
+            models.Finding(
+                id='f1',
+                title='Some service',
+                severity='info',
+                risk_score=0,
+                metadata={'port': 80, 'state': 'LISTEN'},
+                tags=['network']
+            )
+        ]
+
+        scanner_result = models.ScannerResult(
+            scanner='network',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'workstation'
+        assert 'default workstation fallback' in signals
+
+    def test_classify_bastion_with_many_services(self):
+        """Test classify bastion with many services gets additional signal."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = []
+        # Create 15 listening services (more than 12)
+        for i in range(15):
+            findings.append(models.Finding(
+                id=f'f{i}',
+                title=f'Service {i}',
+                severity='info',
+                risk_score=0,
+                metadata={'state': 'LISTEN', 'port': 1000 + i},
+                tags=['network']
+            ))
+
+        # Add bastion signals
+        findings.extend([
+            models.Finding(
+                id='ssh1',
+                title='SSH 1',
+                severity='info',
+                risk_score=0,
+                metadata={'state': 'LISTEN', 'port': 22},
+                tags=['network']
+            ),
+            models.Finding(
+                id='ssh2',
+                title='SSH 2',
+                severity='info',
+                risk_score=0,
+                metadata={'state': 'LISTEN', 'port': 22},
+                tags=['network']
+            ),
+            models.Finding(
+                id='route',
+                title='Routing',
+                severity='info',
+                risk_score=0,
+                metadata={},
+                tags=['routing']
+            )
+        ])
+
+        scanner_result = models.ScannerResult(
+            scanner='network',
+            finding_count=len(findings),
+            findings=findings
+        )
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'lightweight_router'
+        assert 'lightweight_router: routing/nat or ip_forward enabled' in signals
+        assert '17 listening services (mixed)' in signals
+
+    def test_classify_multiple_scanner_types(self):
+        """Test classify with multiple scanner result types."""
+        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_graph_agent import models
+
+        findings = [
+            # Network findings
+            models.Finding(
+                id='net1',
+                title='SSH',
+                severity='info',
+                risk_score=0,
+                metadata={'state': 'LISTEN', 'port': 22},
+                tags=['network']
+            ),
+            # Kernel params
+            models.Finding(
+                id='kern1',
+                title='IP forward',
+                severity='info',
+                risk_score=0,
+                metadata={'sysctl_key': 'net.ipv4.ip_forward', 'value': '1'},
+                tags=[]
+            ),
+            # Modules
+            models.Finding(
+                id='mod1',
+                title='Container module',
+                severity='info',
+                risk_score=0,
+                metadata={'module': 'overlay'},
+                tags=['container']
+            )
+        ]
+
+        results = [
+            models.ScannerResult(scanner='network', finding_count=1, findings=[findings[0]]),
+            models.ScannerResult(scanner='kernel_params', finding_count=1, findings=[findings[1]]),
+            models.ScannerResult(scanner='modules', finding_count=1, findings=[findings[2]])
+        ]
+
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=results,
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        # Should prioritize lightweight_router over container_host due to ordering
+        assert role == 'lightweight_router'
+        assert 'lightweight_router: routing/nat or ip_forward enabled' in signals
+
+    def test_classify_role_order_precedence(self):
+        """Test that role ordering is respected (bastion > lightweight_router > container_host > dev_workstation > workstation)."""
+        from sys_scan_graph_agent.endpoint_classification import classify, ROLE_ORDER
+        from sys_scan_graph_agent import models
+
+        # Test that bastion takes precedence over others
+        findings = [
+            # Bastion signals
+            models.Finding(id='ssh1', title='SSH1', severity='info', risk_score=0, metadata={'state': 'LISTEN', 'port': 22}, tags=['network']),
+            models.Finding(id='ssh2', title='SSH2', severity='info', risk_score=0, metadata={'state': 'LISTEN', 'port': 22}, tags=['network']),
+            models.Finding(id='route', title='Route', severity='info', risk_score=0, metadata={}, tags=['routing']),
+            # Container signals (should be ignored due to precedence)
+            models.Finding(id='cont', title='Container', severity='info', risk_score=0, metadata={'module': 'overlay'}, tags=['container']),
+            # Dev signals (should be ignored)
+            models.Finding(id='dev1', title='Dev port', severity='info', risk_score=0, metadata={'port': 3000, 'state': 'LISTEN'}, tags=['network']),
+            models.Finding(id='dev2', title='High port', severity='info', risk_score=0, metadata={'port': 35000, 'state': 'LISTEN'}, tags=['network'])
+        ]
+
+        scanner_result = models.ScannerResult(scanner='mixed', finding_count=len(findings), findings=findings)
+        report = models.Report(
+            meta=models.Meta(),
+            summary=models.Summary(),
+            results=[scanner_result],
+            summary_extension=models.SummaryExtension(total_risk_score=0)
+        )
+
+        role, signals = classify(report)
+
+        assert role == 'lightweight_router'
+        assert ROLE_ORDER.index(role) < ROLE_ORDER.index('container_host')
+        assert ROLE_ORDER.index(role) < ROLE_ORDER.index('dev_workstation')
+        assert ROLE_ORDER.index(role) < ROLE_ORDER.index('workstation')

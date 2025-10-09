@@ -6,10 +6,10 @@ Welcome to the comprehensive documentation for sys-scan-graph. This index provid
 
 ## Quick Links
 
-- **[GitHub Repository](https://github.com/Mazzlabs/sys-scan-graph)** - Main project repository
-- **[GitHub Wiki](https://github.com/Mazzlabs/sys-scan-graph/wiki)** - Community-contributed documentation and guides
-- **[Issues](https://github.com/Mazzlabs/sys-scan-graph/issues)** - Report bugs and request features
-- **[Discussions](https://github.com/Mazzlabs/sys-scan-graph/discussions)** - Community discussions and Q&A
+- **[GitHub Repository](https://github.com/J-mazz/sys-scan-graph)** - Main project repository
+- **[GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)** - Community-contributed documentation and guides
+- **[Issues](https://github.com/J-mazz/sys-scan-graph/issues)** - Report bugs and request features
+- **[Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)** - Community discussions and Q&A
 
 ## Core Documentation
 
@@ -62,20 +62,20 @@ If you're new to sys-scan-graph, start here:
 
 ## Community Resources
 
-- **GitHub Wiki**: <https://github.com/Mazzlabs/sys-scan-graph/wiki>
+- **GitHub Wiki**: <https://github.com/J-mazz/sys-scan-graph/wiki>
   - User guides and tutorials
   - Configuration examples
   - Troubleshooting tips
   - Integration guides
 
-- **Discussions**: <https://github.com/Mazzlabs/sys-scan-graph/discussions>
+- **Discussions**: <https://github.com/J-mazz/sys-scan-graph/discussions>
   - Ask questions
   - Share use cases
   - Discuss features and roadmap
 
 ## Support
 
-- **Issues**: <https://github.com/Mazzlabs/sys-scan-graph/issues>
+- **Issues**: <https://github.com/J-mazz/sys-scan-graph/issues>
   - Bug reports
   - Feature requests
   - Technical support
@@ -90,4 +90,4 @@ This documentation is licensed under Creative Commons Attribution 4.0 Internatio
 
 ![Mazzlabs Logo](../../assets/Mazzlabs.png)
 
-Last updated: September 2025
+Last updated: October 2025

@@ -16,14 +16,14 @@ Testing is one of the most valuable contributions you can make:
 
 ### 🐛 Bug Reports
 
-- Use the [GitHub Issues](https://github.com/Mazzlabs/sys-scan-graph/issues) to report bugs
+- Use the [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues) to report bugs
 - Include detailed reproduction steps
 - Provide system information and scanner output
 - Tag security-related issues appropriately
 
 ### 💡 Feature Requests
 
-- Open a [GitHub Discussion](https://github.com/Mazzlabs/sys-scan-graph/discussions) for new features
+- Open a [GitHub Discussion](https://github.com/J-mazz/sys-scan-graph/discussions) for new features
 - Describe the problem you're trying to solve
 - Consider how the feature fits with existing architecture
 - Be open to alternative solutions
@@ -55,7 +55,7 @@ Testing is one of the most valuable contributions you can make:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Mazzlabs/sys-scan-graph.git
+git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
 # Build the core scanner
@@ -166,8 +166,8 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to ensure a wel
 ## Getting Help
 
 - **Documentation**: Check the [wiki](docs/wiki/_index.md) first
-- **Discussions**: Use [GitHub Discussions](https://github.com/Mazzlabs/sys-scan-graph/discussions) for questions
-- **Issues**: Report bugs via [GitHub Issues](https://github.com/Mazzlabs/sys-scan-graph/issues)
+- **Discussions**: Use [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions) for questions
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
 
 ## Recognition
 

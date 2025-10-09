@@ -1,3 +1,9 @@
+╔══════════════════════════════════╗
+║             MazzLabs             ║
+╟──────────────────────────────────╢
+║           Joseph Mazzini         ║
+╚══════════════════════════════════╝
+
 # Security Architecture
 
 ## Zero-Trust AI Security Posture
