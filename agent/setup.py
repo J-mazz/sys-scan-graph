@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+# ╔══════════════════════════════════╗
+# ║             MazzLabs             ║
+# ╟──────────────────────────────────╢
+# ║           Joseph Mazzini         ║
+# ╚══════════════════════════════════╝
+
+# ==============================================================================
+"""
+sys-scan-graph-agent Package Setup
+
+Setup configuration for the Python intelligence layer package that provides
+AI-powered analysis and enrichment of security scan results.
+"""
 
 from setuptools import setup, find_packages
 import os
@@ -41,7 +54,7 @@ setup(
     long_description_content_type='text/markdown',
     author='Joseph Mazzini',
     author_email='joseph@mazzlabs.works',
-    url='https://github.com/Mazzlabs/sys-scan-graph',
+    url='https://github.com/J-mazz/sys-scan-graph',
     packages=find_packages(),
     include_package_data=True,
     package_data={
@@ -88,8 +101,8 @@ setup(
     python_requires='>=3.8',
     keywords='security scanner ai intelligence linux system-analysis',
     project_urls={
-        'Bug Reports': 'https://github.com/Mazzlabs/sys-scan-graph/issues',
-        'Source': 'https://github.com/Mazzlabs/sys-scan-graph',
-        'Documentation': 'https://github.com/Mazzlabs/sys-scan-graph/wiki'
+        'Bug Reports': 'https://github.com/J-mazz/sys-scan-graph/issues',
+        'Source': 'https://github.com/J-mazz/sys-scan-graph',
+        'Documentation': 'https://github.com/J-mazz/sys-scan-graph/wiki'
     }
 )

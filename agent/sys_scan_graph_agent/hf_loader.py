@@ -15,7 +15,6 @@ import os
 from typing import Optional
 
 def _get_token() -> Optional[str]:
-    # Optional lazy load from python-dotenv if available.
     try:
         if '.env' in os.listdir('.'):
             try:

@@ -1,8 +1,15 @@
+# ╔══════════════════════════════════╗
+# ║             MazzLabs             ║
+# ╟──────────────────────────────────╢
+# ║           Joseph Mazzini         ║
+# ╚══════════════════════════════════╝
+
+# ==============================================================================
 from __future__ import annotations
 """Graph state schema (INT-FUT-GRAPH-STATE)
 
 Central TypedDict describing the evolving state passed between LangGraph nodes
-for the future LLM-driven analysis agent. This is a lightweight, JSON-friendly
+for the LLM-driven analysis agent. This is a lightweight, JSON-friendly
 structure distinct from the richer Pydantic models in models.py to allow
 incremental population and external serialization without validation overhead.
 """
