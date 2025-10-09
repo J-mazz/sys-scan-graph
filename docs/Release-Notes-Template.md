@@ -24,7 +24,7 @@
 
 ## Changelog
 
-- Compare: <https://github.com/Mazzlabs/sys-scan-graph/compare/`prev`...`this`>
+- Compare: <https://github.com/J-mazz/sys-scan-graph/compare/`prev`...`this`>
 - See [CHANGELOG](./CHANGELOG.md) for structured changes and migration notes.
 
 ## Security

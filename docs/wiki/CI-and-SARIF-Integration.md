@@ -32,7 +32,7 @@ jobs:
       - name: Download sys-scan-graph binary
         uses: robinraju/release-downloader@v1
         with:
-          repository: Mazzlabs/sys-scan-graph
+          repository: J-mazz/sys-scan-graph
           latest: true
           fileName: "sys-scan-graph-*-linux-x86_64.tar.gz"
           extract: true
@@ -117,7 +117,7 @@ scan_security:
   image: ubuntu:22.04
   before_script:
     - apt-get update && apt-get install -y wget tar
-    - wget https://github.com/Mazzlabs/sys-scan-graph/releases/latest/download/sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
+    - wget https://github.com/J-mazz/sys-scan-graph/releases/latest/download/sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
     - tar -xzf sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
   script:
     - chmod +x sys-scan
@@ -137,7 +137,7 @@ pipeline {
             steps {
                 sh '''
                     apt-get update && apt-get install -y wget tar
-                    wget https://github.com/Mazzlabs/sys-scan-graph/releases/latest/download/sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
+                    wget https://github.com/J-mazz/sys-scan-graph/releases/latest/download/sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
                     tar -xzf sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
                     chmod +x sys-scan
                     ./sys-scan --sarif --min-severity high > scan.sarif

@@ -48,7 +48,7 @@ sudo yum install cmake git python3 python3-devel
 
 ```bash
 # Clone repository
-git clone https://github.com/Mazzlabs/sys-scan-graph.git
+git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
 # Build core scanner
@@ -109,9 +109,9 @@ After installation, you may want to:
 
 ### Getting Help
 
-- Check the [troubleshooting section](https://github.com/Mazzlabs/sys-scan-graph/wiki/Troubleshooting) in the GitHub Wiki
-- File an issue on [GitHub Issues](https://github.com/Mazzlabs/sys-scan-graph/issues)
-- Ask questions in [GitHub Discussions](https://github.com/Mazzlabs/sys-scan-graph/discussions)
+- Check the [troubleshooting section](https://github.com/J-mazz/sys-scan-graph/wiki/Troubleshooting) in the GitHub Wiki
+- File an issue on [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
+- Ask questions in [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
 
 ## Next Steps
 

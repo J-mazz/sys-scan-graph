@@ -1,3 +1,9 @@
+╔══════════════════════════════════╗
+║             MazzLabs             ║
+╟──────────────────────────────────╢
+║           Joseph Mazzini         ║
+╚══════════════════════════════════╝
+
 # Architecture Overview
 
 **sys-scan-graph** combines a high-performance C++20 scanning engine with an AI-powered intelligence layer to deliver comprehensive Linux system security analysis. The architecture emphasizes determinism, type safety, and zero-trust principles.
@@ -112,7 +118,7 @@ The 2.5M training dataset undergoes rigorous validation to ensure high-quality, 
 - **8 Specialized Producers**: Generate findings for each scanner type
 - **3 Correlation Producers**: Create realistic cross-finding relationships
 - **Multi-Stage Verification**: Schema compliance, coherence checks, realism constraints, diversity validation
-- **MLOps Pipeline**: Complete infrastructure at [sys-scan-agent-MLops](https://github.com/Mazzlabs/sys-scan-agent-MLops)
+- **MLOps Pipeline**: Complete infrastructure at [sys-scan-agent-MLops](https://github.com/J-mazz/sys-scan-agent-MLops)
 
 ---
 

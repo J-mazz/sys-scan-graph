@@ -1,3 +1,11 @@
+// ╔══════════════════════════════════╗
+// ║             MazzLabs             ║
+// ╟──────────────────────────────────╢
+// ║           Joseph Mazzini         ║
+// ╚══════════════════════════════════╝
+
+// ==============================================================================
+
 #include "MACScanner.h"
 #include "../core/ScanContext.h"
 #include "../core/Report.h"
@@ -13,7 +21,7 @@ namespace sys_scan {
 
 // Ultra-lean constants
 static const size_t MAX_PROC_ENTRIES = 1000;
-static const size_t MAX_PATH_LEN_LEAN = 256;
+static const size_t MAX_PATH_LEN_LEAN = 512;
 static const size_t MAX_BUF_SIZE = 512;
 
 // Ultra-fast file existence check

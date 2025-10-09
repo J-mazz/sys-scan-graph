@@ -72,21 +72,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install clang
-        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libbpf-dev linux-tools-common libseccomp-dev libcap-dev
+        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential
       - name: Configure fuzz harness
         run: |
           cmake -B build -S . -DBUILD_FUZZERS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            -DENABLE_SECCOMP=OFF -DENABLE_CAPABILITIES=OFF
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: Build fuzz target
-        run: |
-          cd build
-          # Apply fuzzer flags only to fuzz targets
-          make fuzz_rules VERBOSE=1 \
-            CXXFLAGS="-O1 -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer" \
-            LDFLAGS="-fsanitize=fuzzer,address,undefined" || true
+        run: cmake --build build --target fuzz_config -j$(nproc)
       - name: Run fuzz smoke (30s)
         run: |
-          if [ -f build/fuzz_rules ]; then
-            ./build/fuzz_rules -max_total_time=30 || true
+          if [ -f build/fuzz_config ]; then
+            ./build/fuzz_config -max_total_time=30 || true
           fi

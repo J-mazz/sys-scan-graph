@@ -1,3 +1,11 @@
+// ╔══════════════════════════════════╗
+// ║             MazzLabs             ║
+// ╟──────────────────────────────────╢
+// ║           Joseph Mazzini         ║
+// ╚══════════════════════════════════╝
+
+// ==============================================================================
+
 #include "core/ScannerRegistry.h"
 #include "core/ScanContext.h"  // Added ScanContext include
 #include "core/Report.h"

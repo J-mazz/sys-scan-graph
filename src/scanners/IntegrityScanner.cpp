@@ -1,3 +1,11 @@
+// ╔══════════════════════════════════╗
+// ║             MazzLabs             ║
+// ╟──────────────────────────────────╢
+// ║           Joseph Mazzini         ║
+// ╚══════════════════════════════════╝
+
+// ==============================================================================
+
 #include "IntegrityScanner.h"
 #include "../core/ScanContext.h"
 #include "../core/Report.h"
@@ -15,6 +23,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <random>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -132,8 +141,9 @@ void IntegrityScanner::scan(ScanContext& context){
                 // Sample random packages
                 size_t sample_count = (packages.size() * cfg.integrity_sample_pct) / 100;
                 if(sample_count > 0){
-                    std::srand(std::time(nullptr));
-                    std::random_shuffle(packages.begin(), packages.end());
+                    std::random_device rd;
+                    std::mt19937 g(rd());
+                    std::shuffle(packages.begin(), packages.end(), g);
                     packages.resize(std::min(sample_count, packages.size()));
                     for(const auto& pkg : packages){
                         std::string pkg_out = run_cmd_capture({"dpkg", "-V", pkg});
@@ -196,8 +206,9 @@ void IntegrityScanner::scan(ScanContext& context){
                 }
                 size_t sample_count = (packages.size() * cfg.integrity_sample_pct) / 100;
                 if(sample_count > 0){
-                    std::srand(std::time(nullptr));
-                    std::random_shuffle(packages.begin(), packages.end());
+                    std::random_device rd;
+                    std::mt19937 g(rd());
+                    std::shuffle(packages.begin(), packages.end(), g);
                     packages.resize(std::min(sample_count, packages.size()));
                     for(const auto& pkg : packages){
                         std::string pkg_out = run_cmd_capture({"rpm", "-V", pkg});
