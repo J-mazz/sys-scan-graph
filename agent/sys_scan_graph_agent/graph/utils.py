@@ -154,12 +154,21 @@ def _findings_from_graph(state: StateType) -> List[models.Finding]:
     out: List[models.Finding] = []
     for finding_dict in state.get('raw_findings', []) or []:
         try:
+            # Extract risk score with fallback and error handling
+            risk_score_raw = finding_dict.get('risk_score')
+            if risk_score_raw is None:
+                risk_score_raw = finding_dict.get('risk_total', 0)
+            try:
+                risk_score = int(risk_score_raw) if risk_score_raw is not None else 0
+            except (ValueError, TypeError):
+                risk_score = 0
+
             # Provide minimal required fields; defaults for missing
             out.append(models.Finding(
                 id=finding_dict.get('id','unknown'),
                 title=finding_dict.get('title','(no title)'),
                 severity=finding_dict.get('severity','info'),
-                risk_score=int(finding_dict.get('risk_score', finding_dict.get('risk_total', 0)) or 0),
+                risk_score=risk_score,
                 metadata=finding_dict.get('metadata', {})
             ))
         except Exception:  # pragma: no cover - defensive

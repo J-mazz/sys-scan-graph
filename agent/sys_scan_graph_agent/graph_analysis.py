@@ -80,10 +80,12 @@ def annotate_and_summarize(state: AgentState) -> Dict:
         total_risk = 0
         max_deg = -1
         hub_fid = None
+        valid_findings = []
         for fid in fset:
             fo = fid_to_obj.get(fid)
             if not fo:
                 continue
+            valid_findings.append(fid)
             total_risk += fo.risk_score
             deg = fo.graph_degree or 0
             if deg > max_deg:
@@ -92,9 +94,9 @@ def annotate_and_summarize(state: AgentState) -> Dict:
             fo.cluster_id = cluster_id
         clusters.append({
             "cluster_id": cluster_id,
-            "finding_count": len(fset),
+            "finding_count": len(valid_findings),
             "correlation_count": len(cset),
-            "finding_ids": sorted(list(fset)),
+            "finding_ids": sorted(valid_findings),
             "correlation_ids": sorted(list(cset)),
             "total_risk_score": total_risk,
             "hub_finding_id": hub_fid,
@@ -107,7 +109,7 @@ def annotate_and_summarize(state: AgentState) -> Dict:
     for c in sorted_clusters[:5]:
         hub_title = None
         if c.get("hub_finding_id") and c["hub_finding_id"] in fid_to_obj:
-            hub_title = fid_to_obj[c["hub_finding_id"].__str__()].title if hasattr(fid_to_obj[c["hub_finding_id"]], 'title') else fid_to_obj[c["hub_finding_id"]].title
+            hub_title = fid_to_obj[c["hub_finding_id"]].title
         top5.append({
             "cluster_id": c["cluster_id"],
             "total_risk_score": c["total_risk_score"],

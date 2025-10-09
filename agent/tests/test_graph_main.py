@@ -607,14 +607,22 @@ class TestSyncWrapperFunctions:
 
             assert result == state  # Should return unchanged state
 
-    @patch('graph_main.enhanced_suggest_rules', Mock(return_value={'suggested_rules': ['rule1']}))
-    def test_suggest_rules_with_function(self, mock_enhanced_suggest_rules):
+    def test_suggest_rules_with_function(self):
         """Test suggest_rules when function is available."""
-        state: GraphState = {'enriched_findings': []}
-        result = suggest_rules(state)
+        # Temporarily replace the None value with a mock
+        original_value = getattr(graph_main, 'enhanced_suggest_rules', None)
+        async def mock_func(state):
+            return {'suggested_rules': ['rule1']}
+        setattr(graph_main, 'enhanced_suggest_rules', mock_func)
+        
+        try:
+            state: GraphState = {'enriched_findings': []}
+            result = graph_main.suggest_rules(state)  # Call directly from module
 
-        assert result == {'suggested_rules': ['rule1']}
-        mock_enhanced_suggest_rules.assert_called_once_with(state)
+            assert result == {'suggested_rules': ['rule1']}
+        finally:
+            # Restore original value
+            setattr(graph_main, 'enhanced_suggest_rules', original_value)
 
     def test_suggest_rules_without_function(self):
         """Test suggest_rules when function is None."""
@@ -624,14 +632,20 @@ class TestSyncWrapperFunctions:
 
         assert result == state  # Should return unchanged state
 
-    @patch('graph_main.tool_coordinator', Mock(return_value={'tool_calls': ['call1']}))
-    def test_tool_coordinator_sync_with_function(self, mock_tool_coordinator):
+    def test_tool_coordinator_sync_with_function(self):
         """Test tool_coordinator_sync when function is available."""
-        state: GraphState = {'pending_tool_calls': []}
-        result = tool_coordinator_sync(state)
+        original_value = getattr(graph_main, 'tool_coordinator', None)
+        async def mock_func(state):
+            return {'tool_calls': ['call1']}
+        setattr(graph_main, 'tool_coordinator', mock_func)
+        
+        try:
+            state: GraphState = {'pending_tool_calls': []}
+            result = tool_coordinator_sync(state)
 
-        assert result == {'tool_calls': ['call1']}
-        mock_tool_coordinator.assert_called_once_with(state)
+            assert result == {'tool_calls': ['call1']}
+        finally:
+            setattr(graph_main, 'tool_coordinator', original_value)
 
     def test_tool_coordinator_sync_without_function(self):
         """Test tool_coordinator_sync when function is None."""
@@ -641,57 +655,227 @@ class TestSyncWrapperFunctions:
 
         assert result == state  # Should return unchanged state
 
-    @patch('graph_main.risk_analyzer', Mock(return_value={'risk_assessment': {'level': 'high'}}))
-    def test_risk_analyzer_sync_with_function(self, mock_risk_analyzer):
+    def test_risk_analyzer_sync_with_function(self):
         """Test risk_analyzer_sync when function is available."""
-        state: GraphState = {'enriched_findings': []}
-        result = risk_analyzer_sync(state)
+        original_value = getattr(graph_main, 'risk_analyzer', None)
+        async def mock_func(state):
+            return {'risk_assessment': {'level': 'high'}}
+        setattr(graph_main, 'risk_analyzer', mock_func)
+        
+        try:
+            state: GraphState = {'enriched_findings': []}
+            result = risk_analyzer_sync(state)
 
-        assert result == {'risk_assessment': {'level': 'high'}}
-        mock_risk_analyzer.assert_called_once_with(state)
+            assert result == {'risk_assessment': {'level': 'high'}}
+        finally:
+            setattr(graph_main, 'risk_analyzer', original_value)
 
-    @patch('graph_main.compliance_checker', Mock(return_value={'compliance_check': {'passed': 5}}))
-    def test_compliance_checker_sync_with_function(self, mock_compliance_checker):
+    def test_compliance_checker_sync_with_function(self):
         """Test compliance_checker_sync when function is available."""
-        state: GraphState = {'enriched_findings': []}
-        result = compliance_checker_sync(state)
+        original_value = getattr(graph_main, 'compliance_checker', None)
+        async def mock_func(state):
+            return {'compliance_check': {'passed': 5}}
+        setattr(graph_main, 'compliance_checker', mock_func)
+        
+        try:
+            state: GraphState = {'enriched_findings': []}
+            result = compliance_checker_sync(state)
 
-        assert result == {'compliance_check': {'passed': 5}}
-        mock_compliance_checker.assert_called_once_with(state)
+            assert result == {'compliance_check': {'passed': 5}}
+        finally:
+            setattr(graph_main, 'compliance_checker', original_value)
 
-    @patch('graph_main.metrics_collector', Mock(return_value={'metrics': {'duration': 100}}))
-    def test_metrics_collector_sync_with_function(self, mock_metrics_collector):
+    def test_metrics_collector_sync_with_function(self):
         """Test metrics_collector_sync when function is available."""
-        state: GraphState = {'iteration_count': 1}
-        result = metrics_collector_sync(state)
+        original_value = getattr(graph_main, 'metrics_collector', None)
+        async def mock_func(state):
+            return {'metrics': {'duration': 100}}
+        setattr(graph_main, 'metrics_collector', mock_func)
+        
+        try:
+            state: GraphState = {'iteration_count': 1}
+            result = metrics_collector_sync(state)
 
-        assert result == {'metrics': {'duration': 100}}
-        mock_metrics_collector.assert_called_once_with(state)
+            assert result == {'metrics': {'duration': 100}}
+        finally:
+            setattr(graph_main, 'metrics_collector', original_value)
 
-    @patch('graph_main.query_baseline', Mock(return_value={'baseline_data': 'test'}))
-    @patch('graph_main.ToolNode', Mock())
-    def test_baseline_tools_sync_with_function(self, mock_toolnode, mock_query_baseline):
+    def test_baseline_tools_sync_with_function(self):
         """Test baseline_tools_sync when function is available."""
-        # Create a mock message with tool_calls attribute
-        mock_message = Mock()
-        mock_message.tool_calls = [{
-            'id': 'call1',
-            'name': 'query_baseline',
-            'args': {'finding_id': 'f1'}
-        }]
+        original_query_baseline = getattr(graph_main, 'query_baseline', None)
+        original_toolnode = getattr(graph_main, 'ToolNode', None)
+        
+        def mock_query_func(**kwargs):
+            return {'baseline_data': 'test'}
+        setattr(graph_main, 'query_baseline', mock_query_func)
+        setattr(graph_main, 'ToolNode', Mock())
+        
+        try:
+            # Create a mock message with tool_calls attribute
+            mock_message = Mock()
+            mock_message.tool_calls = [{
+                'id': 'call1',
+                'name': 'query_baseline',
+                'args': {'finding_id': 'f1'}
+            }]
 
-        state: GraphState = {
-            'messages': [mock_message]
-        }
-        result = baseline_tools_sync(state)
+            state: GraphState = {
+                'messages': [mock_message]
+            }
+            result = baseline_tools_sync(state)
 
-        # Should add tool results to messages
-        assert 'messages' in result
-        messages = result['messages']
-        assert len(messages) == 2
-        assert messages[1]['tool_call_id'] == 'call1'
-        assert messages[1]['content'] == {'baseline_data': 'test'}
-        mock_query_baseline.assert_called_once_with(finding_id='f1')
+            # Should add tool results to messages
+            assert 'messages' in result
+            messages = result['messages']
+            assert len(messages) == 2
+            assert messages[1]['tool_call_id'] == 'call1'
+            assert messages[1]['content'] == {'baseline_data': 'test'}
+        finally:
+            setattr(graph_main, 'query_baseline', original_query_baseline)
+            setattr(graph_main, 'ToolNode', original_toolnode)
+
+    def test_summarize_host_state_exception_handling(self):
+        """Test summarize_host_state exception handling."""
+        # Patch the actual function to raise an exception
+        with patch('graph_main.enhanced_summarize_host_state') as mock_func:
+            mock_func.side_effect = Exception("Test exception")
+            # Temporarily set it to not None so the if check passes
+            original_value = graph_main.enhanced_summarize_host_state
+            setattr(graph_main, 'enhanced_summarize_host_state', mock_func)
+            
+            try:
+                state: GraphState = {'test': 'data'}
+                result = summarize_host_state(state)
+
+                # Should return original state on exception
+                assert result == state
+            finally:
+                setattr(graph_main, 'enhanced_summarize_host_state', original_value)
+
+    def test_suggest_rules_exception_handling(self):
+        """Test suggest_rules exception handling."""
+        # Patch the actual function to raise an exception
+        with patch('graph_main.enhanced_suggest_rules') as mock_func:
+            mock_func.side_effect = Exception("Test exception")
+            # Temporarily set it to not None so the if check passes
+            original_value = graph_main.enhanced_suggest_rules
+            setattr(graph_main, 'enhanced_suggest_rules', mock_func)
+            
+            try:
+                state: GraphState = {'test': 'data'}
+                result = suggest_rules(state)
+
+                # Should return original state on exception
+                assert result == state
+            finally:
+                setattr(graph_main, 'enhanced_suggest_rules', original_value)
+
+    def test_tool_coordinator_sync_exception_handling(self):
+        """Test tool_coordinator_sync exception handling."""
+        # Patch the actual function to raise an exception
+        with patch('graph_main.tool_coordinator') as mock_func:
+            mock_func.side_effect = Exception("Test exception")
+            # Temporarily set it to not None so the if check passes
+            original_value = graph_main.tool_coordinator
+            setattr(graph_main, 'tool_coordinator', mock_func)
+            
+            try:
+                state: GraphState = {'test': 'data'}
+                result = tool_coordinator_sync(state)
+
+                # Should return original state on exception
+                assert result == state
+            finally:
+                setattr(graph_main, 'tool_coordinator', original_value)
+
+    def test_risk_analyzer_sync_exception_handling(self):
+        """Test risk_analyzer_sync exception handling."""
+        # Patch the actual function to raise an exception
+        with patch('graph_main.risk_analyzer') as mock_func:
+            mock_func.side_effect = Exception("Test exception")
+            # Temporarily set it to not None so the if check passes
+            original_value = graph_main.risk_analyzer
+            setattr(graph_main, 'risk_analyzer', mock_func)
+            
+            try:
+                state: GraphState = {'test': 'data'}
+                result = risk_analyzer_sync(state)
+
+                # Should return original state on exception
+                assert result == state
+            finally:
+                setattr(graph_main, 'risk_analyzer', original_value)
+
+    def test_compliance_checker_sync_exception_handling(self):
+        """Test compliance_checker_sync exception handling."""
+        # Patch the actual function to raise an exception
+        with patch('graph_main.compliance_checker') as mock_func:
+            mock_func.side_effect = Exception("Test exception")
+            # Temporarily set it to not None so the if check passes
+            original_value = graph_main.compliance_checker
+            setattr(graph_main, 'compliance_checker', mock_func)
+            
+            try:
+                state: GraphState = {'test': 'data'}
+                result = compliance_checker_sync(state)
+
+                # Should return original state on exception
+                assert result == state
+            finally:
+                setattr(graph_main, 'compliance_checker', original_value)
+
+    def test_metrics_collector_sync_exception_handling(self):
+        """Test metrics_collector_sync exception handling."""
+        # Patch the actual function to raise an exception
+        with patch('graph_main.metrics_collector') as mock_func:
+            mock_func.side_effect = Exception("Test exception")
+            # Temporarily set it to not None so the if check passes
+            original_value = graph_main.metrics_collector
+            setattr(graph_main, 'metrics_collector', mock_func)
+            
+            try:
+                state: GraphState = {'test': 'data'}
+                result = metrics_collector_sync(state)
+
+                # Should return original state on exception
+                assert result == state
+            finally:
+                setattr(graph_main, 'metrics_collector', original_value)
+
+    def test_baseline_tools_sync_exception_handling(self):
+        """Test baseline_tools_sync exception handling."""
+        original_query_baseline = getattr(graph_main, 'query_baseline', None)
+        original_toolnode = getattr(graph_main, 'ToolNode', None)
+        
+        def failing_query_func(**kwargs):
+            raise Exception("Query failed")
+        setattr(graph_main, 'query_baseline', failing_query_func)
+        setattr(graph_main, 'ToolNode', Mock())
+        
+        try:
+            # Create a mock message with tool_calls attribute
+            mock_message = Mock()
+            mock_message.tool_calls = [{
+                'id': 'call1',
+                'name': 'query_baseline',
+                'args': {'finding_id': 'f1'}
+            }]
+
+            state: GraphState = {
+                'messages': [mock_message]
+            }
+            result = baseline_tools_sync(state)
+
+            # Should add error tool results to messages
+            assert 'messages' in result
+            messages = result['messages']
+            assert len(messages) == 2
+            assert messages[1]['tool_call_id'] == 'call1'
+            assert messages[1]['content']['status'] == 'error'
+            assert 'Query failed' in messages[1]['content']['error']
+        finally:
+            setattr(graph_main, 'query_baseline', original_query_baseline)
+            setattr(graph_main, 'ToolNode', original_toolnode)
 
 
 class TestBuildWorkflow:
@@ -770,6 +954,40 @@ class TestBuildWorkflow:
             # Should return None, None when required components are missing
             assert wf is None
             assert app is None
+
+    def test_build_workflow_compilation_failure(self):
+        """Test build_workflow when compilation fails (lines 385, 431-432)."""
+        with patch('graph_main.StateGraph') as mock_state_graph, \
+             patch('graph_main.END', 'END'), \
+             patch('graph_main.START', 'START'), \
+             patch('graph_main.ToolNode', 'ToolNode'):
+            
+            # Mock the required components
+            mock_wf = Mock()
+            mock_wf.add_node = Mock()
+            mock_wf.add_edge = Mock()
+            mock_wf.set_entry_point = Mock()
+            mock_wf.compile = Mock(side_effect=Exception("Compilation failed"))
+
+            mock_state_graph.return_value = mock_wf
+
+            # Mock the imported functions
+            with patch.multiple('graph_main',
+                              enrich_findings=Mock(),
+                              enhanced_summarize_host_state=Mock(),
+                              enhanced_suggest_rules=Mock(),
+                              tool_coordinator=Mock(),
+                              plan_baseline_queries=Mock(),
+                              integrate_baseline_results=Mock(),
+                              risk_analyzer=Mock(),
+                              compliance_checker=Mock(),
+                              metrics_collector=Mock(),
+                              query_baseline=Mock()):
+                wf, app = build_workflow()
+
+                assert wf == mock_wf  # Should return the workflow object
+                assert app is None  # Should return None for app when compilation fails
+                mock_wf.compile.assert_called_once()
 
 
 class TestErrorHandling:
