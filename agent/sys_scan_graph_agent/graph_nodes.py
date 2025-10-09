@@ -4,7 +4,7 @@ This module provides the necessary functions and classes for baseline query
 operations in the graph workflow.
 """
 
-from .graph_nodes_scaffold import plan_baseline_queries, integrate_baseline_results
+from .graph import plan_baseline_queries, integrate_baseline_results
 
 # Lazy import to avoid import order issues
 def _get_baseline_query_graph():

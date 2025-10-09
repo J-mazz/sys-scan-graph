@@ -22,8 +22,15 @@ from . import calibration
 from . import config
 from . import report_html
 from . import report_diff
-from . import graph_nodes_scaffold
+from . import graph
 from . import graph_state
+from . import models
+from . import metrics_exporter
+from .audit import tail_since
+from .rule_gap_miner import mine_gap_candidates, refine_with_llm
+from .rules import load_rules_dir, dry_run_apply
+from .rarity_generate import generate as rarity_generate_func
+from .integrity import generate_keypair, sign_file, verify_file
 import time
 from jsonschema import validate as js_validate, ValidationError
 # Phase 10 imports
@@ -81,20 +88,20 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
         
         # Run synchronous nodes with telemetry
         with time_node(state, 'enrich_findings') as timed_state:
-            state = graph_nodes_scaffold.enrich_findings(timed_state)
+            state = graph.enrich_findings(timed_state)
         
         with time_node(state, 'correlate_findings') as timed_state:
-            state = graph_nodes_scaffold.correlate_findings(timed_state)
+            state = graph.correlate_findings(timed_state)
         
         # Run async nodes with telemetry
         import asyncio
         async def run_async_nodes(current_state):
             with time_node(current_state, 'risk_analyzer') as timed_state:
-                current_state = await graph_nodes_scaffold.risk_analyzer(timed_state)
+                current_state = await graph.risk_analyzer(timed_state)
             with time_node(current_state, 'compliance_checker') as timed_state:
-                current_state = await graph_nodes_scaffold.compliance_checker(timed_state)
+                current_state = await graph.compliance_checker(timed_state)
             with time_node(current_state, 'metrics_collector') as timed_state:
-                current_state = await graph_nodes_scaffold.metrics_collector(timed_state)
+                current_state = await graph.metrics_collector(timed_state)
             return current_state
         
         # Run async workflow
@@ -104,14 +111,14 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
         from .models import EnrichedOutput, Reductions, Summaries
         
         # Generate executive summary
-        executive_summary = graph_nodes_scaffold._generate_executive_summary(
+        executive_summary = graph._generate_executive_summary(
             final_state.get('enriched_findings', []),
             final_state.get('correlations', []),
             final_state.get('risk_assessment', {})
         )
         
         # Generate reductions
-        reductions_data = graph_nodes_scaffold._generate_reductions(
+        reductions_data = graph._create_reductions(
             final_state.get('enriched_findings', [])
         )
         
@@ -142,7 +149,7 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
             metrics_out: Path = typer.Option(None, help="Export node telemetry metrics to file (supports .json, .csv, .prom extensions)")):
     cfg = config.load_config()
     if dry_run:
-        sandbox_config(dry_run=True)
+        sandbox.configure(dry_run=True)
     enriched, final_state = run_intelligence_workflow(report)
     out.write_text(enriched.model_dump_json(indent=2))
     print(f"[green]Wrote enriched output -> {out}")
@@ -150,29 +157,23 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
     # Export metrics if requested
     if metrics_out:
         try:
-            from metrics_exporter import export_all_formats, print_metrics_summary
-
             # Determine export format from file extension
             if str(metrics_out).endswith('.json'):
-                from metrics_exporter import write_metrics_json
-                write_metrics_json(metrics_state, str(metrics_out))
+                metrics_exporter.write_metrics_json(final_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to JSON -> {metrics_out}")
             elif str(metrics_out).endswith('.csv'):
-                from metrics_exporter import export_metrics_csv
-                export_metrics_csv(metrics_state, str(metrics_out))
+                metrics_exporter.export_metrics_csv(final_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to CSV -> {metrics_out}")
             elif str(metrics_out).endswith('.prom'):
-                from metrics_exporter import export_prometheus
-                export_prometheus(metrics_state, str(metrics_out))
+                metrics_exporter.export_prometheus(final_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to Prometheus -> {metrics_out}")
             else:
                 # Default to JSON if no extension or unknown
-                from metrics_exporter import write_metrics_json
-                write_metrics_json(metrics_state, str(metrics_out))
+                metrics_exporter.write_metrics_json(final_state, str(metrics_out))
                 print(f"[cyan]Metrics exported to JSON -> {metrics_out}")
 
             # Always print summary to console
-            print_metrics_summary(metrics_state)
+            metrics_exporter.print_metrics_summary(final_state)
 
         except Exception as e:
             print(f"[red]Metrics export failed: {e}")
@@ -324,57 +325,57 @@ def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw v2 rep
     except Exception as e:
         print(f"[red]Failed to record decision: {e}")
 
-    @app.command()
-    def rule_lint(rules_dir: Path = typer.Option(..., exists=True, help="Directory with rule files (.json/.yml/.yaml)")):
-        rules_data = rules.load_rules_dir(str(rules_dir))
-        issues = rules.lint_rules(rules_data)
-        if not issues:
-            print("[green]No lint issues detected")
-            raise typer.Exit(code=0)
-        for i in issues:
-            print(f"[yellow]{i['rule_id']}[/yellow] {i['code']} {i['detail']}")
-        raise typer.Exit(code=1)
+@app.command()
+def rule_lint(rules_dir: Path = typer.Option(..., exists=True, help="Directory with rule files (.json/.yml/.yaml)")):
+    rules_data = rules.load_rules_dir(str(rules_dir))
+    issues = rules.lint_rules(rules_data)
+    if not issues:
+        print("[green]No lint issues detected")
+        raise typer.Exit(code=0)
+    for i in issues:
+        print(f"[yellow]{i['rule_id']}[/yellow] {i['code']} {i['detail']}")
+    raise typer.Exit(code=1)
 
-    @app.command()
-    def rule_dry_run(rules_dir: Path = typer.Option(..., exists=True),
-                     findings_json: Path = typer.Option(..., exists=True, help="JSON array of findings to test")):
-        from models import Finding
-        data = json.loads(findings_json.read_text())
-        rules = load_rules_dir(str(rules_dir))
-        findings = []
-        for obj in data:
-            findings.append(Finding(
-                id=obj.get('id'),
-                title=obj.get('title','(no title)'),
-                severity=obj.get('severity','info'),
-                risk_score=obj.get('risk_score',0),
-                metadata=obj.get('metadata',{})
-            ))
-        matches = dry_run_apply(rules, findings)
-        for rid, m in matches.items():
-            if m:
-                print(f"[cyan]{rid}[/cyan]: {', '.join(m)}")
-            else:
-                print(f"[dim]{rid}[/dim]: (no matches)")
+@app.command()
+def rule_dry_run(rules_dir: Path = typer.Option(..., exists=True),
+                 findings_json: Path = typer.Option(..., exists=True, help="JSON array of findings to test")):
+    from models import Finding
+    data = json.loads(findings_json.read_text())
+    rules_data = load_rules_dir(str(rules_dir))
+    findings = []
+    for obj in data:
+        findings.append(Finding(
+            id=obj.get('id'),
+            title=obj.get('title','(no title)'),
+            severity=obj.get('severity','info'),
+            risk_score=obj.get('risk_score',0),
+            metadata=obj.get('metadata',{})
+        ))
+    matches = dry_run_apply(rules_data, findings)
+    for rid, m in matches.items():
+        if m:
+            print(f"[cyan]{rid}[/cyan]: {', '.join(m)}")
+        else:
+            print(f"[dim]{rid}[/dim]: (no matches)")
 
-    @app.command()
-    def baseline_integrity(db: Path = typer.Option(Path("agent_baseline.db")),
-                           host: str = typer.Option(..., help="Host ID"),
-                           days: int = typer.Option(7, help="Look back days for continuity")):
-        store = baseline.BaselineStore(db)
-        days_map = store.scan_days_present(host, days)
-        missing = [d for d, present in days_map.items() if not present]
-        for d, present in sorted(days_map.items()):
-            mark = "OK" if present else "MISSING"
-            color = "green" if present else "red"
-            print(f"[{color}]{d}[/] {mark}")
-        if missing:
-            print(f"[red]Missing {len(missing)} day(s) in last {days}d window[/red]")
+@app.command()
+def baseline_integrity(db: Path = typer.Option(Path("agent_baseline.db")),
+                       host: str = typer.Option(..., help="Host ID"),
+                       days: int = typer.Option(7, help="Look back days for continuity")):
+    store = baseline.BaselineStore(db)
+    days_map = store.scan_days_present(host, days)
+    missing = [d for d, present in days_map.items() if not present]
+    for d, present in sorted(days_map.items()):
+        mark = "OK" if present else "MISSING"
+        color = "green" if present else "red"
+        print(f"[{color}]{d}[/] {mark}")
+    if missing:
+        print(f"[red]Missing {len(missing)} day(s) in last {days}d window[/red]")
 
 @app.command()
 def rarity_generate_cmd(db: Path = typer.Option(Path("agent_baseline.db"), help="Baseline DB path"),
                         out: Path = typer.Option(Path("rarity.yaml"), help="Output rarity YAML")):
-    path = rarity_generate(db, out)
+    path = rarity_generate_func(db, out)
     print(f"[green]Generated rarity file {path}")
 
 @app.command()
@@ -382,29 +383,29 @@ def sandbox(dry_run: bool = typer.Option(None), timeout: float = typer.Option(No
     cfg = sandbox.configure(dry_run=dry_run, timeout_sec=timeout, max_output_bytes=max_output)
     print(f"[green]Sandbox updated[/green] {cfg.model_dump()}")
 
-    @app.command()
-    def baseline_diff(db: Path = typer.Option(Path("agent_baseline.db")),
-                      host: str = typer.Option(..., help="Host ID"),
-                      since: str = typer.Option("7d", help="Duration spec (e.g. 7d, 24h)")):
-        # Parse simple duration
-        mult = 1
-        val = since
-        if since.endswith('d'):
-            mult = 86400
-            val = since[:-1]
-        elif since.endswith('h'):
-            mult = 3600
-            val = since[:-1]
-        try:
-            qty = int(val)
-        except ValueError:
-            print("[red]Invalid duration format[/red]")
-            raise typer.Exit(code=2)
-        seconds = qty * mult
-        days = max(1, seconds // 86400)
-        store = baseline.BaselineStore(db)
-        recent = store.diff_since_days(host, days)
-        print(json.dumps(recent, indent=2))
+@app.command()
+def baseline_diff(db: Path = typer.Option(Path("agent_baseline.db")),
+                  host: str = typer.Option(..., help="Host ID"),
+                  since: str = typer.Option("7d", help="Duration spec (e.g. 7d, 24h)")):
+    # Parse simple duration
+    mult = 1
+    val = since
+    if since.endswith('d'):
+        mult = 86400
+        val = since[:-1]
+    elif since.endswith('h'):
+        mult = 3600
+        val = since[:-1]
+    try:
+        qty = int(val)
+    except ValueError:
+        print("[red]Invalid duration format[/red]")
+        raise typer.Exit(code=2)
+    seconds = qty * mult
+    days = max(1, seconds // 86400)
+    store = baseline.BaselineStore(db)
+    recent = store.diff_since_days(host, days)
+    print(json.dumps(recent, indent=2))
 
 def build_fleet_report(db: Path, top_n: int = 5, recent_seconds: int = 86400, module_min_hosts: int = 3) -> dict:
     """Return fleet report object (not written to disk)."""

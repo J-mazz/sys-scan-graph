@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 import copy
-from sys_scan_graph_agent.graph_nodes_scaffold import enhanced_enrich_findings, enhanced_suggest_rules
+from sys_scan_graph_agent.graph import enhanced_enrich_findings, enhanced_suggest_rules
 
 
 def test_enhanced_suggest_rules_monkeypatch(monkeypatch):

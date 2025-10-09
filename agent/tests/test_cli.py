@@ -203,7 +203,7 @@ class TestIntegrityCommands:
 
     def test_sign(self, runner, sample_report_file):
         """Test sign command."""
-        with patch('sys_scan_graph_agent.integrity.sign_file') as mock_sign:
+        with patch('sys_scan_graph_agent.cli.sign_file') as mock_sign:
             mock_sign.return_value = ("test_digest", "test_sig_base64")
 
             key_file = sample_report_file.parent / "test_key"
@@ -217,7 +217,7 @@ class TestIntegrityCommands:
 
     def test_verify_valid(self, runner, sample_report_file):
         """Test verify command with valid signature."""
-        with patch('sys_scan_graph_agent.integrity.verify_file') as mock_verify:
+        with patch('sys_scan_graph_agent.cli.verify_file') as mock_verify:
             mock_verify.return_value = {"digest_match": True, "signature_valid": True}
 
             key_file = sample_report_file.parent / "test_key"
@@ -230,7 +230,7 @@ class TestIntegrityCommands:
 
     def test_verify_invalid(self, runner, sample_report_file):
         """Test verify command with invalid signature."""
-        with patch('sys_scan_graph_agent.integrity.verify_file') as mock_verify:
+        with patch('sys_scan_graph_agent.cli.verify_file') as mock_verify:
             mock_verify.return_value = {"digest_match": False, "signature_valid": False}
 
             key_file = sample_report_file.parent / "test_key"
