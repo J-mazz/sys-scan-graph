@@ -8,11 +8,9 @@ import os
 import time
 
 from sys_scan_graph_agent.pipeline import (
-    load_report, augment, correlate, integrate_compliance, baseline_rarity,
-    process_novelty, sequence_correlation, reduce, summarize, actions,
-    build_output, apply_policy, run_pipeline, _recompute_finding_risk,
-    _log_error, _load_attack_mapping, generate_causal_hypotheses,
-    _load_policy_allowlist, _approved_dirs
+    load_report, augment, correlate, baseline_rarity,
+    process_novelty, sequence_correlation, reduce, summarize,
+    build_output, apply_policy, run_pipeline, generate_causal_hypotheses
 )
 from sys_scan_graph_agent.models import AgentState, Report, ScannerResult, Finding, Correlation, ActionItem, Summaries
 

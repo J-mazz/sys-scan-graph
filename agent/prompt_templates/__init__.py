@@ -1,3 +1,10 @@
+# ╔══════════════════════════════════╗
+# ║             MazzLabs             ║
+# ╟──────────────────────────────────╢
+# ║           Joseph Mazzini         ║
+# ╚══════════════════════════════════╝
+
+# ==============================================================================
 from __future__ import annotations
 """Prompt template management system with A/B testing and structured responses.
 

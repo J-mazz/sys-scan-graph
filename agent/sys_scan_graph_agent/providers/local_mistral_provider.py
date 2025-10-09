@@ -71,6 +71,45 @@ class LocalMistralLLMProvider:
         model_dir = package_dir / "mistral-security-lora"
         return str(model_dir)
 
+    def _load_lora_adapter(self, adapter_path: Path):
+        """Load LoRA adapter, reassembling shards if necessary.
+        
+        Supports both:
+        - Monolithic: adapter_model.safetensors (161MB)
+        - Sharded: adapter_model_01_of_04.safetensors, etc. (4x40MB)
+        """
+        from safetensors import safe_open
+        from safetensors.torch import save_file
+        
+        monolithic_file = adapter_path / "adapter_model.safetensors"
+        shards_dir = adapter_path / "shards"
+        
+        # Check for monolithic adapter (development/source builds)
+        if monolithic_file.exists():
+            return str(adapter_path)
+        
+        # Check for sharded adapter (Debian package)
+        if shards_dir.exists():
+            shard_files = sorted(shards_dir.glob("adapter_model_*_of_*.safetensors"))
+            if shard_files:
+                print(f"✓ Found {len(shard_files)} LoRA shards, reassembling...")
+                
+                # Load all shards and combine
+                combined_tensors = {}
+                for shard_file in shard_files:
+                    with safe_open(str(shard_file), framework='pt') as f:
+                        for key in f.keys():
+                            combined_tensors[key] = f.get_tensor(key)
+                
+                # Save reassembled adapter to cache
+                cache_file = adapter_path / "adapter_model.safetensors"
+                save_file(combined_tensors, str(cache_file))
+                print(f"✓ Reassembled {len(combined_tensors)} tensors -> {cache_file.name}")
+                
+                return str(adapter_path)
+        
+        raise FileNotFoundError(f"No LoRA adapter found at {adapter_path} (neither monolithic nor sharded)")
+
     def _load_model(self):
         """Load the base model and LoRA adapters for zero-trust analysis."""
         try:
@@ -105,9 +144,12 @@ class LocalMistralLLMProvider:
 
             # Load LoRA adapters trained on 2.5M security findings
             try:
+                # Resolve adapter path (handles both monolithic and sharded)
+                adapter_path = self._load_lora_adapter(Path(self.model_path))
+                
                 self.model = PeftModel.from_pretrained(
                     base_model,
-                    self.model_path,
+                    adapter_path,
                     torch_dtype=torch.float16,
                     device_map=self.device
                 )
