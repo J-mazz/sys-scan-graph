@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import pytest
 
-from sys_scan_graph_agent.graph_nodes_scaffold import (
+from sys_scan_graph_agent.graph import (
     # error_handler,  # Not implemented
     # human_feedback_node,  # Not implemented
     cache_manager,

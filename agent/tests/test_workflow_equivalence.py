@@ -11,11 +11,12 @@ from typing import Dict, Any, List
 from unittest.mock import patch
 
 # Import types
-from sys_scan_graph_agent.graph import GraphState
-from sys_scan_graph_agent.graph_nodes_scaffold import StateType
+from sys_scan_graph_agent.graph_state import GraphState
+from typing import Dict, Any
+StateType = Dict[str, Any]  # type: ignore
 
 # Import both workflow variants
-from sys_scan_graph_agent.graph_nodes_scaffold import (
+from sys_scan_graph_agent.graph import (
     enrich_findings,
     correlate_findings,
     enhanced_summarize_host_state as scaffold_summarize,

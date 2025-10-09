@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import Dict, Any, List
-from .graph_nodes_scaffold import (
+from .graph import (
     advanced_router,
     enhanced_enrich_findings as scaffold_enrich_findings,
     enhanced_summarize_host_state as scaffold_summarize,

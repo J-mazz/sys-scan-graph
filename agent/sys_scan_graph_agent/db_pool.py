@@ -142,8 +142,12 @@ class DatabaseConnectionPool:
         """
         if self._closed:
             # If pool is closed, close the connection
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(self._executor, conn.close)
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(self._executor, conn.close)
+            except RuntimeError:
+                # Executor might be shut down, close synchronously
+                conn.close()
             return
 
         try:
@@ -185,6 +189,9 @@ class DatabaseConnectionPool:
                     cursor.execute(query, params)
                     results = cursor.fetchall()
                     cursor.close()
+                    # Commit for write operations
+                    if query.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER')):
+                        cast(sqlite3.Connection, conn).commit()
                     return results
 
                 results = await loop.run_in_executor(self._executor, _execute)
@@ -317,7 +324,16 @@ def get_db_pool(db_path: Optional[str] = None,
     if _pool_instance is None or _pool_instance.db_path != db_path:
         if _pool_instance:
             # Close existing pool if database path changed
-            asyncio.create_task(_pool_instance.close_all())
+            try:
+                # Try to close synchronously if possible, otherwise schedule async close
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(_pool_instance.close_all())
+                else:
+                    loop.run_until_complete(_pool_instance.close_all())
+            except RuntimeError:
+                # No event loop, just mark as closed
+                _pool_instance._closed = True
 
         _pool_instance = DatabaseConnectionPool(
             db_path=db_path,

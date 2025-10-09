@@ -60,7 +60,7 @@ try:  # Optional dependency guard
     from langgraph.prebuilt import ToolNode  # type: ignore
 
     # Import scaffold nodes (required for current workflow)
-    from .graph_nodes_scaffold import (
+    from .graph import (
         enrich_findings,
         enhanced_summarize_host_state,
         enhanced_suggest_rules,
