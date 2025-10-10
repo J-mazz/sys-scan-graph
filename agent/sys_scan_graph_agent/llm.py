@@ -20,8 +20,8 @@ class LLMClient:
             self.avg_prompt_tokens = self.alpha*pt + (1-self.alpha)*self.avg_prompt_tokens
             self.avg_completion_tokens = self.alpha*ct + (1-self.alpha)*self.avg_completion_tokens
         return self.avg_prompt_tokens, self.avg_completion_tokens
-    def _prompt_a_consistency(self, reductions: models.Reductions, correlations: List[models.Correlation]) -> llm_models.PromptAOutput:
-        ms = reductions.module_summary or {}
+    def _prompt_a_consistency(self, reductions, correlations):
+        ms = reductions.get('module_summary') or {}
         issues: List[llm_models.ConsistencyIssue] = []
         mc = ms.get('module_count')
         distinct = ms.get('distinct_modules') or mc
@@ -32,9 +32,9 @@ class LLMClient:
                 issues.append(llm_models.ConsistencyIssue(issue="empty_correlation", details={"id": c.id}))
         return llm_models.PromptAOutput(findings=issues)
 
-    def _prompt_b_triage(self, reductions: models.Reductions, correlations: List[models.Correlation]) -> llm_models.PromptBOutput:
+    def _prompt_b_triage(self, reductions, correlations):
         top = []
-        for f in reductions.top_findings[:5]:
+        for f in reductions.get('top_findings', [])[:5]:
             try:
                 top.append(llm_models.TriageFinding(**f))
             except Exception:
@@ -87,29 +87,29 @@ class LLMClient:
         except Exception:
             red_red = reductions
         lines = []
-        if red_red.module_summary:
-            lines.append(f"Modules: {red_red.module_summary.get('module_count')} total; notable: {', '.join(red_red.module_summary.get('notable_modules', []))}")
-        if red_red.suid_summary:
-            lines.append(f"SUID unexpected: {len(red_red.suid_summary.get('unexpected_suid', []))}")
-        if red_red.network_summary:
-            lines.append(f"Listening ports: {red_red.network_summary.get('listen_count')}")
+        if red_red.get('module_summary'):
+            lines.append(f"Modules: {red_red['module_summary'].get('module_count')} total; notable: {', '.join(red_red['module_summary'].get('notable_modules', []))}")
+        if red_red.get('suid_summary'):
+            lines.append(f"SUID unexpected: {len(red_red['suid_summary'].get('unexpected_suid', []))}")
+        if red_red.get('network_summary'):
+            lines.append(f"Listening ports: {red_red['network_summary'].get('listen_count')}")
         if correlations:
             lines.append(f"Correlations: {len(correlations)}")
         executive = "; ".join(lines)[:600]
-        analyst = {"correlation_count": len(correlations), "top_findings_count": len(red_red.top_findings)}
+        analyst = {"correlation_count": len(correlations), "top_findings_count": len(red_red.get('top_findings', []))}
         consistency_obj = self._validate_or_retry(lambda: self._prompt_a_consistency(red_red, correlations))
         triage_obj = self._validate_or_retry(lambda: self._prompt_b_triage(red_red, correlations))
         action_obj = self._validate_or_retry(lambda: self._prompt_c_actions(actions))
         elapsed = int((time.time()-start)*1000)
         # Simulated token counts (deterministic approximation)
         prompt_tokens = 50 + len(lines)*10
-        completion_tokens = 40 + len(red_red.top_findings)*8
+        completion_tokens = 40 + len(red_red.get('top_findings', []))*8
         avg_pt, avg_ct = self._update_avgs(prompt_tokens, completion_tokens)
         drift_flag = (prompt_tokens > 1.3*avg_pt)
         metrics = {
             'tokens_prompt': prompt_tokens,
             'tokens_completion': completion_tokens,
-            'findings_count': len(red_red.top_findings),
+            'findings_count': len(red_red.get('top_findings', [])),
             'latency_ms': elapsed,
             'avg_prompt_tokens': round(avg_pt,2),
             'avg_completion_tokens': round(avg_ct,2),

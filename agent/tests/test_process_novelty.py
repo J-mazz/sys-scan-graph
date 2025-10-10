@@ -36,8 +36,8 @@ def test_process_novelty(tmp_path, monkeypatch):
     state = AgentState()
     state = load_report(state, p1)
     state = augment(state)
-    state = baseline_rarity(state, baseline_path=tmp_path/'db.sqlite')
-    state = process_novelty(state, baseline_path=tmp_path/'db.sqlite')
+    state = baseline_rarity(state, baseline_path=tmp_path/'baseline.db')
+    state = process_novelty(state, baseline_path=tmp_path/'novelty.json')
     assert state.report and state.report.results
     first_tags = [f.tags for r in state.report.results for f in r.findings]
     # Second scan introduces novel process
@@ -47,8 +47,8 @@ def test_process_novelty(tmp_path, monkeypatch):
     state2 = AgentState()
     state2 = load_report(state2, p2)
     state2 = augment(state2)
-    state2 = baseline_rarity(state2, baseline_path=tmp_path/'db.sqlite')
-    state2 = process_novelty(state2, baseline_path=tmp_path/'db.sqlite')
+    state2 = baseline_rarity(state2, baseline_path=tmp_path/'baseline.db')
+    state2 = process_novelty(state2, baseline_path=tmp_path/'novelty.json')
     assert state2.report and state2.report.results
     novel = [f for r in state2.report.results for f in r.findings if 'process_novel' in f.tags]
     assert novel, 'Expected at least one novel process finding tagged'

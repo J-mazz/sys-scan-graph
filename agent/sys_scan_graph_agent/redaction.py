@@ -93,8 +93,11 @@ def redact_obj(obj: Any):  # pragma: no cover small helper
     return obj
 
 
-def redact_reductions(reductions: dict) -> dict:
-    red = deepcopy(reductions)
+def redact_reductions(reductions) -> dict:
+    if hasattr(reductions, 'model_dump'):
+        red = deepcopy(reductions.model_dump())
+    else:
+        red = deepcopy(reductions)
     # top_findings / top_risks titles and maybe tags
     new_tf = []
     for f in red.get('top_findings', []):

@@ -20,7 +20,16 @@ def test_sign_and_verify(tmp_path):
     status = verify_file(rp, vk)
     assert status['digest_match'] is True
     assert status['signature_valid'] is True
-    # Pipeline includes integrity sha automatically
-    enriched = run_pipeline(rp)
-    assert enriched.integrity is not None
-    assert enriched.integrity.get('sha256_actual') == digest
+    # Pipeline includes integrity sha automatically - use temp baseline DB
+    import os
+    old_baseline = os.environ.get('AGENT_BASELINE_DB')
+    os.environ['AGENT_BASELINE_DB'] = str(tmp_path / 'baseline.db')
+    try:
+        enriched = run_pipeline(rp)
+        assert enriched.integrity is not None
+        assert enriched.integrity.get('sha256_actual') == digest
+    finally:
+        if old_baseline is not None:
+            os.environ['AGENT_BASELINE_DB'] = old_baseline
+        else:
+            os.environ.pop('AGENT_BASELINE_DB', None)

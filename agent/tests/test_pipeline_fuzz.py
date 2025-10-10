@@ -38,16 +38,25 @@ def make_random_report(path: Path, n_findings: int = 20):
 
 def test_pipeline_fuzz_runs(tmp_path):
     # Generate multiple random reports and ensure pipeline completes without exceptions
-    for i in range(3):
-        rp = tmp_path / f'random_{i}.json'
-        make_random_report(rp, n_findings=30)
-        enriched = run_pipeline(rp)
-        assert enriched is not None
-        # Ensure enrichment results present and contain perf snapshot
-        perf_obj = {}
-        if enriched.enrichment_results:
-            perf_obj = enriched.enrichment_results.get('perf', {})
-        assert isinstance(perf_obj, dict)
-        # Basic performance metric propagated into summaries.metrics if available
-        if enriched.summaries and enriched.summaries.metrics:
-            assert 'perf.total_ms' in enriched.summaries.metrics
+    import os
+    old_baseline = os.environ.get('AGENT_BASELINE_DB')
+    os.environ['AGENT_BASELINE_DB'] = str(tmp_path / 'baseline.db')
+    try:
+        for i in range(3):
+            rp = tmp_path / f'random_{i}.json'
+            make_random_report(rp, n_findings=30)
+            enriched = run_pipeline(rp)
+            assert enriched is not None
+            # Ensure enrichment results present and contain perf snapshot
+            perf_obj = {}
+            if enriched.enrichment_results:
+                perf_obj = enriched.enrichment_results.get('perf', {})
+            assert isinstance(perf_obj, dict)
+            # Basic performance metric propagated into summaries.metrics if available
+            if enriched.summaries and enriched.summaries.metrics:
+                assert 'perf.total_ms' in enriched.summaries.metrics
+    finally:
+        if old_baseline is not None:
+            os.environ['AGENT_BASELINE_DB'] = old_baseline
+        else:
+            os.environ.pop('AGENT_BASELINE_DB', None)

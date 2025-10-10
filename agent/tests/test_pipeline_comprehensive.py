@@ -232,7 +232,7 @@ class TestBaselineRarity:
         state = load_report(state, sample_report_path)
         state = augment(state)
 
-        result = baseline_rarity(state)
+        result = baseline_rarity(state, baseline_path=baseline_path)
 
         # Should return the state (baseline_rarity now implements metric drift detection)
         assert result is not None
@@ -339,8 +339,9 @@ class TestReduce:
 
         result = reduce(state)
 
-        # Should not crash (reduce is a stub that returns None)
-        assert result is None
+        # Should return the state (reduce now returns state for pipeline compatibility)
+        assert result is not None
+        assert result is state
 
 
 class TestSummarize:

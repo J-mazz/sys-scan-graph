@@ -75,6 +75,7 @@ CURRENT_SCHEMA_VERSION = 5
 class BaselineStore:
     def __init__(self, path: Path):
         self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(path)
         self.conn.execute("PRAGMA journal_mode=WAL;")
         self._migrate()
