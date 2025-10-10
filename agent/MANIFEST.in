@@ -1,0 +1,18 @@
+include LICENSE
+include README.md
+recursive-include sys_scan_graph_agent *.yaml
+recursive-include sys_scan_graph_agent *.json
+recursive-include sys_scan_graph_agent *.txt
+recursive-include prompt_templates *
+recursive-include executors *
+exclude *.db
+exclude *.log
+exclude artifacts/*
+exclude fixtures/*
+exclude htmlcov/*
+exclude mistral_env/*
+exclude mistral-security-lora/*
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .pytest_cache
+global-exclude .coverage

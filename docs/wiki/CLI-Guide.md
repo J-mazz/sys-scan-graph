@@ -79,7 +79,7 @@ The core scanner (`sys-scan`) is the high-performance C++ engine that performs t
 
 ## Intelligence Layer Commands
 
-The intelligence layer (`agent/cli`) provides advanced analysis, enrichment, and reporting capabilities.
+The intelligence layer (`sys-scan-graph`) provides advanced analysis, enrichment, and reporting capabilities.
 
 ### Environment Setup
 
@@ -96,81 +96,81 @@ pip install -r agent/requirements.txt
 
 ```bash
 # Analyze a core scanner report
-python -m agent.cli analyze --report report.json --out enriched.json
+sys-scan-graph analyze --report report.json --out enriched.json
 
 # Generate HTML dashboard
-python -m agent.cli analyze --report report.json --html --out dashboard.html
+sys-scan-graph analyze --report report.json --html --out dashboard.html
 
 # Compare with previous scan
-python -m agent.cli analyze --report report.json --prev previous.json --out diff.json
+sys-scan-graph analyze --report report.json --prev previous.json --out diff.json
 ```
 
 ### Risk Management
 
 ```bash
 # Display current risk weights
-python -m agent.cli risk-weights --show
+sys-scan-graph risk-weights --show
 
 # Update risk weights
-python -m agent.cli risk-weights --impact 7 --exposure 8 --anomaly 6
+sys-scan-graph risk-weights --impact 7 --exposure 8 --anomaly 6
 
 # Show risk calibration
-python -m agent.cli risk-calibration --show
+sys-scan-graph risk-calibration --show
 
 # Update calibration parameters
-python -m agent.cli risk-calibration --a -2.5 --b 0.18
+sys-scan-graph risk-calibration --a -2.5 --b 0.18
 ```
 
 ### Fleet and Rarity Analysis
 
 ```bash
 # Generate fleet report
-python -m agent.cli fleet-report --out fleet.json
+sys-scan-graph fleet-report --out fleet.json
 
 # Generate rarity file
-python -m agent.cli rarity-generate-cmd
+sys-scan-graph rarity-generate-cmd
 
 # Analyze process novelty
-python -m agent.cli process-novelty --report report.json
+sys-scan-graph process-novelty --report report.json
 ```
 
 ### Rule Management
 
 ```bash
 # List available rules
-python -m agent.cli rules --list
+sys-scan-graph rules --list
 
 # Validate rule files
-python -m agent.cli rules --validate /path/to/rules/
+sys-scan-graph rules --validate /path/to/rules/
 
 # Generate rule gap analysis
-python -m agent.cli rule-gap-mine --dir history/ --refine
+sys-scan-graph rule-gap-mine --dir history/ --refine
 ```
 
 ### Data Management
 
 ```bash
 # Export baseline data
-python -m agent.cli baseline --export baseline.json
+sys-scan-graph baseline --export baseline.json
 
 # Import baseline data
-python -m agent.cli baseline --import baseline.json
+sys-scan-graph baseline --import baseline.json
 
 # Clean old baseline entries
-python -m agent.cli baseline --cleanup --days 30
+sys-scan-graph baseline --cleanup --days 30
 ```
 
 ### Performance and Debugging
 
 ```bash
 # Enable checkpointing for debugging
-python -m agent.cli analyze --checkpoint-dir checkpoints/ --report report.json
+sys-scan-graph analyze --checkpoint-dir checkpoints/ --report report.json
 
 # Set performance regression threshold
-python -m agent.cli analyze --perf-threshold 50 --report report.json
+sys-scan-graph analyze --perf-threshold 50 --report report.json
 
 # Enable verbose logging
-python -m agent.cli analyze --verbose --report report.json
+sys-scan-graph analyze --verbose --report report.json
 ```
 
 ## Configuration Files
@@ -287,7 +287,7 @@ cd agent && python -m pytest tests/ -v
 
 # Generate comprehensive report
 ./build/sys-scan --canonical --output scan.json
-python -m agent.cli analyze --report scan.json --html --out security-report.html
+sys-scan-graph analyze --report scan.json --html --out security-report.html
 
 # Check for high-severity issues
 ./build/sys-scan --fail-on high --min-severity medium
@@ -300,7 +300,7 @@ python -m agent.cli analyze --report scan.json --html --out security-report.html
 SYS_SCAN_PERF_TRACKING=1 ./build/sys-scan --canonical --output perf.json
 
 # Analyze performance regression
-python -m agent.cli analyze --report perf.json --perf-baseline baseline.json
+sys-scan-graph analyze --report perf.json --perf-baseline baseline.json
 ```
 
 ### Compliance Auditing
@@ -310,7 +310,7 @@ python -m agent.cli analyze --report perf.json --perf-baseline baseline.json
 ./build/sys-scan --scanners compliance --canonical --output compliance.json
 
 # Generate compliance report
-python -m agent.cli analyze --report compliance.json --compliance-focus --out compliance-report.html
+sys-scan-graph analyze --report compliance.json --compliance-focus --out compliance-report.html
 ```
 
 ## Troubleshooting
@@ -342,10 +342,10 @@ pip install -r agent/requirements.txt --force-reinstall
 **Memory issues:**
 ```bash
 # Limit report size
-python -m agent.cli analyze --max-size 10MB --report large.json
+sys-scan-graph analyze --max-size 10MB --report large.json
 
 # Use streaming for large datasets
-./build/sys-scan --ndjson | python -m agent.cli analyze --stream
+./build/sys-scan --ndjson | sys-scan-graph analyze --stream
 ```
 
 ### Debug Commands
@@ -355,7 +355,7 @@ python -m agent.cli analyze --max-size 10MB --report large.json
 ./build/sys-scan --debug --verbose --log-file debug.log
 
 # Intelligence layer debug
-python -m agent.cli analyze --debug --checkpoint-dir debug_checkpoints/ --report report.json
+sys-scan-graph analyze --debug --checkpoint-dir debug_checkpoints/ --report report.json
 
 # Environment info
 python -c "import sys; print(sys.version, sys.platform)"
@@ -398,5 +398,5 @@ For more detailed help, use `--help` with any command:
 
 ```bash
 ./build/sys-scan --help
-python -m agent.cli analyze --help
+sys-scan-graph analyze --help
 ```

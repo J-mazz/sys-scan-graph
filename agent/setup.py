@@ -22,96 +22,63 @@ AI-powered analysis and enrichment of security scan results.
 from setuptools import setup, find_packages
 import os
 
-# Read the README file
-def read_readme():
-    with open(os.path.join(os.path.dirname(__file__), '..', 'README.md'), encoding='utf-8') as f:
-        return f.read()
+# Read the contents of your README file
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
-# Read requirements
-def read_requirements():
-    requirements = []
-    try:
-        with open(os.path.join(os.path.dirname(__file__), 'requirements.txt'), encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    requirements.append(line)
-    except FileNotFoundError:
-        # Fallback requirements if requirements.txt doesn't exist
-        requirements = [
-            'pyyaml>=6.0',
-            'requests>=2.25.0',
-            'click>=8.0.0',
-            'rich>=10.0.0',
-            'pydantic>=1.8.0',
+setup(
+    name='sys-scan-graph',
+    version='5.0.0',  # Increment this for every new version you publish
+    author='Joseph Mazzini',
+    author_email='joseph@mazzlabs.works',
+    description='AI-powered intelligence layer for the sys-scan-graph security scanner.',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url='https://github.com/J-mazz/sys-scan-graph',
+    license='Apache License 2.0',
+    # Automatically find all python packages in the agent directory
+    packages=find_packages(),
+    # Include non-python files specified in MANIFEST.in
+    include_package_data=True,
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: Apache Software License",
+        "Operating System :: POSIX :: Linux",
+        "Topic :: Security",
+    ],
+    python_requires='>=3.8',
+    # Core dependencies only - keep it lightweight
+    install_requires=[
+        'pydantic>=2.7,<3',
+        'sqlalchemy>=2.0,<3',
+        'typer>=0.12,<0.13',
+        'rich>=13.0,<14',
+        'click>=8.1.0,<8.2.0',
+        'pyyaml>=6.0,<7',
+        'orjson>=3.9,<4',
+        'jsonschema>=4.21,<5',
+        'pytest>=8.0,<9',
+        'pytest-asyncio>=0.23,<0.24',
+        'PyNaCl>=1.5,<2',
+    ],
+    # Optional dependencies for AI/ML features
+    extras_require={
+        'ai': [
+            'langgraph>=0.2,<1',
+            'langchain-core>=0.3,<1',
             'torch>=2.0.0',
             'transformers>=4.40.0',
             'peft>=0.10.0',
             'accelerate>=0.29.0',
-            'huggingface_hub>=0.20.0'
-        ]
-    return requirements
-
-setup(
-    name='sys-scan-graph-agent',
-    version='5.0.0',
-    description='Zero-Trust AI Intelligence Layer for Sys-Scan-Graph Security Scanner',
-    long_description=read_readme(),
-    long_description_content_type='text/markdown',
-    author='Joseph Mazzini',
-    author_email='joseph@mazzlabs.works',
-    url='https://github.com/J-mazz/sys-scan-graph',
-    packages=find_packages(),
-    include_package_data=True,
-    package_data={
-        'sys_scan_graph_agent': [
-            'mistral-security-lora/*.safetensors',
-            'mistral-security-lora/*.json',
-            'mistral-security-lora/*.model',
-            'mistral-security-lora/*.jinja',
-            'mistral-security-lora/special_tokens_map.json',
-            'mistral-security-lora/tokenizer_config.json',
+            'safetensors>=0.4.0',
+            'huggingface_hub>=0.20.0',
         ],
     },
-    install_requires=read_requirements(),
-    extras_require={
-        'dev': [
-            'pytest>=6.0.0',
-            'pytest-cov>=2.10.0',
-            'black>=21.0.0',
-            'flake8>=3.9.0',
-            'mypy>=0.800'
-        ],
-        'docs': [
-            'sphinx>=4.0.0',
-            'sphinx-rtd-theme>=1.0.0'
-        ]
-    },
+    # This creates the `sys-scan-graph` command
     entry_points={
         'console_scripts': [
-            'sys-scan-agent=sys_scan_graph_agent.cli:app',
+            'sys-scan-graph=sys_scan_graph_agent.cli:app',
             'sys-scan-intelligence=sys_scan_graph_agent.cli:app'
-        ]
+        ],
     },
-    classifiers=[
-        'Development Status :: 4 - Beta',
-        'Intended Audience :: System Administrators',
-        'Intended Audience :: Information Technology',
-        'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-        'Topic :: Security',
-        'Topic :: System :: Systems Administration',
-        'Topic :: Utilities'
-    ],
-    python_requires='>=3.8',
-    keywords='security scanner ai intelligence linux system-analysis',
-    project_urls={
-        'Bug Reports': 'https://github.com/J-mazz/sys-scan-graph/issues',
-        'Source': 'https://github.com/J-mazz/sys-scan-graph',
-        'Documentation': 'https://github.com/J-mazz/sys-scan-graph/wiki'
-    }
 )

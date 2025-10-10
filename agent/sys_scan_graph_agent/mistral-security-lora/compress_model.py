@@ -42,30 +42,29 @@ def split_into_groups(tensors, num_groups=4):
     return groups
 
 def main():
-    adapter_path = "/home/joseph-mazzini/sys-scan-graph/agent/sys_scan_graph_agent/mistral-security-lora/adapter_model.safetensors"
     output_dir = "/home/joseph-mazzini/sys-scan-graph/agent/sys_scan_graph_agent/mistral-security-lora"
 
-    # Load adapter tensors
-    print("Loading adapter model...")
-    adapter_tensors = load_file(adapter_path)
+    # Process each part
+    parts = [f"adapter_part{i}.safetensors" for i in range(1, 5)]
+    for part in parts:
+        adapter_path = os.path.join(output_dir, part)
+        print(f"Loading {part}...")
+        adapter_tensors = load_file(adapter_path)
 
-    # Split into 4 groups
-    print("Splitting adapter into 4 groups...")
-    adapter_groups = split_into_groups(adapter_tensors, num_groups=4)
+        # Split into 2 groups
+        print(f"Splitting {part} into 2 groups...")
+        adapter_groups = split_into_groups(adapter_tensors, num_groups=2)
 
-    total_size = 0
-    for i, group in enumerate(adapter_groups):
-        # Save group
-        output_path = os.path.join(output_dir, f"adapter_part{i+1}.safetensors")
-        print(f"Saving part {i+1}...")
-        save_file(group, output_path)
-        
-        size = os.path.getsize(output_path) / (1024 * 1024)  # MB
-        total_size += size
-        print(f"Part {i+1} size: {size:.2f} MB")
+        for j, group in enumerate(adapter_groups):
+            # Save group
+            output_path = os.path.join(output_dir, f"{part.replace('.safetensors', '')}_{j+1}.safetensors")
+            print(f"Saving {output_path}...")
+            save_file(group, output_path)
+            
+            size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+            print(f"Size: {size:.2f} MB")
 
-    print(f"Total size: {total_size:.2f} MB")
-    print("Success: Adapter split into 4 parts.")
+    print("Success: All parts split into ~20MB pieces.")
 
 if __name__ == "__main__":
     main()
