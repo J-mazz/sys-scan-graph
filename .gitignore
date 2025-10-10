@@ -16,6 +16,7 @@ agent_baseline.db
 # Build directories
 /build/
 /build-*/
+enriched_*.html
 
 #fucking datasets
 *.tar.*
@@ -36,6 +37,7 @@ build.ninja
 .cmake/
 _deps/
 ml_env/
+mistral_env/
 
 -# Object & binary artifacts
 *.o
