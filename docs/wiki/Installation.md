@@ -8,10 +8,13 @@ This guide covers all available installation methods for sys-scan-graph.
 
 ```bash
 # Add the Mazzlabs repository
-echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works/ stable main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
+echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works/ testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
 
 # Import the GPG key
 curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+
+# Verify the key fingerprint (optional but recommended)
+gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
 
 # Update package lists
 sudo apt update
