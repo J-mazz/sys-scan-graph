@@ -15,16 +15,178 @@ from .reduction import reduce_all
 from .llm import LLMClient
 from .utils import _recompute_finding_risk
 
-# Stub functions for compatibility - these were in the original pipeline but not yet modularized
-def baseline_rarity(state):
-    """Stub function for baseline rarity processing."""
-    # TODO: Implement baseline rarity logic if needed
-    pass
+# Import model classes
+Finding = models.Finding
+ScannerResult = models.ScannerResult
 
-def process_novelty(state):
-    """Stub function for novelty processing."""
-    # TODO: Implement novelty processing logic if needed
-    pass
+# Stub functions for compatibility - these were in the original pipeline but not yet modularized
+def baseline_rarity(state, baseline_path=None):
+    """Process baseline rarity and detect metric drift."""
+    if not state.report:
+        return state
+
+    from .baseline import BaselineStore
+    from .config import load_config
+    import os, hashlib
+
+    # Get baseline DB path
+    if baseline_path is None:
+        baseline_path = os.environ.get('AGENT_BASELINE_DB', 'agent_baseline.db')
+
+    baseline_path = Path(baseline_path)
+    store = BaselineStore(baseline_path)
+
+    # Extract host_id from report meta
+    host_id = state.report.meta.hostname or state.report.meta.host_id or 'unknown_host'
+
+    # Generate scan_id using a counter stored in baseline
+    scan_counter_key = f"scan_counter:{host_id}"
+    current_counter = store._get_meta(scan_counter_key)
+    if current_counter:
+        try:
+            counter = int(current_counter) + 1
+        except ValueError:
+            counter = 1
+    else:
+        counter = 1
+    store._set_meta(scan_counter_key, str(counter))
+    scan_id = f"scan_{counter}"
+
+    # Record the scan
+    store.record_scan(host_id, scan_id)
+
+    # Extract metrics from report summary
+    metrics = {}
+    if state.report.summary:
+        metrics['finding_count_total'] = float(state.report.summary.finding_count_total or 0)
+        metrics['finding_count_emitted'] = float(state.report.summary.finding_count_emitted or 0)
+        if state.report.summary.severity_counts:
+            for sev, count in state.report.summary.severity_counts.items():
+                metrics[f'severity_{sev}'] = float(count)
+
+    # Record metrics and check for drift
+    if metrics:
+        drift_results = store.record_metrics(host_id, scan_id, metrics)
+
+        # Check for metric drift using z-score threshold
+        config = load_config()
+        threshold = config.thresholds.metric_drift_z
+
+        for metric_name, result in drift_results.items():
+            z_score = result.get('z')
+            if z_score is not None and abs(z_score) > threshold:
+                # Create metric drift finding
+                drift_finding = Finding(
+                    id=f"metric_drift_{metric_name}_{scan_id}",
+                    title=f"Metric drift detected in {metric_name}",
+                    severity="medium",
+                    risk_score=50,
+                    description=f"Statistical anomaly detected in {metric_name}: z-score {z_score:.2f} exceeds threshold {threshold}",
+                    metadata={
+                        "metric": metric_name,
+                        "current_value": result['value'],
+                        "mean": result.get('mean'),
+                        "std": result.get('std'),
+                        "z_score": z_score,
+                        "history_n": result.get('history_n', 0)
+                    },
+                    category="metric_drift",
+                    tags=["metric_drift"],
+                    rationale=[f"Metric drift detected in {metric_name}: z-score {z_score:.2f} exceeds threshold {threshold}"]
+                )
+
+                # Add to the first scanner result or create a new one
+                if state.report.results:
+                    state.report.results[0].findings.append(drift_finding)
+                    state.report.results[0].finding_count += 1
+                else:
+                    # Create a new scanner result for drift findings
+                    drift_scanner = ScannerResult(
+                        scanner="metric_drift_detector",
+                        finding_count=1,
+                        findings=[drift_finding]
+                    )
+                    state.report.results.append(drift_scanner)
+
+                # Update summary counts
+                if state.report.summary:
+                    state.report.summary.finding_count_total = (state.report.summary.finding_count_total or 0) + 1
+                    state.report.summary.finding_count_emitted = (state.report.summary.finding_count_emitted or 0) + 1
+                    if state.report.summary.severity_counts:
+                        sev = drift_finding.severity
+                        state.report.summary.severity_counts[sev] = state.report.summary.severity_counts.get(sev, 0) + 1
+
+    return state
+
+def process_novelty(state, baseline_path=None):
+    """Process novelty detection by comparing against baseline."""
+    if not state.report or not baseline_path:
+        return state
+
+    import json
+    from pathlib import Path
+
+    baseline_file = Path(baseline_path)
+    known_processes = set()
+
+    # Load existing baseline if it exists
+    if baseline_file.exists():
+        try:
+            with open(baseline_file, 'r') as f:
+                baseline_data = json.load(f)
+                known_processes = set(baseline_data.get('processes', []))
+        except (json.JSONDecodeError, FileNotFoundError):
+            pass
+
+    # Collect current processes
+    current_processes = set()
+    for sr in state.report.results:
+        for finding in sr.findings:
+            if finding.category == 'process':
+                # Extract process name from title or metadata
+                process_name = None
+                if 'process' in finding.metadata:
+                    process_name = finding.metadata['process']
+                elif finding.title:
+                    # Try to extract process name from title
+                    import re
+                    match = re.search(r'Process:?\s*([^\s]+)', finding.title, re.IGNORECASE)
+                    if match:
+                        process_name = match.group(1)
+                    else:
+                        # Use the first word as process name
+                        process_name = finding.title.split()[0]
+
+                if process_name:
+                    current_processes.add(process_name)
+
+    # Tag novel processes
+    for sr in state.report.results:
+        for finding in sr.findings:
+            if finding.category == 'process':
+                process_name = None
+                if 'process' in finding.metadata:
+                    process_name = finding.metadata['process']
+                elif finding.title:
+                    import re
+                    match = re.search(r'Process:?\s*([^\s]+)', finding.title, re.IGNORECASE)
+                    if match:
+                        process_name = match.group(1)
+                    else:
+                        process_name = finding.title.split()[0]
+
+                if process_name and process_name not in known_processes:
+                    if not finding.tags:
+                        finding.tags = []
+                    finding.tags.append('process_novel')
+
+    # Update baseline with current processes
+    baseline_data = {'processes': list(current_processes)}
+    baseline_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(baseline_file, 'w') as f:
+        json.dump(baseline_data, f)
+
+    return state
 
 def reduce(state):
     """Stub function for counterfactual reduction."""
@@ -195,12 +357,26 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     # Summarize
     state = summarize(state)
 
+    # Extract enriched findings (flattened from all scanner results)
+    enriched_findings = []
+    if state.report and state.report.results:
+        for sr in state.report.results:
+            enriched_findings.extend(sr.findings)
+
+    # Calculate integrity (SHA256 of original report)
+    from .integrity import sha256_file
+    integrity = {
+        'sha256_actual': sha256_file(report_path)
+    }
+
     # Build enriched output
     return EnrichedOutput(
         correlations=state.correlations,
         reductions=state.reductions,
         summaries=state.summaries,
-        actions=state.actions
+        actions=state.actions,
+        enriched_findings=enriched_findings,
+        integrity=integrity
     )
 
 

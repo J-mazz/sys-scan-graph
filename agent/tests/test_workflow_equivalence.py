@@ -91,30 +91,33 @@ class TestWorkflowEquivalence:
         normalized = dict(state)  # Convert TypedDict to regular dict
 
         # Remove timing-related fields that will differ
-        metrics = normalized.get('metrics', {}).copy()
-        timing_fields = [k for k in metrics.keys() if k.endswith('_duration') or k.endswith('_time')]
-        for field in timing_fields:
-            metrics.pop(field, None)
-        
-        # Remove timestamp fields
-        if 'node_timestamps' in metrics:
-            del metrics['node_timestamps']
-        if 'start_time_monotonic' in metrics:
-            del metrics['start_time_monotonic']
+        if 'metrics' in normalized and isinstance(normalized['metrics'], dict):
+            metrics = normalized['metrics'].copy()
+            timing_fields = [k for k in metrics.keys() if k.endswith('_duration') or k.endswith('_time')]
+            for field in timing_fields:
+                metrics.pop(field, None)
             
-        # Remove ID fields that are generated per run
-        if 'node_ids' in metrics:
-            del metrics['node_ids']
-        if 'telemetry' in metrics:
-            telemetry = metrics['telemetry'].copy()
-            if 'invocation_id' in telemetry:
-                del telemetry['invocation_id']
-            if 'current_node' in telemetry:
-                del telemetry['current_node']  # This might change during execution
-            metrics['telemetry'] = telemetry
-            
-        if metrics:
+            # Remove timestamp fields
+            if 'node_timestamps' in metrics:
+                del metrics['node_timestamps']
+            if 'start_time_monotonic' in metrics:
+                del metrics['start_time_monotonic']
+                
+            # Remove ID fields that are generated per run
+            if 'node_ids' in metrics:
+                del metrics['node_ids']
+            if 'telemetry' in metrics and isinstance(metrics['telemetry'], dict):
+                telemetry = metrics['telemetry'].copy()
+                if 'invocation_id' in telemetry:
+                    del telemetry['invocation_id']
+                if 'current_node' in telemetry:
+                    del telemetry['current_node']  # This might change during execution
+                metrics['telemetry'] = telemetry
+                
             normalized['metrics'] = metrics
+        elif 'metrics' in normalized:
+            # If metrics exists but is not a dict, remove it
+            del normalized['metrics']
 
         # Remove fields that may be non-deterministic
         fields_to_remove = [
@@ -129,9 +132,9 @@ class TestWorkflowEquivalence:
             normalized.pop(field, None)
 
         # Normalize summary metrics that may vary
-        if 'summary' in normalized:
+        if 'summary' in normalized and isinstance(normalized['summary'], dict):
             summary = normalized['summary']
-            if 'metrics' in summary:
+            if 'metrics' in summary and isinstance(summary['metrics'], dict):
                 summary_metrics = summary['metrics']
                 # Remove timing/latency fields from summary
                 timing_keys = [k for k in summary_metrics.keys() if 'latency' in k.lower() or 'time' in k.lower()]

@@ -18,11 +18,21 @@
 namespace sys_scan {
 
 void MountScanner::scan(ScanContext& context){
+    scan(context, "/proc/mounts");
+}
+
+void MountScanner::scan(ScanContext& context, const std::string& mounts_file){
     const auto& cfg = context.config;
     if(!cfg.hardening) return; // opt-in
 
-    std::ifstream f("/proc/mounts");
-    if(!f.is_open()) { context.report.add_warning(name(), WarnCode::MountsUnreadable, "/proc/mounts"); return; }
+    context.report.start_scanner(name());
+
+    std::ifstream f(mounts_file);
+    if(!f.is_open()) { 
+        context.report.add_warning(name(), WarnCode::MountsUnreadable, mounts_file); 
+        context.report.end_scanner(name());
+        return; 
+    }
     std::string line;
 
     std::unordered_set<std::string> sensitive = {"/", "/home", "/tmp", "/var", "/var/tmp", "/boot", "/efi"};
@@ -30,7 +40,9 @@ void MountScanner::scan(ScanContext& context){
     while(std::getline(f,line)){
         std::istringstream iss(line);
         std::string dev, mountpoint, fstype, opts; int dump, passno; // last two rarely needed
-        if(!(iss>>dev>>mountpoint>>fstype>>opts>>dump>>passno)) continue;
+        if(!(iss>>dev>>mountpoint>>fstype>>opts>>dump>>passno)) {
+            continue;
+        }
 
         // Skip pseudo FS that are rarely security relevant here
         static const std::unordered_set<std::string> skip_fs = {"proc","sysfs","cgroup","cgroup2","debugfs","devpts","mqueue","hugetlbfs","tracefs"};
@@ -63,6 +75,8 @@ void MountScanner::scan(ScanContext& context){
 
         // Missing secure boot style modules restrictions (fs.protected_symlinks etc. outside scope here)
     }
+
+    context.report.end_scanner(name());
 }
 
 }

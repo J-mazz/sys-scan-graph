@@ -622,7 +622,9 @@ void analyze_module_signature(const std::string& path, const std::string& full_p
         }
 
         if (contents.empty()) {
+            // Failed to decompress or no signature found - treat as unsigned
             context.report.add_warning(scanner_name, WarnCode::DecompressFail, path);
+            unsigned_mod = true;
         } else {
             if (contents.find("Module signature appended") == std::string::npos) {
                 unsigned_mod = true;

@@ -234,8 +234,9 @@ class TestBaselineRarity:
 
         result = baseline_rarity(state)
 
-        # Should not crash (baseline_rarity is a stub that returns None)
-        assert result is None
+        # Should return the state (baseline_rarity now implements metric drift detection)
+        assert result is not None
+        assert result is state
 
 
 class TestProcessNovelty:
@@ -249,10 +250,11 @@ class TestProcessNovelty:
         state = load_report(state, sample_report_path)
         state = augment(state)
 
-        result = process_novelty(state)
+        result = process_novelty(state, baseline_path=baseline_path)
 
-        # Should not crash (process_novelty is a stub that returns None)
-        assert result is None
+        # Should return the state (novelty detection implemented)
+        assert result is not None
+        assert result is state  # Should return the same state object
 
 
 class TestSequenceCorrelation:

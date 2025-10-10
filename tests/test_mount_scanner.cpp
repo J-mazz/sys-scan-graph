@@ -19,42 +19,54 @@ protected:
         // Create temporary directory for test files
         char template_path[] = "/tmp/mount_test_XXXXXX";
         temp_dir = mkdtemp(template_path);
-        ASSERT_FALSE(temp_dir.empty());
+        ASSERT_FALSE(temp_dir.empty()) << "Failed to create temp directory";
+        std::cout << "Created temp dir: " << temp_dir << std::endl;
+
+        // Set up default config
+        config_.hardening = true;
     }
 
     void TearDown() override {
         // Clean up temporary directory
-        std::filesystem::remove_all(temp_dir);
+        if (!temp_dir.empty()) {
+            std::filesystem::remove_all(temp_dir);
+        }
     }
 
-    // Helper to create a test /proc/mounts file
-    void create_proc_mounts(const std::string& content) {
-        std::string mounts_path = temp_dir + "/proc_mounts";
-        std::ofstream file(mounts_path);
-        ASSERT_TRUE(file.is_open());
-        file << content;
-        file.close();
-    }
-
-    // Helper to create scan context
+    // Helper to create a test context
     std::unique_ptr<sys_scan::ScanContext> create_context(bool hardening_enabled = true) {
         config_.hardening = hardening_enabled;
         return std::make_unique<sys_scan::ScanContext>(config_, report_);
     }
 
-    // Helper to get findings for a specific scanner
-    std::vector<sys_scan::Finding> get_findings_for_scanner(const sys_scan::Report& report, const std::string& scanner_name) {
-        for (const auto& result : report.results()) {
-            if (result.scanner_name == scanner_name) {
-                return result.findings;
-            }
-        }
-        return {};
+    // Helper to create a temporary mounts file
+    std::string create_mounts_file(const std::string& content) {
+        std::string file_path = temp_dir + "/mounts";
+        std::cout << "Creating mounts file: " << file_path << std::endl;
+        std::ofstream file(file_path);
+        file << content;
+        file.close();
+        std::cout << "Wrote content: " << content << std::endl;
+        return file_path;
     }
 
-    // Helper to find finding by ID
-    sys_scan::Finding* find_finding_by_id(std::vector<sys_scan::Finding>& findings, const std::string& id) {
-        for (auto& finding : findings) {
+    // Helper to get findings for a specific scanner
+    std::vector<sys_scan::Finding> get_findings_for_scanner(
+        const sys_scan::Report& report, const std::string& scanner_name) {
+        std::vector<sys_scan::Finding> findings;
+        for (const auto& result : report.results()) {
+            if (result.scanner_name == scanner_name) {
+                findings.insert(findings.end(), result.findings.begin(), result.findings.end());
+            }
+        }
+        return findings;
+    }
+
+    // Helper to find a finding by ID
+    const sys_scan::Finding* find_finding_by_id(
+        const std::vector<sys_scan::Finding>& findings,
+        const std::string& id) {
+        for (const auto& finding : findings) {
             if (finding.id == id) {
                 return &finding;
             }
@@ -63,174 +75,420 @@ protected:
     }
 };
 
-// Test has_mount_option function
-TEST_F(MountScannerTest, HasMountOption) {
-    // Test exact match
-    EXPECT_TRUE(sys_scan::MountScanner::has_mount_option("noexec", "noexec"));
-    
-    // Test comma-separated options
-    EXPECT_TRUE(sys_scan::MountScanner::has_mount_option("noexec,nosuid,nodev", "noexec"));
-    EXPECT_TRUE(sys_scan::MountScanner::has_mount_option("rw,noexec,nosuid", "noexec"));
-    EXPECT_TRUE(sys_scan::MountScanner::has_mount_option("rw,noexec", "noexec"));
-    
-    // Test missing options
-    EXPECT_FALSE(sys_scan::MountScanner::has_mount_option("rw,nosuid,nodev", "noexec"));
-    EXPECT_FALSE(sys_scan::MountScanner::has_mount_option("exec,noexec_partial", "noexec"));
-    
-    // Test empty string
-    EXPECT_FALSE(sys_scan::MountScanner::has_mount_option("", "noexec"));
-    
-    // Test different options
-    EXPECT_TRUE(sys_scan::MountScanner::has_mount_option("noexec", "noexec"));
-    EXPECT_FALSE(sys_scan::MountScanner::has_mount_option("nosuid", "noexec"));
-}
-
-TEST_F(MountScannerTest, ScanDisabledWhenHardeningDisabled) {
+// Test basic scanner properties
+TEST_F(MountScannerTest, ScannerProperties) {
     sys_scan::MountScanner scanner;
-    auto context = create_context(false);
-
-    scanner.scan(*context);
-
-    // Should not add any findings when hardening is disabled
-    auto findings = get_findings_for_scanner(context->report, scanner.name());
-    EXPECT_EQ(findings.size(), 0);
-}
-
-TEST_F(MountScannerTest, ScanWithEmptyMountsFile) {
-    sys_scan::MountScanner scanner;
-    create_proc_mounts("");
-    auto context = create_context(true);
-
-    // Mock /proc/mounts by temporarily replacing it
-    std::string real_mounts = "/proc/mounts";
-    std::string temp_mounts = temp_dir + "/proc_mounts";
-
-    // Create symlink to our test file
-    if (symlink(temp_mounts.c_str(), (temp_dir + "/mounts").c_str()) == 0) {
-        // This test would require more complex mocking, skip for now
-        // In a real implementation, we'd need to mock the file reading
-    }
-
-    // For now, test that scanner handles missing file gracefully
-    scanner.scan(*context);
-    // Should not crash, may add warning
-}
-
-TEST_F(MountScannerTest, ScanTmpMountMissingNoexec) {
-    sys_scan::MountScanner scanner;
-    // Create a /tmp mount without noexec
-    std::string mounts_content =
-        "/dev/sda1 /tmp ext4 rw,relatime 0 0\n";
-
-    create_proc_mounts(mounts_content);
-    auto context = create_context(true);
-
-    // We can't easily mock /proc/mounts reading, so let's test the logic differently
-    // by creating a minimal test that exercises the core logic
-
-    // For now, test that scanner initializes properly
     EXPECT_EQ(scanner.name(), "mounts");
     EXPECT_EQ(scanner.description(), "Checks mount options and surfaces risky configurations");
 }
 
-TEST_F(MountScannerTest, ScanTmpMountMissingNosuid) {
+// Test scanner is disabled when hardening is disabled
+TEST_F(MountScannerTest, ScanDisabledWhenHardeningDisabled) {
+    auto context = create_context(false);
     sys_scan::MountScanner scanner;
-    auto context = create_context(true);
 
-    // Test scanner initialization
-    EXPECT_EQ(scanner.name(), "mounts");
+    scanner.scan(*context);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    EXPECT_TRUE(findings.empty());
 }
 
+// Test /tmp mount missing noexec
+TEST_F(MountScannerTest, ScanTmpMountMissingNoexec) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /tmp ext4 rw,nosuid,nodev,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 1); // Should find tmp-noexec-missing
+
+    const auto* noexec_finding = find_finding_by_id(findings, "mount:tmp-noexec-missing:/tmp");
+    ASSERT_NE(noexec_finding, nullptr);
+    EXPECT_EQ(noexec_finding->metadata.at("mount"), "/tmp");
+    EXPECT_EQ(noexec_finding->metadata.at("device"), "/dev/sda1");
+    EXPECT_EQ(noexec_finding->severity, sys_scan::Severity::Medium);
+    EXPECT_EQ(noexec_finding->title, "/tmp style mount missing noexec");
+}
+
+// Test secure /tmp mount (all options present)
+TEST_F(MountScannerTest, ScanSecureTmpMount) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /tmp ext4 rw,noexec,nosuid,nodev,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 0); // Should find no issues
+}
+
+// Test /home mount missing options
+TEST_F(MountScannerTest, ScanHomeMountMissingOptions) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda2 /home ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 2); // Should find sensitive-nosuid, sensitive-nodev
+
+    const auto* nosuid_finding = find_finding_by_id(findings, "mount:sensitive-nosuid-missing:/home");
+    ASSERT_NE(nosuid_finding, nullptr);
+    EXPECT_EQ(nosuid_finding->metadata.at("mount"), "/home");
+    EXPECT_EQ(nosuid_finding->metadata.at("device"), "/dev/sda2");
+    EXPECT_EQ(nosuid_finding->severity, sys_scan::Severity::Low);
+    EXPECT_EQ(nosuid_finding->title, "Sensitive mount missing nosuid");
+}
+
+// Test /tmp mount missing nodev
 TEST_F(MountScannerTest, ScanTmpMountMissingNodev) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda1 /tmp ext4 rw,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 4); // Should find tmp-nosuid, tmp-nodev, sensitive-nosuid, sensitive-nodev
+
+    const auto* nodev_finding = find_finding_by_id(findings, "mount:tmp-nodev-missing:/tmp");
+    ASSERT_NE(nodev_finding, nullptr);
+    EXPECT_EQ(nodev_finding->metadata.at("mount"), "/tmp");
+    EXPECT_EQ(nodev_finding->metadata.at("device"), "/dev/sda1");
+    EXPECT_EQ(nodev_finding->severity, sys_scan::Severity::Low);
+    EXPECT_EQ(nodev_finding->title, "/tmp style mount missing nodev");
 }
 
-TEST_F(MountScannerTest, ScanSensitiveMountMissingNosuid) {
-    sys_scan::MountScanner scanner;
+// Test /tmp mount missing nosuid
+TEST_F(MountScannerTest, ScanTmpMountMissingNosuid) {
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda1 /tmp ext4 rw,noexec,nodev,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 2); // Should find tmp-nosuid, sensitive-nosuid
+
+    const auto* nosuid_finding = find_finding_by_id(findings, "mount:tmp-nosuid-missing:/tmp");
+    ASSERT_NE(nosuid_finding, nullptr);
+    EXPECT_EQ(nosuid_finding->metadata.at("mount"), "/tmp");
+    EXPECT_EQ(nosuid_finding->metadata.at("device"), "/dev/sda1");
+    EXPECT_EQ(nosuid_finding->severity, sys_scan::Severity::Medium);
+    EXPECT_EQ(nosuid_finding->title, "/tmp style mount missing nosuid");
 }
 
-TEST_F(MountScannerTest, ScanSensitiveMountMissingNodev) {
-    sys_scan::MountScanner scanner;
-    auto context = create_context(true);
-
-    EXPECT_EQ(scanner.name(), "mounts");
-}
-
+// Test /home mount with exec (should find issue)
 TEST_F(MountScannerTest, ScanHomeMountWithExec) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda3 /home ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 2); // Should find missing nosuid and nodev
+
+    const auto* nosuid_finding = find_finding_by_id(findings, "mount:sensitive-nosuid-missing:/home");
+    ASSERT_NE(nosuid_finding, nullptr);
+    EXPECT_EQ(nosuid_finding->severity, sys_scan::Severity::Low);
+    EXPECT_EQ(nosuid_finding->title, "Sensitive mount missing nosuid");
+
+    const auto* nodev_finding = find_finding_by_id(findings, "mount:sensitive-nodev-missing:/home");
+    ASSERT_NE(nodev_finding, nullptr);
+    EXPECT_EQ(nodev_finding->severity, sys_scan::Severity::Low);
+    EXPECT_EQ(nodev_finding->title, "Sensitive mount missing nodev");
 }
 
-TEST_F(MountScannerTest, ScanBindMountGeneric) {
-    sys_scan::MountScanner scanner;
-    auto context = create_context(true);
-
-    EXPECT_EQ(scanner.name(), "mounts");
-}
-
-TEST_F(MountScannerTest, ScanSkipsPseudoFilesystems) {
-    sys_scan::MountScanner scanner;
-    auto context = create_context(true);
-
-    // Test that scanner handles pseudo filesystems correctly
-    EXPECT_EQ(scanner.name(), "mounts");
-}
-
-TEST_F(MountScannerTest, ScanMultipleMounts) {
-    sys_scan::MountScanner scanner;
-    auto context = create_context(true);
-
-    EXPECT_EQ(scanner.name(), "mounts");
-}
-
+// Test /home subdirectory mount
 TEST_F(MountScannerTest, ScanHomeSubdirectory) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda3 /home/user ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 2); // Should find missing nosuid and nodev
+
+    const auto* nosuid_finding = find_finding_by_id(findings, "mount:sensitive-nosuid-missing:/home/user");
+    ASSERT_NE(nosuid_finding, nullptr);
+    EXPECT_EQ(nosuid_finding->severity, sys_scan::Severity::Low);
 }
 
+// Test bind mount generic
+TEST_F(MountScannerTest, ScanBindMountGeneric) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/mnt/source /mnt/data ext4 rw,bind,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 1);
+
+    const auto* bind_finding = find_finding_by_id(findings, "mount:bind-generic:/mnt/data");
+    ASSERT_NE(bind_finding, nullptr);
+    EXPECT_EQ(bind_finding->severity, sys_scan::Severity::Info);
+    EXPECT_EQ(bind_finding->title, "Bind mount present");
+}
+
+// Test skips pseudo filesystems
+TEST_F(MountScannerTest, ScanSkipsPseudoFilesystems) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content =
+        "proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n"
+        "sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0\n"
+        "/dev/sda1 /tmp ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    // Should only find /tmp issues, not proc/sysfs
+    ASSERT_EQ(findings.size(), 5); // tmp-noexec, tmp-nosuid, tmp-nodev, sensitive-nosuid, sensitive-nodev for /tmp
+}
+
+// Test multiple mounts
+TEST_F(MountScannerTest, ScanMultipleMounts) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content =
+        "/dev/sda1 /tmp ext4 rw,relatime 0 0\n"
+        "/dev/sda2 /var/tmp ext4 rw,relatime 0 0\n"
+        "/dev/sda3 /home ext4 rw,nosuid,nodev,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 10); // 5 issues for /tmp + 5 issues for /var/tmp
+}
+
+// Test /boot mount with nodev
 TEST_F(MountScannerTest, ScanBootMountWithNodev) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda1 /boot ext4 rw,nosuid,nodev,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    // /boot should only check for nosuid, not nodev/noexec, and nosuid is present
+    ASSERT_EQ(findings.size(), 0);
 }
 
+// Test /boot mount missing nosuid
+TEST_F(MountScannerTest, ScanBootMountMissingNosuid) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /boot ext4 rw,nodev,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 1);
+
+    const auto* nosuid_finding = find_finding_by_id(findings, "mount:sensitive-nosuid-missing:/boot");
+    ASSERT_NE(nosuid_finding, nullptr);
+    EXPECT_EQ(nosuid_finding->severity, sys_scan::Severity::Low);
+}
+
+// Test /var/tmp mount missing noexec
 TEST_F(MountScannerTest, ScanVarTmpMount) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda2 /var/tmp ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 5); // tmp-noexec, tmp-nosuid, tmp-nodev, sensitive-nosuid, sensitive-nodev
+
+    const auto* noexec_finding = find_finding_by_id(findings, "mount:tmp-noexec-missing:/var/tmp");
+    ASSERT_NE(noexec_finding, nullptr);
+    EXPECT_EQ(noexec_finding->metadata.at("mount"), "/var/tmp");
+    EXPECT_EQ(noexec_finding->severity, sys_scan::Severity::Medium);
 }
 
+// Test /home mount missing nosuid
+TEST_F(MountScannerTest, ScanSensitiveMountMissingNosuid) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda3 /home ext4 rw,nodev,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 1);
+
+    const auto* nosuid_finding = find_finding_by_id(findings, "mount:sensitive-nosuid-missing:/home");
+    ASSERT_NE(nosuid_finding, nullptr);
+    EXPECT_EQ(nosuid_finding->severity, sys_scan::Severity::Low);
+    EXPECT_EQ(nosuid_finding->title, "Sensitive mount missing nosuid");
+}
+
+// Test /home mount missing nodev
+TEST_F(MountScannerTest, ScanSensitiveMountMissingNodev) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda3 /home ext4 rw,nosuid,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 1);
+
+    const auto* nodev_finding = find_finding_by_id(findings, "mount:sensitive-nodev-missing:/home");
+    ASSERT_NE(nodev_finding, nullptr);
+    EXPECT_EQ(nodev_finding->severity, sys_scan::Severity::Low);
+    EXPECT_EQ(nodev_finding->title, "Sensitive mount missing nodev");
+}
+
+// Test /tmp mount with all required options
+TEST_F(MountScannerTest, ScanTmpMountWithAllOptions) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /tmp ext4 rw,noexec,nodev,nosuid,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    EXPECT_TRUE(findings.empty()); // Should have no findings
+}
+
+// Test /home mount with all required options
+TEST_F(MountScannerTest, ScanHomeMountWithAllOptions) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda3 /home ext4 rw,nosuid,nodev,noexec,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    EXPECT_TRUE(findings.empty()); // Should have no findings
+}
+
+// Test root mount (should be ignored)
 TEST_F(MountScannerTest, ScanRootMount) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda1 / ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    EXPECT_TRUE(findings.empty()); // Root mount should be ignored
 }
 
+// Test malformed mount line
 TEST_F(MountScannerTest, ScanWithMalformedMountLine) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "malformed line\n/dev/sda1 /tmp ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    // Should still process the valid line
+    ASSERT_EQ(findings.size(), 5); // tmp-noexec, tmp-nosuid, tmp-nodev, sensitive-nosuid, sensitive-nodev for /tmp
 }
 
+// Test incomplete mount line
 TEST_F(MountScannerTest, ScanWithIncompleteMountLine) {
-    sys_scan::MountScanner scanner;
     auto context = create_context(true);
+    sys_scan::MountScanner scanner;
 
-    EXPECT_EQ(scanner.name(), "mounts");
+    std::string mounts_content = "/dev/sda1\n/dev/sda1 /tmp ext4 rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    // Should still process the valid line
+    ASSERT_EQ(findings.size(), 5); // tmp-noexec, tmp-nosuid, tmp-nodev, sensitive-nosuid, sensitive-nodev for /tmp
+}
+
+// Test unsupported filesystem (should still check mount options)
+TEST_F(MountScannerTest, ScanWithUnsupportedFilesystem) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /tmp unknown_fs rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 3); // Should still check tmp mount options but not sensitive checks for unknown fs
+}
+
+// Test XFS filesystem
+TEST_F(MountScannerTest, ScanWithXfsFilesystem) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /tmp xfs rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 5); // Should check mount options for XFS tmp
+}
+
+// Test Btrfs filesystem
+TEST_F(MountScannerTest, ScanWithBtrfsFilesystem) {
+    auto context = create_context(true);
+    sys_scan::MountScanner scanner;
+
+    std::string mounts_content = "/dev/sda1 /tmp btrfs rw,relatime 0 0\n";
+    std::string mounts_file = create_mounts_file(mounts_content);
+
+    scanner.scan(*context, mounts_file);
+
+    auto findings = get_findings_for_scanner(context->report, scanner.name());
+    ASSERT_EQ(findings.size(), 5); // Should check mount options for Btrfs tmp
 }
 
 int main(int argc, char **argv) {

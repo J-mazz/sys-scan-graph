@@ -255,17 +255,6 @@ def render(output: models.EnrichedOutput) -> str:
         else:
             prob_fmt = "0.00"
         rows.append(f"<div class='finding {sev}'><strong>{html.escape(f.title or f.id)}</strong> <span class='badge sev-{sev}'>{sev}</span> risk={f.risk_total or f.risk_score} prob={prob_fmt} {tags}{rationale}</div>")
-        sev = (f.severity or 'info').lower()
-        tags = ''.join(f'<span class="badge">{html.escape(t)}</span>' for t in (f.tags or [])[:12])
-        rationale = ''
-        if f.rationale:
-            rationale = '<ul>' + ''.join(f'<li>{html.escape(r)}</li>' for r in f.rationale[:6]) + '</ul>'
-        # Format probability defensively (older models may not set it)
-        if f.probability_actionable is not None:
-            prob_fmt = f"{f.probability_actionable:.2f}"
-        else:
-            prob_fmt = "0.00"
-        rows.append(f"<div class='finding {sev}'><strong>{html.escape(f.title or f.id)}</strong> <span class='badge sev-{sev}'>{sev}</span> risk={f.risk_total or f.risk_score} prob={prob_fmt} {tags}{rationale}</div>")
     corr_rows = []
     for c in corrs[:120]:
         corr_rows.append(f"<div class='finding'><strong>{html.escape(c.title)}</strong> <small>{len(c.related_finding_ids)} findings</small><br>{html.escape(c.rationale or '')}</div>")

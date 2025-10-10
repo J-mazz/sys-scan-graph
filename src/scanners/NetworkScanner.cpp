@@ -36,20 +36,22 @@ namespace fs = std::filesystem;
 
 namespace sys_scan {
 
-// Lean network scanning constants
-static const size_t MAX_SOCKETS_LEAN = 1000;
-static const size_t MAX_PATH_LEN_LEAN = 512;  // Increased from 256 for better path handling
-static const size_t MAX_INODE_LEN_LEAN = 32;  // Increased from 16 for better safety margin
+// Export internal functions for testing
+#ifdef BUILD_TESTS
+#define EXPORT_FOR_TEST
+#else
+#define EXPORT_FOR_TEST static
+#endif
 
 // Forward declarations for helper functions
-static const char* tcp_state_lean(const char* st);
-static bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size);
-static bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_size);
-static size_t find_inode_lean(const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], size_t count, const char* inode);
-static bool state_allowed_lean(const char* st, const Config& config);
-static Severity classify_tcp_severity_lean(const char* state, unsigned port, const char* exe);
-static Severity classify_udp_severity_lean(unsigned port, const char* exe);
-static Severity escalate_exposed_lean(Severity current, const char* state, const char* lip);
+EXPORT_FOR_TEST const char* tcp_state_lean(const char* st);
+EXPORT_FOR_TEST bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size);
+EXPORT_FOR_TEST bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_size);
+EXPORT_FOR_TEST size_t find_inode_lean(const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], size_t count, const char* inode);
+EXPORT_FOR_TEST bool state_allowed_lean(const char* st, const Config& config);
+EXPORT_FOR_TEST Severity classify_tcp_severity_lean(const char* state, unsigned port, const char* exe);
+EXPORT_FOR_TEST Severity classify_udp_severity_lean(unsigned port, const char* exe);
+EXPORT_FOR_TEST Severity escalate_exposed_lean(Severity current, const char* state, const char* lip);
 
 // Fanout aggregation struct
 struct FanoutAgg { size_t total=0; std::unordered_set<std::string> remote_ips; unsigned privileged_listen=0; unsigned wildcard_listen=0; };
@@ -262,8 +264,9 @@ static void parse_proc_net_file(const char* path, Report& report, const char* pr
 }
 
 // State filtering with case-insensitive comparison
-static bool state_allowed_lean(const char* st, const Config& config) {
+EXPORT_FOR_TEST bool state_allowed_lean(const char* st, const Config& config) {
     if (config.network_states.empty()) return true;
+    if (!st) return false;  // NULL state not allowed when config has states
     for (const auto& allowed : config.network_states) {
         // Case-insensitive comparison for state filtering
         if (strcasecmp(st, allowed.c_str()) == 0) return true;
@@ -284,7 +287,7 @@ static bool has_container_marker(const char* ptr, const char* end, const char* c
 }
 
 // Check if string of given length is all hex digits
-static bool is_valid_hex_string(const char* ptr, size_t len, const char* end) {
+EXPORT_FOR_TEST bool is_valid_hex_string(const char* ptr, size_t len, const char* end) {
     if (ptr + len > end) return false;
     for (size_t i = 0; i < len; ++i) {
         if (!isxdigit(ptr[i])) return false;
@@ -294,6 +297,11 @@ static bool is_valid_hex_string(const char* ptr, size_t len, const char* end) {
 
 // Extract container ID from position if valid hex string found
 static bool extract_container_id_from_position(const char* ptr, const char* end, char* out_id, size_t out_size) {
+    // Skip past any marker (find the first hex digit after non-hex)
+    while (ptr < end && !isxdigit(*ptr)) {
+        ++ptr;
+    }
+    
     // Check for 64-char hex string first (full container ID)
     if (is_valid_hex_string(ptr, 64, end)) {
         memcpy(out_id, ptr, 12);
@@ -312,19 +320,19 @@ static bool extract_container_id_from_position(const char* ptr, const char* end,
 }
 
 // Extract container ID from cgroup data (lean version)
-static bool extract_container_id_lean(const char* cgroup_data, size_t len, char* out_id, size_t out_size) {
-    if (out_size < 13) return false;  // Need at least 12 chars + null
+EXPORT_FOR_TEST bool extract_container_id_lean(const char* cgroup_data, size_t len, char* out_id, size_t out_size) {
+    if (!cgroup_data || out_size < 13) return false;  // Need at least 12 chars + null
 
     const char* ptr = cgroup_data;
     const char* end = cgroup_data + len;
 
     // Known container runtime markers for stricter parsing
     static const char* markers[] = {
-        "docker-", "containerd-", "crio-", "podman-", "lxc-", "kubepods"
+        "/docker/", "/kubepods/", "/crio/", "/libpod_parent/", "/lxc/"
     };
     static const size_t marker_count = sizeof(markers) / sizeof(markers[0]);
 
-    while (ptr < end - 32) {  // Need at least 32 chars for shortest valid ID
+    while (ptr <= end - 32) {  // Need at least 32 chars for shortest valid ID
         // Check for known container runtime markers first
         if (!has_container_marker(ptr, end, markers, marker_count) && !isxdigit(*ptr)) {
             ++ptr;
@@ -342,7 +350,7 @@ static bool extract_container_id_lean(const char* cgroup_data, size_t len, char*
 }
 
 // Fast PID validation
-static inline bool is_valid_pid(const char* str, int* pid_out = nullptr) {
+EXPORT_FOR_TEST bool is_valid_pid(const char* str, int* pid_out = nullptr) {
     if (!str || !*str) return false;
     char* endptr;
     long val = strtol(str, &endptr, 10);
@@ -506,8 +514,16 @@ static size_t build_inode_map_lean(char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LE
 }
 
 // Ultra-fast hex IP conversion (no string allocations)
-static bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size) {
-    if (!hex_ip || strlen(hex_ip) < 8 || out_size < 16) return false;
+EXPORT_FOR_TEST bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size) {
+    if (!hex_ip || !out_ip || out_size < 16) return false;
+    
+    size_t len = strlen(hex_ip);
+    if (len < 8) return false;
+
+    // Validate all characters are hex digits
+    for (size_t i = 0; i < 8; ++i) {
+        if (!isxdigit(hex_ip[i])) return false;
+    }
 
     unsigned int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
     char byte_str[3] = {0};
@@ -522,8 +538,16 @@ static bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size)
     return true;
 }
 
-static bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_size) {
-    if (!hex_ip || strlen(hex_ip) < 32 || out_size < 40) return false;
+EXPORT_FOR_TEST bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_size) {
+    if (!hex_ip || !out_ip || out_size < 40) return false;
+    
+    size_t len = strlen(hex_ip);
+    if (len < 32) return false;
+
+    // Validate all characters are hex digits
+    for (size_t i = 0; i < 32; ++i) {
+        if (!isxdigit(hex_ip[i])) return false;
+    }
 
     char* out = out_ip;
     for (int i = 0; i < 8; ++i) {
@@ -531,6 +555,8 @@ static bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_siz
             *out++ = ':';
             if (out - out_ip >= (ssize_t)out_size) return false;
         }
+        // IPv6 addresses in /proc/net are in network byte order (big-endian)
+        // Each 16-bit segment is stored as 4 hex chars in big-endian order
         memcpy(out, hex_ip + i * 4, 4);
         out += 4;
         if (out - out_ip >= (ssize_t)out_size) return false;
@@ -540,7 +566,9 @@ static bool hex_ip6_to_str_lean(const char* hex_ip, char* out_ip, size_t out_siz
 }
 
 // Ultra-fast TCP state lookup
-static const char* tcp_state_lean(const char* st) {
+EXPORT_FOR_TEST const char* tcp_state_lean(const char* st) {
+    if (!st) return nullptr;
+
     static const struct { const char* hex; const char* name; } states[] = {
         {"01", "ESTABLISHED"}, {"02", "SYN_SENT"}, {"03", "SYN_RECV"},
         {"04", "FIN_WAIT1"}, {"05", "FIN_WAIT2"}, {"06", "TIME_WAIT"},
@@ -580,14 +608,14 @@ static Severity classify_listen_port_severity(unsigned port) {
 }
 
 // Ultra-fast severity classification for TCP
-static Severity classify_tcp_severity_lean(const char* state, unsigned port, const char* exe) {
+EXPORT_FOR_TEST Severity classify_tcp_severity_lean(const char* state, unsigned port, const char* exe) {
     if (strcmp(state, "LISTEN") == 0) {
         return classify_listen_port_severity(port);
     }
     return Severity::Info;
 }
 
-static Severity classify_udp_severity_lean(unsigned port, const char* exe) {
+EXPORT_FOR_TEST Severity classify_udp_severity_lean(unsigned port, const char* exe) {
     // DNS is common and low-risk
     if (port == 53) return Severity::Low;
 
@@ -604,8 +632,9 @@ static Severity classify_udp_severity_lean(unsigned port, const char* exe) {
 }
 
 // Ultra-fast escalation for exposed listeners
-static Severity escalate_exposed_lean(Severity current, const char* state, const char* lip) {
-    if (strcmp(state, "LISTEN") != 0) return current;
+EXPORT_FOR_TEST Severity escalate_exposed_lean(Severity current, const char* state, const char* lip) {
+    if (!state || strcmp(state, "LISTEN") != 0) return current;
+    if (!lip) return current;  // Can't check loopback without lip
 
     // Check for loopback addresses
     if (strncmp(lip, "127.", 4) == 0 ||
@@ -628,7 +657,8 @@ static Severity escalate_exposed_lean(Severity current, const char* state, const
 }
 
 // Ultra-fast inode lookup in lean arrays
-static size_t find_inode_lean(const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], size_t count, const char* inode) {
+EXPORT_FOR_TEST size_t find_inode_lean(const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], size_t count, const char* inode) {
+    if (!inode || !inode_map) return SIZE_MAX;
     for (size_t i = 0; i < count; ++i) {
         if (strcmp(inode_map[i], inode) == 0) {
             return i;
