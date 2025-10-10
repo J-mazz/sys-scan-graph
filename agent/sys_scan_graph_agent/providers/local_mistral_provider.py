@@ -67,16 +67,17 @@ class LocalMistralLLMProvider:
         """Get the default path to the packaged LoRA model."""
         # The fine-tuned LoRA model is in the mistral-security-lora directory
         import sys_scan_graph_agent
-        package_dir = Path(sys_scan_graph_agent.__file__).parent.parent
+        package_dir = Path(sys_scan_graph_agent.__file__).parent
         model_dir = package_dir / "mistral-security-lora"
         return str(model_dir)
 
     def _load_lora_adapter(self, adapter_path: Path):
         """Load LoRA adapter, reassembling shards if necessary.
         
-        Supports both:
+        Supports multiple formats:
         - Monolithic: adapter_model.safetensors (161MB)
-        - Sharded: adapter_model_01_of_04.safetensors, etc. (4x40MB)
+        - Split parts: adapter_part1.safetensors, adapter_part2.safetensors, etc. (packaged format)
+        - Sharded: adapter_model_01_of_04.safetensors, etc. (legacy sharded format)
         """
         from safetensors import safe_open
         from safetensors.torch import save_file
@@ -88,7 +89,27 @@ class LocalMistralLLMProvider:
         if monolithic_file.exists():
             return str(adapter_path)
         
-        # Check for sharded adapter (Debian package)
+        # Check for split parts (new packaged format: adapter_part1.safetensors, etc.)
+        split_parts = sorted(adapter_path.glob("adapter_part*.safetensors"))
+        if split_parts:
+            print(f"✓ Found {len(split_parts)} split LoRA parts, reassembling...")
+            
+            # Load all parts and combine
+            combined_tensors = {}
+            for part_file in split_parts:
+                print(f"  Loading {part_file.name}...")
+                with safe_open(str(part_file), framework='pt') as f:
+                    for key in f.keys():
+                        combined_tensors[key] = f.get_tensor(key)
+            
+            # Save reassembled adapter to cache
+            cache_file = adapter_path / "adapter_model.safetensors"
+            save_file(combined_tensors, str(cache_file))
+            print(f"✓ Reassembled {len(combined_tensors)} tensors -> {cache_file.name}")
+            
+            return str(adapter_path)
+        
+        # Check for sharded adapter (legacy Debian package format)
         if shards_dir.exists():
             shard_files = sorted(shards_dir.glob("adapter_model_*_of_*.safetensors"))
             if shard_files:
@@ -108,7 +129,7 @@ class LocalMistralLLMProvider:
                 
                 return str(adapter_path)
         
-        raise FileNotFoundError(f"No LoRA adapter found at {adapter_path} (neither monolithic nor sharded)")
+        raise FileNotFoundError(f"No LoRA adapter found at {adapter_path} (neither monolithic, split parts, nor sharded)")
 
     def _load_model(self):
         """Load the base model and LoRA adapters for zero-trust analysis."""
