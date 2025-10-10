@@ -7,6 +7,7 @@ in the monolithic pipeline.py file. It imports from the new modular components.
 
 from pathlib import Path
 from typing import List
+import os
 from . import models
 from .loader import load_report
 from .enricher import augment
@@ -27,7 +28,7 @@ def baseline_rarity(state, baseline_path=None):
 
     from .baseline import BaselineStore
     from .config import load_config
-    import os, hashlib
+    import hashlib
 
     # Get baseline DB path
     if baseline_path is None:
@@ -191,7 +192,7 @@ def process_novelty(state, baseline_path=None):
 def reduce(state):
     """Stub function for counterfactual reduction."""
     # TODO: Implement counterfactual reduction logic if needed
-    pass
+    return state
 
 AgentState = models.AgentState
 EnrichedOutput = models.EnrichedOutput

@@ -37,8 +37,8 @@ def test_counterfactual_and_novelty(tmp_path):
     st = load_report(st, p)
     st = augment(st)
     st = correlate(st)
-    st = baseline_rarity(st, baseline_path=tmp_path/'db.sqlite')
-    st = process_novelty(st, baseline_path=tmp_path/'db.sqlite')
+    st = baseline_rarity(st, baseline_path=tmp_path/'baseline.db')
+    st = process_novelty(st, baseline_path=tmp_path/'novelty.json')
     # Ensure novelty detection fires
     assert st.report and st.report.results
     novel = [f for r in st.report.results for f in r.findings if 'process_novel' in f.tags]
