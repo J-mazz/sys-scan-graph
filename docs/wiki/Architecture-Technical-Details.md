@@ -1,4 +1,3 @@
-<!-- REWRITTEN ARCHITECTURE (2025) -->
 # Architecture Overview
 
 **sys-scan-graph** combines a high-performance C++20 scanning engine with an AI-powered intelligence layer to deliver comprehensive Linux system security analysis. The architecture emphasizes determinism, type safety, and zero-trust principles.

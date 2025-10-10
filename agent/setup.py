@@ -59,9 +59,12 @@ setup(
     include_package_data=True,
     package_data={
         'sys_scan_graph_agent': [
-            'models/mistral-security-scanner/*',
-            'models/mistral-security-scanner/*.safetensors',
-            'models/mistral-security-scanner/*.json',
+            'mistral-security-lora/*.safetensors',
+            'mistral-security-lora/*.json',
+            'mistral-security-lora/*.model',
+            'mistral-security-lora/*.jinja',
+            'mistral-security-lora/special_tokens_map.json',
+            'mistral-security-lora/tokenizer_config.json',
         ],
     },
     install_requires=read_requirements(),
