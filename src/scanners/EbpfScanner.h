@@ -14,6 +14,12 @@
 #include <optional>
 #include <string>
 
+#ifdef BUILD_TESTS
+#define EXPORT_FOR_TEST
+#else
+#define EXPORT_FOR_TEST
+#endif
+
 namespace sys_scan {
 
 // Forward declaration to avoid circular includes
@@ -27,7 +33,7 @@ public:
 
 private:
     // Runtime eBPF feature detection
-    bool is_ebpf_available() const;
+    EXPORT_FOR_TEST bool is_ebpf_available() const;
 
     // Alternative detection structures
     struct ProcessInfo {
@@ -39,8 +45,8 @@ private:
 
     // Alternative detection methods
     void scan_proc_filesystem(ScanContext& context, int duration);
-    std::optional<std::set<pid_t>> get_running_pids();
-    std::optional<ProcessInfo> get_process_info(pid_t pid);
+    EXPORT_FOR_TEST std::optional<std::set<pid_t>> get_running_pids();
+    EXPORT_FOR_TEST std::optional<ProcessInfo> get_process_info(pid_t pid);
 };
 
 // Factory

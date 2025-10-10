@@ -282,6 +282,307 @@ TEST_F(JSONWriterTest, MetaInformation) {
     EXPECT_EQ(parsed["meta"]["json_schema_version"], "2");
 }
 
+TEST_F(JSONWriterTest, SarifOutput) {
+    Config sarif_config = config;
+    sarif_config.sarif = true;
+    sarif_config.min_severity = "medium";
+
+    // Add findings with different severities and MITRE techniques
+    ScanResult result;
+    result.scanner_name = "sarif_test";
+
+    Finding low_finding;
+    low_finding.id = "LOW-001";
+    low_finding.title = "Low severity finding";
+    low_finding.severity = Severity::Low;
+    low_finding.base_severity_score = 2;
+    result.findings.push_back(low_finding);
+
+    Finding medium_finding;
+    medium_finding.id = "MEDIUM-001";
+    medium_finding.title = "Medium severity finding";
+    medium_finding.description = "This is a medium finding";
+    medium_finding.severity = Severity::Medium;
+    medium_finding.base_severity_score = 5;
+    medium_finding.metadata["mitre_techniques"] = "T1059,T1071";
+    result.findings.push_back(medium_finding);
+
+    Finding high_finding;
+    high_finding.id = "HIGH-001";
+    high_finding.title = "High severity finding";
+    high_finding.description = "This is a high finding";
+    high_finding.severity = Severity::High;
+    high_finding.base_severity_score = 8;
+    result.findings.push_back(high_finding);
+
+    report.add_result(std::move(result));
+
+    std::string sarif_output = writer.write(report, sarif_config);
+
+    // Should produce valid JSON
+    nlohmann::json parsed = nlohmann::json::parse(sarif_output);
+
+    // Check SARIF structure
+    EXPECT_EQ(parsed["$schema"], "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json");
+    EXPECT_EQ(parsed["version"], "2.1.0");
+    EXPECT_TRUE(parsed.contains("runs"));
+    EXPECT_EQ(parsed["runs"].size(), 1);
+
+    auto& run = parsed["runs"][0];
+    EXPECT_TRUE(run.contains("tool"));
+    EXPECT_EQ(run["tool"]["driver"]["name"], "sys-scan");
+    EXPECT_EQ(run["tool"]["driver"]["informationUri"], "https://github.com/J-mazz/sys-scan");
+
+    // Should only include medium and high severity findings (low is filtered out)
+    EXPECT_TRUE(run.contains("results"));
+    EXPECT_EQ(run["results"].size(), 2);
+
+    // Check first result (medium severity)
+    auto& result1 = run["results"][0];
+    EXPECT_EQ(result1["ruleId"], "MEDIUM-001");
+    EXPECT_EQ(result1["level"], "medium");
+    EXPECT_TRUE(result1.contains("message"));
+    EXPECT_TRUE(result1["message"].contains("text"));
+    EXPECT_THAT(result1["message"]["text"], ::testing::HasSubstr("Medium severity finding"));
+    EXPECT_THAT(result1["message"]["text"], ::testing::HasSubstr("This is a medium finding"));
+    EXPECT_EQ(result1["properties"]["baseSeverityScore"], 5);
+    EXPECT_TRUE(result1["properties"].contains("mitreTechniqueIds"));
+    EXPECT_EQ(result1["properties"]["mitreTechniqueIds"].size(), 2);
+    EXPECT_EQ(result1["properties"]["mitreTechniqueIds"][0], "T1059");
+    EXPECT_EQ(result1["properties"]["mitreTechniqueIds"][1], "T1071");
+
+    // Check second result (high severity)
+    auto& result2 = run["results"][1];
+    EXPECT_EQ(result2["ruleId"], "HIGH-001");
+    EXPECT_EQ(result2["level"], "high");
+    EXPECT_EQ(result2["properties"]["baseSeverityScore"], 8);
+    EXPECT_FALSE(result2["properties"].contains("mitreTechniqueIds")); // No MITRE techniques
+}
+
+TEST_F(JSONWriterTest, NdjsonOutput) {
+    Config ndjson_config = config;
+    ndjson_config.ndjson = true;
+    ndjson_config.timings = true;
+    ndjson_config.min_severity = "medium";
+
+    // Add test data
+    ScanResult result1;
+    result1.scanner_name = "ndjson_scanner1";
+    result1.start_time = std::chrono::system_clock::now();
+    result1.end_time = result1.start_time + std::chrono::milliseconds(150);
+
+    Finding finding1;
+    finding1.id = "NDJSON-001";
+    finding1.title = "NDJSON Test Finding";
+    finding1.severity = Severity::High;
+    finding1.base_severity_score = 8;
+    finding1.metadata["mitre_techniques"] = "T1001,T1002";
+    result1.findings.push_back(finding1);
+
+    ScanResult result2;
+    result2.scanner_name = "ndjson_scanner2";
+    result2.start_time = std::chrono::system_clock::now();
+    result2.end_time = result2.start_time + std::chrono::milliseconds(200);
+
+    Finding finding2;
+    finding2.id = "NDJSON-002";
+    finding2.title = "Another NDJSON Finding";
+    finding2.severity = Severity::Medium;
+    finding2.base_severity_score = 5;
+    result2.findings.push_back(finding2);
+
+    // Low severity finding that should be filtered out
+    Finding finding3;
+    finding3.id = "NDJSON-003";
+    finding3.title = "Low severity finding";
+    finding3.severity = Severity::Low;
+    finding3.base_severity_score = 2;
+    result2.findings.push_back(finding3);
+
+    report.add_result(std::move(result1));
+    report.add_result(std::move(result2));
+
+    std::string ndjson_output = writer.write(report, ndjson_config);
+
+    // Split into lines
+    std::vector<std::string> lines;
+    std::istringstream iss(ndjson_output);
+    std::string line;
+    while (std::getline(iss, line)) {
+        if (!line.empty()) {
+            lines.push_back(line);
+        }
+    }
+
+    // Should have: meta, summary, 2 timing lines, summary_extension, 2 finding lines = 7 lines
+    EXPECT_EQ(lines.size(), 7);
+
+    // Parse each line as JSON
+    std::vector<nlohmann::json> parsed_lines;
+    for (const auto& l : lines) {
+        parsed_lines.push_back(nlohmann::json::parse(l));
+    }
+
+    // Check meta line
+    EXPECT_EQ(parsed_lines[0]["type"], "meta");
+    EXPECT_TRUE(parsed_lines[0].contains("tool_version"));
+    EXPECT_EQ(parsed_lines[0]["schema"], "2");
+
+    // Check summary line
+    EXPECT_EQ(parsed_lines[1]["type"], "summary");
+    EXPECT_TRUE(parsed_lines[1].contains("duration_ms"));
+    EXPECT_EQ(parsed_lines[1]["scanner_count"], 2);
+    EXPECT_EQ(parsed_lines[1]["scanners_with_findings"], 2);
+    EXPECT_EQ(parsed_lines[1]["finding_count_total"], 3);
+    EXPECT_EQ(parsed_lines[1]["finding_count_emitted"], 2); // Only medium/high severity
+
+    // Check timing lines (should be 2)
+    EXPECT_EQ(parsed_lines[2]["type"], "timing");
+    EXPECT_EQ(parsed_lines[2]["scanner"], "ndjson_scanner1");
+    EXPECT_EQ(parsed_lines[2]["elapsed_ms"], 150);
+
+    EXPECT_EQ(parsed_lines[3]["type"], "timing");
+    EXPECT_EQ(parsed_lines[3]["scanner"], "ndjson_scanner2");
+    EXPECT_EQ(parsed_lines[3]["elapsed_ms"], 200);
+
+    // Check summary extension
+    EXPECT_EQ(parsed_lines[4]["type"], "summary_extension");
+    EXPECT_TRUE(parsed_lines[4].contains("total_risk_score"));
+    EXPECT_TRUE(parsed_lines[4].contains("emitted_risk_score"));
+
+    // Check finding lines (should be 2, filtered by severity)
+    EXPECT_EQ(parsed_lines[5]["type"], "finding");
+    EXPECT_EQ(parsed_lines[5]["scanner"], "ndjson_scanner1");
+    EXPECT_EQ(parsed_lines[5]["id"], "NDJSON-001");
+    EXPECT_EQ(parsed_lines[5]["severity"], "high");
+    EXPECT_EQ(parsed_lines[5]["base_severity_score"], 8);
+    EXPECT_EQ(parsed_lines[5]["mitre_techniques"], "T1001,T1002");
+
+    EXPECT_EQ(parsed_lines[6]["type"], "finding");
+    EXPECT_EQ(parsed_lines[6]["scanner"], "ndjson_scanner2");
+    EXPECT_EQ(parsed_lines[6]["id"], "NDJSON-002");
+    EXPECT_EQ(parsed_lines[6]["severity"], "medium");
+    EXPECT_EQ(parsed_lines[6]["base_severity_score"], 5);
+}
+
+TEST_F(JSONWriterTest, TimingsOutput) {
+    Config timings_config = config;
+    timings_config.timings = true;
+
+    // Add scan results with different elapsed times
+    ScanResult result1;
+    result1.scanner_name = "fast_scanner";
+    result1.start_time = std::chrono::system_clock::now();
+    result1.end_time = result1.start_time + std::chrono::milliseconds(50);
+
+    ScanResult result2;
+    result2.scanner_name = "slow_scanner";
+    result2.start_time = std::chrono::system_clock::now();
+    result2.end_time = result2.start_time + std::chrono::milliseconds(200);
+
+    ScanResult result3;
+    result3.scanner_name = "no_timing_scanner";
+    // No start/end times set
+
+    report.add_result(std::move(result1));
+    report.add_result(std::move(result2));
+    report.add_result(std::move(result3));
+
+    std::string json_output = writer.write(report, timings_config);
+    nlohmann::json parsed = nlohmann::json::parse(json_output);
+
+    // Check that timings array exists in meta
+    EXPECT_TRUE(parsed["meta"].contains("timings"));
+    auto& timings = parsed["meta"]["timings"];
+    EXPECT_EQ(timings.size(), 3);
+
+    // Check timing entries (order may vary, so check all)
+    bool found_fast = false, found_slow = false, found_no_timing = false;
+    for (const auto& timing : timings) {
+        std::string scanner = timing["scanner"];
+        if (scanner == "fast_scanner") {
+            EXPECT_EQ(timing["elapsed_ms"], 50);
+            found_fast = true;
+        } else if (scanner == "slow_scanner") {
+            EXPECT_EQ(timing["elapsed_ms"], 200);
+            found_slow = true;
+        } else if (scanner == "no_timing_scanner") {
+            EXPECT_EQ(timing["elapsed_ms"], 0);
+            found_no_timing = true;
+        }
+    }
+
+    EXPECT_TRUE(found_fast);
+    EXPECT_TRUE(found_slow);
+    EXPECT_TRUE(found_no_timing);
+}
+
+TEST_F(JSONWriterTest, MetaSuppressionFlags) {
+    // Test no_user_meta flag
+    Config no_user_config = config;
+    no_user_config.no_user_meta = true;
+
+    std::string json_output = writer.write(report, no_user_config);
+    nlohmann::json parsed = nlohmann::json::parse(json_output);
+
+    // User-related fields should be absent
+    EXPECT_FALSE(parsed["meta"].contains("uid"));
+    EXPECT_FALSE(parsed["meta"].contains("euid"));
+    EXPECT_FALSE(parsed["meta"].contains("gid"));
+    EXPECT_FALSE(parsed["meta"].contains("egid"));
+    EXPECT_FALSE(parsed["meta"].contains("user"));
+
+    // Other meta fields should still be present
+    EXPECT_TRUE(parsed["meta"].contains("hostname"));
+    EXPECT_TRUE(parsed["meta"].contains("kernel"));
+    EXPECT_TRUE(parsed["meta"].contains("arch"));
+
+    // Test no_hostname_meta flag
+    Config no_hostname_config = config;
+    no_hostname_config.no_hostname_meta = true;
+
+    json_output = writer.write(report, no_hostname_config);
+    parsed = nlohmann::json::parse(json_output);
+
+    EXPECT_FALSE(parsed["meta"].contains("hostname"));
+    EXPECT_TRUE(parsed["meta"].contains("uid")); // user fields should be present
+
+    // Test no_cmdline_meta flag
+    Config no_cmdline_config = config;
+    no_cmdline_config.no_cmdline_meta = true;
+
+    json_output = writer.write(report, no_cmdline_config);
+    parsed = nlohmann::json::parse(json_output);
+
+    EXPECT_FALSE(parsed["meta"].contains("cmdline"));
+    EXPECT_TRUE(parsed["meta"].contains("hostname"));
+    EXPECT_TRUE(parsed["meta"].contains("uid"));
+
+    // Test all suppression flags together
+    Config all_suppressed_config = config;
+    all_suppressed_config.no_user_meta = true;
+    all_suppressed_config.no_hostname_meta = true;
+    all_suppressed_config.no_cmdline_meta = true;
+
+    json_output = writer.write(report, all_suppressed_config);
+    parsed = nlohmann::json::parse(json_output);
+
+    // All sensitive fields should be absent
+    EXPECT_FALSE(parsed["meta"].contains("uid"));
+    EXPECT_FALSE(parsed["meta"].contains("euid"));
+    EXPECT_FALSE(parsed["meta"].contains("gid"));
+    EXPECT_FALSE(parsed["meta"].contains("egid"));
+    EXPECT_FALSE(parsed["meta"].contains("user"));
+    EXPECT_FALSE(parsed["meta"].contains("hostname"));
+    EXPECT_FALSE(parsed["meta"].contains("cmdline"));
+
+    // But essential fields should remain
+    EXPECT_TRUE(parsed["meta"].contains("$schema"));
+    EXPECT_TRUE(parsed["meta"].contains("tool_version"));
+    EXPECT_TRUE(parsed["meta"].contains("arch"));
+    EXPECT_TRUE(parsed["meta"].contains("kernel"));
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

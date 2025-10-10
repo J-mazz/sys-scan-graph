@@ -458,6 +458,8 @@ static void detect_dangling_suid_hardlinks(InodeEntry* inode_entries, size_t ino
 }
 
 void WorldWritableScanner::scan(ScanContext& context) {
+    context.report.start_scanner(name());
+
     // Interpreter list
     const char* interpreters[] = {"bash", "sh", "dash", "zsh", "ksh", "python", "python3", "perl", "ruby"};
     const size_t interpreter_count = sizeof(interpreters) / sizeof(interpreters[0]);
@@ -469,23 +471,28 @@ void WorldWritableScanner::scan(ScanContext& context) {
     size_t total_files = 0;
     size_t ww_count = 0;
 
+    // Scan additional directories from config first
+    scan_additional_directories(context, inode_entries, &inode_count,
+                              interpreters, interpreter_count, &total_files, &ww_count);
+
     // Scan default directories
     scan_default_directories(context, batch, inode_entries, &inode_count,
                            interpreters, interpreter_count, &total_files, &ww_count);
 
-    // Scan additional directories from config
-    scan_additional_directories(context, inode_entries, &inode_count,
-                              interpreters, interpreter_count, &total_files, &ww_count);
-
     delete batch;
 
-    if (!context.config.fs_hygiene) return;  // Advanced checks gated
+    if (!context.config.fs_hygiene) {
+        context.report.end_scanner(name());
+        return;  // Advanced checks gated
+    }
 
     // Check PATH directories for world-writability
     check_path_directories_world_writable(context);
 
     // Detect dangling SUID hardlinks
     detect_dangling_suid_hardlinks(inode_entries, inode_count, context);
+
+    context.report.end_scanner(name());
 }
 
 }

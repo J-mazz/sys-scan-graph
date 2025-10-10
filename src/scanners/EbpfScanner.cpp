@@ -33,6 +33,12 @@
 #include <set>
 #include <optional>
 
+#ifdef BUILD_TESTS
+#define EXPORT_FOR_TEST
+#else
+#define EXPORT_FOR_TEST static
+#endif
+
 namespace sys_scan
 {
     std::string EbpfScanner::name() const { return "ebpf_exec_trace"; }
@@ -279,7 +285,7 @@ namespace sys_scan
         context.report.add_finding(name(), std::move(summary));
     }
 
-    std::optional<std::set<pid_t>> EbpfScanner::get_running_pids()
+    EXPORT_FOR_TEST std::optional<std::set<pid_t>> EbpfScanner::get_running_pids()
     {
         std::set<pid_t> pids;
         try {
@@ -311,7 +317,7 @@ namespace sys_scan
         return pids;
     }
 
-    std::optional<EbpfScanner::ProcessInfo> EbpfScanner::get_process_info(pid_t pid)
+    EXPORT_FOR_TEST std::optional<EbpfScanner::ProcessInfo> EbpfScanner::get_process_info(pid_t pid)
     {
         ProcessInfo info{};
         info.pid = pid;
@@ -360,7 +366,7 @@ namespace sys_scan
     }
 
     // Runtime eBPF feature detection
-    bool EbpfScanner::is_ebpf_available() const
+    EXPORT_FOR_TEST bool EbpfScanner::is_ebpf_available() const
     {
 #ifndef SYS_SCAN_HAVE_EBPF
         // eBPF not compiled in at all
@@ -427,6 +433,14 @@ namespace sys_scan
     {
         const auto& cfg = context.config;
         int duration = cfg.ioc_exec_trace_seconds > 0 ? cfg.ioc_exec_trace_seconds : 3;
+
+        // Clamp duration to reasonable maximum to prevent excessive test wait times
+        constexpr int MAX_DURATION_SECONDS = 10;
+        if (duration > MAX_DURATION_SECONDS) {
+            Logger::instance().warn("Clamping eBPF scan duration from " + std::to_string(duration) +
+                                  " to " + std::to_string(MAX_DURATION_SECONDS) + " seconds");
+            duration = MAX_DURATION_SECONDS;
+        }
 
         // Check if eBPF is available at runtime
         bool ebpf_available = is_ebpf_available();

@@ -68,9 +68,9 @@ if(ENABLE_COVERAGE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
     message(STATUS "Code coverage enabled with Clang instrumentation")
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-update=atomic")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-    message(STATUS "Code coverage enabled with GCC gcov")
+    message(STATUS "Code coverage enabled with GCC gcov (atomic updates)")
   else()
     message(WARNING "Code coverage requested but compiler ${CMAKE_CXX_COMPILER_ID} not supported")
   endif()
@@ -188,6 +188,10 @@ add_library(sys_scan_core
   src/core/Privilege.cpp
   src/scanners/EbpfScanner.cpp
 )
+
+if(BUILD_TESTS)
+  target_compile_definitions(sys_scan_core PUBLIC BUILD_TESTS=1)
+endif()
 
 if(WITH_EBPF AND TARGET ebpf_skeleton)
   add_dependencies(sys_scan_core ebpf_skeleton)
@@ -503,6 +507,10 @@ add_executable(test_mount_scanner tests/test_mount_scanner.cpp)
 target_link_libraries(test_mount_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME mount_scanner COMMAND test_mount_scanner)
 
+add_executable(test_module_scanner tests/test_module_scanner.cpp)
+target_link_libraries(test_module_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME module_scanner COMMAND test_module_scanner)
+
 add_executable(test_kernel_hardening_scanner tests/test_kernel_hardening_scanner.cpp)
 target_link_libraries(test_kernel_hardening_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME kernel_hardening_scanner COMMAND test_kernel_hardening_scanner)
@@ -522,6 +530,26 @@ add_test(NAME suid_scanner COMMAND test_suid_scanner)
 add_executable(test_ioc_scanner tests/test_ioc_scanner.cpp)
 target_link_libraries(test_ioc_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME ioc_scanner COMMAND test_ioc_scanner)
+
+add_executable(test_network_scanner tests/test_network_scanner.cpp)
+target_link_libraries(test_network_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME network_scanner COMMAND test_network_scanner)
+
+add_executable(test_ebpf_scanner tests/test_ebpf_scanner.cpp)
+target_link_libraries(test_ebpf_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME ebpf_scanner COMMAND test_ebpf_scanner)
+
+add_executable(test_ebpf_scanner_extended tests/test_ebpf_scanner_extended.cpp)
+target_link_libraries(test_ebpf_scanner_extended PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME ebpf_scanner_extended COMMAND test_ebpf_scanner_extended)
+
+add_executable(test_world_writable_scanner tests/test_world_writable_scanner.cpp)
+target_link_libraries(test_world_writable_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME world_writable_scanner COMMAND test_world_writable_scanner)
+
+add_executable(test_process_scanner tests/test_process_scanner.cpp)
+target_link_libraries(test_process_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME process_scanner COMMAND test_process_scanner)
 
 add_executable(test_rule_engine tests/test_rule_engine.cpp)
   target_link_libraries(test_rule_engine PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
@@ -556,6 +584,9 @@ if(ENABLE_COVERAGE AND BUILD_TESTS)
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_kernel_hardening.profraw $<TARGET_FILE:test_kernel_hardening_scanner>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_container.profraw $<TARGET_FILE:test_container_scanner>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_module_scanner_extended.profraw $<TARGET_FILE:test_module_scanner_extended>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_network.profraw $<TARGET_FILE:test_network_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_world_writable.profraw $<TARGET_FILE:test_world_writable_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_process.profraw $<TARGET_FILE:test_process_scanner>
       COMMAND llvm-profdata merge coverage/coverage_*.profraw -o coverage/coverage.profdata
       COMMAND llvm-cov show $<TARGET_FILE:sys-scan> -instr-profile=coverage/coverage.profdata -format=html -output-dir=coverage/html -sources=${CMAKE_SOURCE_DIR}/src
       COMMAND llvm-cov report $<TARGET_FILE:sys-scan> -instr-profile=coverage/coverage.profdata -sources=${CMAKE_SOURCE_DIR}/src
@@ -571,8 +602,17 @@ if(ENABLE_COVERAGE AND BUILD_TESTS)
       COMMAND $<TARGET_FILE:test_scanner>
       COMMAND $<TARGET_FILE:test_scanner_registry>
       COMMAND $<TARGET_FILE:test_integration>
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info --include "${CMAKE_SOURCE_DIR}/src/*"
-      COMMAND lcov --remove coverage/coverage.info "/usr/*" "*/third_party/*" "*/_deps/*" --output-file coverage/coverage_filtered.info
+      COMMAND $<TARGET_FILE:test_container_scanner>
+      COMMAND $<TARGET_FILE:test_module_scanner_extended>
+      COMMAND $<TARGET_FILE:test_network_scanner>
+      COMMAND $<TARGET_FILE:test_process_scanner>
+      COMMAND $<TARGET_FILE:test_systemd_unit_scanner>
+      COMMAND $<TARGET_FILE:test_ioc_scanner>
+      COMMAND $<TARGET_FILE:test_suid_scanner>
+      COMMAND $<TARGET_FILE:test_json_writer>
+      COMMAND lcov --capture --directory . --output-file coverage/coverage.info --ignore-errors mismatch,unused
+      COMMAND lcov --extract coverage/coverage.info "${CMAKE_SOURCE_DIR}/src/*" --output-file coverage/coverage_filtered.info --ignore-errors unused
+      COMMAND lcov --extract coverage/coverage.info "${CMAKE_SOURCE_DIR}/src/*" --output-file coverage/coverage_filtered.info --ignore-errors unused
       COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
       COMMAND lcov --list coverage/coverage_filtered.info
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

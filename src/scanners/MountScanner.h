@@ -20,6 +20,7 @@ public:
     std::string name() const override { return "mounts"; }
     std::string description() const override { return "Checks mount options and surfaces risky configurations"; }
     void scan(ScanContext& context) override;
+    void scan(ScanContext& context, const std::string& mounts_file); // Test helper
 
     // Test helper function to check mount options
     static bool has_mount_option(const std::string& opts, const std::string& key) {
