@@ -17,7 +17,7 @@ curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --
 sudo apt update
 
 # Install sys-scan-graph
-sudo apt install sys-scan-graph
+sudo apt install sys-scan
 ```
 
 ### Verify Installation
@@ -25,7 +25,7 @@ sudo apt install sys-scan-graph
 ```bash
 # Check version
 sys-scan --version
-sys-scan-graph-agent --version
+sys-scan-graph --version
 
 # Run a basic scan
 sys-scan --canonical --modules-summary --min-severity info
@@ -60,6 +60,7 @@ cd agent
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Run from Source
@@ -70,7 +71,7 @@ pip install -r requirements.txt
 
 # With intelligence layer
 ./build/sys-scan --canonical --output report.json
-python -m agent.cli analyze --report report.json --out enriched_report.json
+sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
 ## Docker Installation
@@ -85,7 +86,7 @@ docker run --rm -v $(pwd):/output mazzlabs/sys-scan-graph:latest \
 
 # Run with intelligence layer
 docker run --rm -v $(pwd):/output mazzlabs/sys-scan-graph:latest \
-  sys-scan-graph-agent analyze --report /output/report.json --out /output/enriched.json
+  sys-scan-graph analyze --report /output/report.json --out /output/enriched.json
 ```
 
 ## Configuration
@@ -118,6 +119,6 @@ After installation, you may want to:
 Once installed, you can:
 
 1. Run your first scan with `sys-scan --help`
-2. Explore the intelligence layer with `sys-scan-graph-agent --help`
+2. Explore the intelligence layer with `sys-scan-graph --help`
 3. Review the [CLI Guide](../CLI-Guide.md) for detailed usage
 4. Set up automated scanning in your CI/CD pipeline

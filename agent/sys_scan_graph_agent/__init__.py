@@ -12,3 +12,23 @@
 
 # ==============================================================================
 # Agent package init
+
+import subprocess
+import sys
+
+def _check_sys_scan():
+    """Check if sys-scan core is installed and available."""
+    try:
+        # Check if 'sys-scan' is in the system's PATH
+        subprocess.run(["which", "sys-scan"], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(
+            "Error: 'sys-scan' core not found.\n"
+            "Please install the core package first by running:\n"
+            "sudo apt install sys-scan",
+            file=sys.stderr
+        )
+        sys.exit(1)
+
+# Perform the check when the module is imported
+_check_sys_scan()

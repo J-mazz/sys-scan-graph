@@ -17,39 +17,21 @@ Vcs-Browser: https://github.com/J-mazz/sys-scan-graph
 Vcs-Git: https://github.com/J-mazz/sys-scan-graph.git
 Rules-Requires-Root: no
 
-Package: sys-scan-graph
+Package: sys-scan
 Architecture: any
 Depends: ${shlibs:Depends},
-         ${misc:Depends},
-         python3 (>= 3.8),
-         python3-yaml,
-         python3-click,
-         python3-rich,
-         python3-pydantic,
-         python3-torch,
-         python3-transformers,
-         python3-sqlalchemy
+         ${misc:Depends}
 Recommends: jq,
            curl,
            wget
 Suggests: graphviz,
           python3-matplotlib
-Description: Advanced Linux Security Scanner with AI Intelligence Layer
- Sys-Scan-Graph is a comprehensive Linux security and hygiene scanner that combines
- a high-performance C++20 core scanner with an advanced Python-based Intelligence
- Layer powered by AI and graph analysis.
+Description: Advanced Linux Security Scanner Core
+ Sys-Scan is a high-performance C++20 security scanner that performs fast host
+ inspection across multiple security domains: processes, network sockets, kernel
+ parameters, kernel modules, world-writable paths, SUID/SGID binaries, IOC
+ heuristics, and MAC (SELinux/AppArmor) status.
  .
- The core scanner performs fast host inspection across multiple security domains:
- processes, network sockets, kernel parameters, kernel modules, world-writable
- paths, SUID/SGID binaries, IOC heuristics, and MAC (SELinux/AppArmor) status.
- .
- The Intelligence Layer provides:
- * Local AI-powered threat analysis using fine-tuned Mistral-7B model
- * Graph-based attack path modeling and correlation analysis
- * Automated rule generation and refinement
- * Advanced anomaly detection with zero external dependencies
- * Zero-trust local inference with LoRA-adapted security intelligence
- * Comprehensive reporting and visualization
- .
- Features deterministic JSON output, noise reduction techniques, and CI-friendly
- operation. Supports both standalone scanning and integrated security workflows.
+ This package provides the core C++ binary and pre-trained AI models.
+ The Python Intelligence Layer is available separately as sys-scan-graph
+ on PyPI, which provides AI-powered threat analysis and graph-based correlation.

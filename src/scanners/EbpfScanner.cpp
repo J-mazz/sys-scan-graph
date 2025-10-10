@@ -40,7 +40,7 @@
 #ifdef BUILD_TESTS
 #define EXPORT_FOR_TEST
 #else
-#define EXPORT_FOR_TEST static
+#define EXPORT_FOR_TEST
 #endif
 
 namespace sys_scan

@@ -14,7 +14,7 @@ The package consists of two main components:
    - No external dependencies beyond system libraries
    - Outputs deterministic JSON findings
 
-2. **Python Intelligence Layer** (sys-scan-agent)
+2. **Python Intelligence Layer** (sys-scan-graph)
    - Optional AI analysis layer
    - Supports local Mistral-7B model (requires separate model download)
    - Graph-based correlation and risk analysis
@@ -84,7 +84,7 @@ sys-scan --canonical --output report.json
 
 With intelligence analysis (requires model download or uses fallback):
 ```bash
-sys-scan-agent analyze --report report.json --out enriched_report.json
+sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
 Security Considerations

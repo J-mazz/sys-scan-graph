@@ -1,9 +1,3 @@
-╔══════════════════════════════════╗
-║             MazzLabs             ║
-╟──────────────────────────────────╢
-║           Joseph Mazzini         ║
-╚══════════════════════════════════╝
-
 # sys-scan-graph
 
 <div align="center">
@@ -54,23 +48,26 @@ echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://a
 # Import the GPG key
 curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
 
-# Update package lists and install
+# Update and install
 sudo apt update
-sudo apt install sys-scan-graph
+sudo apt install sys-scan
+
+# Install Python intelligence layer (optional, for AI analysis)
+pip install sys-scan-graph
 ```
 
 #### Option 2: Build from Source
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
-# Build the core scanner
+# Build C++ scanner
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
-# Install Python dependencies for intelligence layer
+# Install Python intelligence layer
 cd agent
 python3 -m venv .venv
 source .venv/bin/activate
@@ -83,32 +80,26 @@ pip install -e .
 #### Using Installed Package
 
 ```bash
-# Run a basic scan with canonical JSON output
+# Basic scan
 sys-scan --canonical --output report.json
 
-# Run with intelligence layer for AI-powered analysis
-sys-scan-agent analyze --report report.json --out enriched_report.json
+# AI analysis
+sys-scan-graph analyze --report report.json --out enriched_report.json
 
-# Generate HTML report with visualizations
-sys-scan-agent analyze --report report.json --out enriched_report.json --prev baseline.json
+# HTML report
+sys-scan-graph analyze --report report.json --out enriched_report.json --prev baseline.json
 ```
 
 #### Using Source Build
 
 ```bash
-# Run a basic scan with canonical JSON output
+# Basic scan
 ./build/sys-scan --canonical --output report.json
 
-# Run with intelligence layer for AI-powered analysis
+# AI analysis
 cd agent
-python -m sys_scan_graph_agent.cli analyze --report report.json --out enriched_report.json
-```
-
-### Generate HTML Report
-
-```bash
-# Enable HTML generation in config.yaml, then run:
-sys-scan-agent analyze --report report.json --out enriched_v2.json --prev enriched_report.json
+source .venv/bin/activate
+sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
 ---

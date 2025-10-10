@@ -64,8 +64,13 @@ class LocalMistralLLMProvider:
         self._load_model()
 
     def _get_default_model_path(self) -> str:
-        """Get the default path to the packaged LoRA model."""
-        # The fine-tuned LoRA model is in the mistral-security-lora directory
+        """Get the default path to the LoRA model."""
+        # First check system installation path (from apt package)
+        system_model_dir = Path("/usr/share/sys-scan/models")
+        if system_model_dir.exists():
+            return str(system_model_dir)
+        
+        # Fallback to packaged model (for development)
         import sys_scan_graph_agent
         package_dir = Path(sys_scan_graph_agent.__file__).parent
         model_dir = package_dir / "mistral-security-lora"
