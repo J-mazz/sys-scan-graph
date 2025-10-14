@@ -3,6 +3,8 @@ name: Publish Python Package
 on:
   release:
     types: [published]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -30,6 +32,7 @@ jobs:
         run: python -m build
 
       - name: Publish to PyPI
+        if: github.event_name == 'release'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: agent/dist/
