@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Import Mazzlabs APT GPG Key
         run: |
-          curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+          wget -qO- https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
       - name: Verify Mazzlabs GPG Key fingerprint
         run: gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
       - name: Add Mazzlabs APT repository
