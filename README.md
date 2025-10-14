@@ -61,7 +61,7 @@ sudo apt update
 sudo apt install sys-scan-graph
 
 # Install Python intelligence layer (optional, for AI analysis)
-pip install sys-scan-graph-agent
+pip install sys-scan-graph
 ```
 
 #### Option 2: Build from Source
