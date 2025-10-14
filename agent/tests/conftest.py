@@ -1,4 +1,4 @@
-"""Pytest configuration for sys-scan-graph-agent tests."""
+"""Pytest configuration for sys-scan-graph tests."""
 
 import os
 import pytest

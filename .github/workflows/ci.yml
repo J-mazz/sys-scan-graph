@@ -48,7 +48,7 @@ jobs:
           ls -la /usr/bin/sys-scan || echo "/usr/bin/sys-scan not found"
       - name: install sys-scan-graph intelligence layer
         run: |
-          pip install sys-scan-graph-agent
+          pip install sys-scan-graph
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

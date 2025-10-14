@@ -18,5 +18,5 @@ Description: Advanced Linux Security Scanner Core
  paths, SUID/SGID binaries, IOC heuristics, and MAC (SELinux/AppArmor) status.
  .
  This package provides the core C++ binary and pre-trained AI models.
- The Python Intelligence Layer is available separately as sys-scan-graph-agent
+ The Python Intelligence Layer is available separately as sys-scan-graph
  on PyPI, which provides AI-powered threat analysis and graph-based correlation.
