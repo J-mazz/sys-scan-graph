@@ -28,7 +28,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='sys-scan-agent',
-    version='5.0.2',  # Increment this for every new version you publish
+    version='5.0.3',  # Increment this for every new version you publish
     author='Joseph Mazzini',
     author_email='joseph@mazzlabs.works',
     description='AI-powered intelligence layer for the sys-scan-graph security scanner.',
