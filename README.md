@@ -18,6 +18,9 @@
   <a href="https://codescene.io/projects/71206">
     <img src="https://codescene.io/projects/71206/status-badges/system-mastery" alt="CodeScene System Mastery" />
   </a>
+  <a href="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml">
+    <img src="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" />
+  </a>
 </div>
 
 It combines a high-performance C++20 scanning engine with a Python-based intelligence layer featuring an embedded, fine-tuned Mistral-7B LLM with LoRA adapters. The core engine uses modern dependency injection patterns and type-safe enums to gather security data across 16 specialized scanners, outputting canonical JSON, NDJSON, SARIF, or HTML. The intelligence layer uses LangGraph state machines for cyclical reasoning, baseline learning via SQLite, and 32-dimensional process embeddings for novelty detection—all running locally with zero external API calls.
@@ -46,7 +49,7 @@ It combines a high-performance C++20 scanning engine with a Python-based intelli
 echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works/ testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
 
 # Import the GPG key
-curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+wget -qO- https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
 
 # Verify the key fingerprint (optional but recommended)
 gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
