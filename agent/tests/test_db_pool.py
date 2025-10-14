@@ -21,7 +21,7 @@ import sqlite3
 from unittest.mock import Mock, patch, AsyncMock
 from concurrent.futures import ThreadPoolExecutor
 
-from sys_scan_graph_agent.db_pool import (
+from sys_scan_agent.db_pool import (
     DatabaseConnectionPool,
     get_db_pool,
     get_db_connection,

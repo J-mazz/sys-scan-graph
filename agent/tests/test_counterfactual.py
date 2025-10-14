@@ -3,10 +3,10 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
-from sys_scan_graph_agent.models import AgentState
-from sys_scan_graph_agent.pipeline import load_report, augment, correlate, baseline_rarity, process_novelty, sequence_correlation, reduce, summarize
-from sys_scan_graph_agent.counterfactual import what_if, apply_ip_forward_disabled, recompute_risk
-from sys_scan_graph_agent import models
+from sys_scan_agent.models import AgentState
+from sys_scan_agent.pipeline import load_report, augment, correlate, baseline_rarity, process_novelty, sequence_correlation, reduce, summarize
+from sys_scan_agent.counterfactual import what_if, apply_ip_forward_disabled, recompute_risk
+from sys_scan_agent import models
 
 
 def build_report():
@@ -178,9 +178,9 @@ class TestApplyIPForwardDisabled:
 class TestRecomputeRisk:
     """Test the recompute_risk function."""
 
-    @patch('sys_scan_graph_agent.counterfactual.load_persistent_weights')
-    @patch('sys_scan_graph_agent.counterfactual.compute_risk')
-    @patch('sys_scan_graph_agent.counterfactual.apply_probability')
+    @patch('sys_scan_agent.counterfactual.load_persistent_weights')
+    @patch('sys_scan_agent.counterfactual.compute_risk')
+    @patch('sys_scan_agent.counterfactual.apply_probability')
     def test_recompute_risk_normal_case(self, mock_apply_prob, mock_compute_risk, mock_load_weights):
         """Test recompute_risk with normal findings that have risk subscores."""
         mock_load_weights.return_value = {'impact': 0.4, 'exposure': 0.3, 'anomaly': 0.2, 'confidence': 0.1}
@@ -238,7 +238,7 @@ class TestRecomputeRisk:
         assert finding2.risk_subscores is not None
         assert finding2.risk_subscores['_raw_weighted_sum'] == 25.0
 
-    @patch('sys_scan_graph_agent.counterfactual.load_persistent_weights')
+    @patch('sys_scan_agent.counterfactual.load_persistent_weights')
     def test_recompute_risk_no_subscores(self, mock_load_weights):
         """Test recompute_risk with findings that have no risk subscores."""
         mock_load_weights.return_value = {'impact': 0.4, 'exposure': 0.3}
@@ -264,7 +264,7 @@ class TestRecomputeRisk:
         assert finding1.risk_subscores is None
         assert finding2.risk_subscores == {}
 
-    @patch('sys_scan_graph_agent.counterfactual.load_persistent_weights')
+    @patch('sys_scan_agent.counterfactual.load_persistent_weights')
     def test_recompute_risk_empty_list(self, mock_load_weights):
         """Test recompute_risk with empty findings list."""
         mock_load_weights.return_value = {'impact': 0.4}
@@ -280,7 +280,7 @@ class TestWhatIfExtended:
 
     def test_what_if_no_ip_forward_change(self, tmp_path):
         """Test what_if with ip_forward_disabled=False."""
-        from sys_scan_graph_agent.models import Summaries
+        from sys_scan_agent.models import Summaries
         enriched_data = {
             'enriched_findings': [
                 {
@@ -311,7 +311,7 @@ class TestWhatIfExtended:
 
     def test_what_if_no_findings(self, tmp_path):
         """Test what_if with no findings."""
-        from sys_scan_graph_agent.models import Summaries
+        from sys_scan_agent.models import Summaries
         enriched_data = {
             'enriched_findings': [],
             'correlations': [],
@@ -332,7 +332,7 @@ class TestWhatIfExtended:
 
     def test_what_if_multiple_ip_forward_findings(self, tmp_path):
         """Test what_if with multiple IP forward findings."""
-        from sys_scan_graph_agent.models import Summaries
+        from sys_scan_agent.models import Summaries
         enriched_data = {
             'enriched_findings': [
                 {
@@ -374,7 +374,7 @@ class TestWhatIfExtended:
         enriched_path = tmp_path / 'enriched.json'
         enriched_path.write_text(json.dumps(enriched_data))
 
-        with patch('sys_scan_graph_agent.counterfactual.recompute_risk') as mock_recompute:
+        with patch('sys_scan_agent.counterfactual.recompute_risk') as mock_recompute:
             result = what_if(enriched_path, ip_forward_disabled=True)
 
         assert len(result['changed_findings']) == 2
@@ -386,7 +386,7 @@ class TestWhatIfExtended:
 
     def test_what_if_no_summaries(self, tmp_path):
         """Test what_if when summaries is None (should fallback to empty Summaries)."""
-        from sys_scan_graph_agent.models import Summaries
+        from sys_scan_agent.models import Summaries
         enriched_data = {
             'enriched_findings': [
                 {
@@ -412,7 +412,7 @@ class TestWhatIfExtended:
 
     def test_what_if_disabled_ip_forward_not_enabled(self, tmp_path):
         """Test what_if when IP forward is already disabled."""
-        from sys_scan_graph_agent.models import Summaries
+        from sys_scan_agent.models import Summaries
         enriched_data = {
             'enriched_findings': [
                 {

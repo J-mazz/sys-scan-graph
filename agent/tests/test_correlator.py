@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch, call
-from sys_scan_graph_agent.correlator import (
+from sys_scan_agent.correlator import (
     _enrich_knowledge_before_correlation,
     _collect_findings_for_correlation,
     _load_correlation_config_and_rules,
@@ -29,8 +29,8 @@ class TestEnrichKnowledgeBeforeCorrelation:
         """Test successful knowledge enrichment."""
         state = MagicMock()
 
-        with patch('sys_scan_graph_agent.metrics.get_metrics_collector') as mock_mc, \
-             patch('sys_scan_graph_agent.knowledge.apply_external_knowledge') as mock_apply:
+        with patch('sys_scan_agent.metrics.get_metrics_collector') as mock_mc, \
+             patch('sys_scan_agent.knowledge.apply_external_knowledge') as mock_apply:
 
             mock_mc_instance = MagicMock()
             mock_mc.return_value = mock_mc_instance
@@ -45,7 +45,7 @@ class TestEnrichKnowledgeBeforeCorrelation:
         """Test graceful handling when knowledge module not available."""
         state = MagicMock()
 
-        with patch('sys_scan_graph_agent.metrics.get_metrics_collector', side_effect=ImportError):
+        with patch('sys_scan_agent.metrics.get_metrics_collector', side_effect=ImportError):
             # Should not raise exception
             _enrich_knowledge_before_correlation(state)
 
@@ -99,8 +99,8 @@ class TestLoadCorrelationConfigAndRules:
         mock_cfg.paths.rule_dirs = ['/rules/dir1', '/rules/dir2']
         mock_merged = [{'id': 'rule1'}, {'id': 'rule2'}]
 
-        with patch('sys_scan_graph_agent.config.load_config', return_value=mock_cfg), \
-             patch('sys_scan_graph_agent.correlator._merge_correlation_rules', return_value=mock_merged):
+        with patch('sys_scan_agent.config.load_config', return_value=mock_cfg), \
+             patch('sys_scan_agent.correlator._merge_correlation_rules', return_value=mock_merged):
 
             cfg, merged = _load_correlation_config_and_rules()
 
@@ -109,7 +109,7 @@ class TestLoadCorrelationConfigAndRules:
 
     def test_load_config_and_rules_import_error(self):
         """Test handling when config/rules modules not available."""
-        with patch('sys_scan_graph_agent.config.load_config', side_effect=ImportError):
+        with patch('sys_scan_agent.config.load_config', side_effect=ImportError):
             cfg, merged = _load_correlation_config_and_rules()
 
             assert cfg is None
@@ -128,8 +128,8 @@ class TestMergeCorrelationRules:
         rule2 = {'id': 'rule2', 'name': 'Rule 2'}
         default_rule = {'id': 'default1', 'name': 'Default Rule'}
 
-        with patch('sys_scan_graph_agent.rules.load_rules_dir', return_value=[rule1, rule2]), \
-             patch('sys_scan_graph_agent.rules.DEFAULT_RULES', [default_rule]):
+        with patch('sys_scan_agent.rules.load_rules_dir', return_value=[rule1, rule2]), \
+             patch('sys_scan_agent.rules.DEFAULT_RULES', [default_rule]):
 
             result = _merge_correlation_rules(mock_cfg)
 
@@ -147,8 +147,8 @@ class TestMergeCorrelationRules:
         duplicate_rule = {'id': 'rule1', 'name': 'Duplicate Rule'}
         default_rule = {'id': 'default1', 'name': 'Default Rule'}
 
-        with patch('sys_scan_graph_agent.rules.load_rules_dir', return_value=[rule1, duplicate_rule]), \
-             patch('sys_scan_graph_agent.rules.DEFAULT_RULES', [default_rule]):
+        with patch('sys_scan_agent.rules.load_rules_dir', return_value=[rule1, duplicate_rule]), \
+             patch('sys_scan_agent.rules.DEFAULT_RULES', [default_rule]):
 
             result = _merge_correlation_rules(mock_cfg)
 
@@ -161,7 +161,7 @@ class TestMergeCorrelationRules:
         mock_cfg = MagicMock()
         mock_cfg.paths.rule_dirs = ['/rules/dir1']
 
-        with patch('sys_scan_graph_agent.rules.load_rules_dir', side_effect=ImportError):
+        with patch('sys_scan_agent.rules.load_rules_dir', side_effect=ImportError):
             result = _merge_correlation_rules(mock_cfg)
 
             assert result == []
@@ -178,7 +178,7 @@ class TestApplyCorrelationRulesAndMetrics:
 
         mock_correlations = [MagicMock(), MagicMock()]
 
-        with patch('sys_scan_graph_agent.rules.Correlator') as mock_correlator_class:
+        with patch('sys_scan_agent.rules.Correlator') as mock_correlator_class:
             mock_correlator_instance = MagicMock()
             mock_correlator_instance.apply.return_value = mock_correlations
             mock_correlator_class.return_value = mock_correlator_instance
@@ -200,7 +200,7 @@ class TestApplyCorrelationRulesAndMetrics:
         merged = [{'id': 'rule1'}]
         mc = MagicMock()
 
-        with patch('sys_scan_graph_agent.correlator.Correlator', side_effect=ImportError):
+        with patch('sys_scan_agent.correlator.Correlator', side_effect=ImportError):
             result = _apply_correlation_rules_and_metrics(all_findings, merged, mc)
 
             assert result == []
@@ -288,12 +288,12 @@ class TestCorrelate:
         mock_merged = [{'id': 'rule1'}]
         mock_correlations = [MagicMock()]
 
-        with patch('sys_scan_graph_agent.correlator._enrich_knowledge_before_correlation') as mock_enrich, \
-             patch('sys_scan_graph_agent.correlator._load_correlation_config_and_rules', return_value=(mock_cfg, mock_merged)) as mock_load, \
-             patch('sys_scan_graph_agent.metrics.get_metrics_collector') as mock_mc, \
-             patch('sys_scan_graph_agent.correlator._apply_correlation_rules_and_metrics', return_value=mock_correlations) as mock_apply, \
-             patch('sys_scan_graph_agent.correlator._build_correlation_reference_map') as mock_build_map, \
-             patch('sys_scan_graph_agent.correlator._assign_correlation_refs_to_findings') as mock_assign:
+        with patch('sys_scan_agent.correlator._enrich_knowledge_before_correlation') as mock_enrich, \
+             patch('sys_scan_agent.correlator._load_correlation_config_and_rules', return_value=(mock_cfg, mock_merged)) as mock_load, \
+             patch('sys_scan_agent.metrics.get_metrics_collector') as mock_mc, \
+             patch('sys_scan_agent.correlator._apply_correlation_rules_and_metrics', return_value=mock_correlations) as mock_apply, \
+             patch('sys_scan_agent.correlator._build_correlation_reference_map') as mock_build_map, \
+             patch('sys_scan_agent.correlator._assign_correlation_refs_to_findings') as mock_assign:
 
             correlate(state)
 
@@ -309,7 +309,7 @@ class TestCorrelate:
         state = MagicMock()
         state.report.results = []
 
-        with patch('sys_scan_graph_agent.correlator._enrich_knowledge_before_correlation') as mock_enrich:
+        with patch('sys_scan_agent.correlator._enrich_knowledge_before_correlation') as mock_enrich:
             correlate(state)
 
             mock_enrich.assert_called_once_with(state)

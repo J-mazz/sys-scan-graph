@@ -24,9 +24,9 @@ import sys
 import subprocess
 import tempfile
 from pathlib import Path
-from sys_scan_graph_agent.cli import run_intelligence_workflow
-from sys_scan_graph_agent.metrics_node import get_node_metrics_summary
-from sys_scan_graph_agent.performance_baseline import update_baseline_from_metrics
+from sys_scan_agent.cli import run_intelligence_workflow
+from sys_scan_agent.metrics_node import get_node_metrics_summary
+from sys_scan_agent.performance_baseline import update_baseline_from_metrics
 
 def run_sys_scan(output_path: Path) -> bool:
     """Run sys-scan to generate real scanner data."""

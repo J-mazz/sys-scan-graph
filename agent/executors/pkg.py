@@ -1,7 +1,7 @@
 from __future__ import annotations
 import shlex
 from pathlib import Path
-import sys_scan_graph_agent.sandbox as sandbox
+import sys_scan_agent.sandbox as sandbox
 
 run_command = sandbox.run_command
 

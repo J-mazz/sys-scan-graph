@@ -118,11 +118,11 @@ This project maintains a **zero-trust security architecture** with **absolute pr
 
 ```bash
 # Verify no external API imports
-grep -r "openai\|anthropic\|ChatOpenAI\|ChatAnthropic" agent/sys_scan_graph_agent/*.py
+grep -r "openai\|anthropic\|ChatOpenAI\|ChatAnthropic" agent/sys_scan_agent/*.py
 # Expected: No matches (only local LangChain-core imports)
 
 # Check for HTTP clients
-grep -r "import requests\|import httpx\|import urllib" agent/sys_scan_graph_agent/*.py
+grep -r "import requests\|import httpx\|import urllib" agent/sys_scan_agent/*.py
 # Expected: Only unused import in cli.py
 
 # Verify requirements.txt
@@ -141,8 +141,8 @@ sys.path.insert(0, 'agent')
 # Set default provider (local Mistral)
 os.environ['AGENT_LLM_PROVIDER'] = 'local'
 
-from sys_scan_graph_agent.graph import build_workflow
-from sys_scan_graph_agent.llm_provider import get_llm_provider
+from sys_scan_agent.graph import build_workflow
+from sys_scan_agent.llm_provider import get_llm_provider
 
 # Build workflow - should load LocalMistralLLMProvider
 workflow, app = build_workflow()

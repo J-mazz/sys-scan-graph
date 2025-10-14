@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import pytest
 
-from sys_scan_graph_agent.graph import risk_analyzer, compliance_checker
+from sys_scan_agent.graph import risk_analyzer, compliance_checker
 
 
 def test_risk_analyzer_basic():

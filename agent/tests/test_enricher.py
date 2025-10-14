@@ -6,12 +6,12 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from sys_scan_graph_agent.enricher import (
+from sys_scan_agent.enricher import (
     _compute_finding_tags, _merge_finding_tags, _initialize_finding_risk,
     _process_finding_enrichment, _derive_host_metadata, _apply_host_role_adjustments,
     _perform_initial_risk_recomputation, augment
 )
-from sys_scan_graph_agent.models import AgentState, Report, ScannerResult, Finding
+from sys_scan_agent.models import AgentState, Report, ScannerResult, Finding
 
 
 class TestComputeFindingTags:
@@ -280,7 +280,7 @@ class TestApplyHostRoleAdjustments:
         state = MagicMock()
         state.report.results = []
 
-        with patch.dict('sys.modules', {'sys_scan_graph_agent.audit': None}):
+        with patch.dict('sys.modules', {'sys_scan_agent.audit': None}):
             # Should not crash
             _apply_host_role_adjustments(state)
 
@@ -300,7 +300,7 @@ class TestPerformInitialRiskRecomputation:
         state = MagicMock()
         state.report.results = [scanner_result]
 
-        with patch('sys_scan_graph_agent.enricher._recompute_finding_risk') as mock_recompute:
+        with patch('sys_scan_agent.enricher._recompute_finding_risk') as mock_recompute:
             _perform_initial_risk_recomputation(state)
 
             mock_recompute.assert_called_once_with(finding)
@@ -317,7 +317,7 @@ class TestPerformInitialRiskRecomputation:
         state = MagicMock()
         state.report.results = [scanner_result]
 
-        with patch('sys_scan_graph_agent.enricher._recompute_finding_risk') as mock_recompute:
+        with patch('sys_scan_agent.enricher._recompute_finding_risk') as mock_recompute:
             _perform_initial_risk_recomputation(state)
 
             mock_recompute.assert_not_called()
@@ -334,7 +334,7 @@ class TestPerformInitialRiskRecomputation:
         state = MagicMock()
         state.report.results = [scanner_result]
 
-        with patch('sys_scan_graph_agent.enricher._recompute_finding_risk') as mock_recompute:
+        with patch('sys_scan_agent.enricher._recompute_finding_risk') as mock_recompute:
             _perform_initial_risk_recomputation(state)
 
             mock_recompute.assert_not_called()

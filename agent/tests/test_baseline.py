@@ -7,11 +7,11 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import json
 
-from sys_scan_graph_agent.baseline import (
+from sys_scan_agent.baseline import (
     BaselineStore, process_feature_vector, hashlib_sha,
     SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, CURRENT_SCHEMA_VERSION
 )
-from sys_scan_graph_agent import models
+from sys_scan_agent import models
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import pytest
 
 # Graph is optional; skip if not available
 try:
-    from sys_scan_graph_agent.graph import app
+    from sys_scan_agent.graph import app
 except Exception:  # pragma: no cover
     app = None
 
@@ -18,7 +18,7 @@ def run_graph(raw_findings):
     os.environ['AGENT_GRAPH_MODE'] = 'baseline'
     try:
         # Build a local workflow with baseline mode - don't modify global state
-        from sys_scan_graph_agent.graph import build_workflow
+        from sys_scan_agent.graph import build_workflow
         local_workflow, local_app = build_workflow(enhanced=False)
 
         state = {"raw_findings": raw_findings}

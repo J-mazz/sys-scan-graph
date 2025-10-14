@@ -7,10 +7,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import logging
 
-from sys_scan_graph_agent.retriever import (
+from sys_scan_agent.retriever import (
     KnowledgeRetriever, get_retriever, retrieve_context, retrieve_context_with_summary
 )
-from sys_scan_graph_agent.knowledge import KNOWLEDGE_DIR
+from sys_scan_agent.knowledge import KNOWLEDGE_DIR
 
 # Patch KNOWLEDGE_DIR at module level
 original_knowledge_dir = KNOWLEDGE_DIR
@@ -103,7 +103,7 @@ def temp_knowledge_dir(tmp_path):
 @pytest.fixture(autouse=True)
 def setup_knowledge_dir(temp_knowledge_dir):
     """Set up the knowledge directory for all tests."""
-    from sys_scan_graph_agent import knowledge
+    from sys_scan_agent import knowledge
     knowledge.KNOWLEDGE_DIR = temp_knowledge_dir
     knowledge._CACHE.clear()
     yield
@@ -121,13 +121,13 @@ class TestKnowledgeRetrieverInit:
 
     def test_init_sets_knowledge_dir(self, temp_knowledge_dir):
         """Test that KnowledgeRetriever sets the knowledge directory correctly."""
-        with patch('sys_scan_graph_agent.retriever.KNOWLEDGE_DIR', temp_knowledge_dir):
+        with patch('sys_scan_agent.retriever.KNOWLEDGE_DIR', temp_knowledge_dir):
             retriever = KnowledgeRetriever()
             assert retriever.knowledge_dir == temp_knowledge_dir
 
     def test_init_initializes_cache(self, temp_knowledge_dir):
         """Test that KnowledgeRetriever initializes empty cache."""
-        with patch('sys_scan_graph_agent.retriever.KNOWLEDGE_DIR', temp_knowledge_dir):
+        with patch('sys_scan_agent.retriever.KNOWLEDGE_DIR', temp_knowledge_dir):
             retriever = KnowledgeRetriever()
             assert retriever.cache == {}
             assert retriever.last_updated == {}
@@ -421,7 +421,7 @@ class TestGlobalRetriever:
     def test_get_retriever_singleton(self):
         """Test that get_retriever returns a singleton instance."""
         # Reset global state
-        import sys_scan_graph_agent.retriever as retriever_module
+        import sys_scan_agent.retriever as retriever_module
         retriever_module._retriever = None
 
         r1 = get_retriever()
@@ -430,7 +430,7 @@ class TestGlobalRetriever:
         assert r1 is r2
         assert isinstance(r1, KnowledgeRetriever)
 
-    @patch('sys_scan_graph_agent.retriever.get_retriever')
+    @patch('sys_scan_agent.retriever.get_retriever')
     def test_retrieve_context_function(self, mock_get_retriever):
         """Test retrieve_context function calls retriever."""
         mock_retriever = MagicMock()
@@ -443,8 +443,8 @@ class TestGlobalRetriever:
         mock_retriever.retrieve_context.assert_called_once_with("test query", "ports", 3, 0.2)
         assert result == [{'test': 'data'}]
 
-    @patch('sys_scan_graph_agent.retriever.retrieve_context')
-    @patch('sys_scan_graph_agent.retriever.get_retriever')
+    @patch('sys_scan_agent.retriever.retrieve_context')
+    @patch('sys_scan_agent.retriever.get_retriever')
     def test_retrieve_context_with_summary(self, mock_get_retriever, mock_retrieve_context):
         """Test retrieve_context_with_summary function."""
         mock_context = [{'key': 'test', 'data': {}, 'relevance_score': 0.5}]
@@ -491,7 +491,7 @@ class TestEdgeCases:
         """Test that retrieve_context logs information and returns results."""
         # Configure logging to ensure INFO messages are processed
         logging.basicConfig(level=logging.INFO)
-        logger = logging.getLogger('sys_scan_graph_agent.retriever')
+        logger = logging.getLogger('sys_scan_agent.retriever')
         logger.setLevel(logging.INFO)
 
         results = retriever.retrieve_context("ssh", "general", max_results=1)

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import hashlib
 
-from sys_scan_graph_agent.llm_cache import (
+from sys_scan_agent.llm_cache import (
     CacheEntry, TTLCache, LLMCache, get_llm_cache,
     cached_llm_operation, invalidate_cache_operation, cleanup_llm_cache
 )
@@ -379,7 +379,7 @@ class TestGlobalFunctions:
         assert cache1 is cache2  # Should be same instance
         assert isinstance(cache1, LLMCache)
 
-    @patch('sys_scan_graph_agent.llm_cache.get_llm_cache')
+    @patch('sys_scan_agent.llm_cache.get_llm_cache')
     def test_cached_llm_operation_decorator(self, mock_get_cache):
         """Test cached_llm_operation decorator."""
         mock_cache = MagicMock()
@@ -409,7 +409,7 @@ class TestGlobalFunctions:
 
     def test_invalidate_cache_operation(self):
         """Test global invalidate function."""
-        with patch('sys_scan_graph_agent.llm_cache.get_llm_cache') as mock_get:
+        with patch('sys_scan_agent.llm_cache.get_llm_cache') as mock_get:
             mock_cache = MagicMock()
             mock_cache.invalidate_operation.return_value = 5
             mock_get.return_value = mock_cache
@@ -420,7 +420,7 @@ class TestGlobalFunctions:
 
     def test_cleanup_llm_cache(self):
         """Test global cleanup function."""
-        with patch('sys_scan_graph_agent.llm_cache.get_llm_cache') as mock_get:
+        with patch('sys_scan_agent.llm_cache.get_llm_cache') as mock_get:
             mock_cache = MagicMock()
             mock_cache.cleanup.return_value = 3
             mock_get.return_value = mock_cache

@@ -9,13 +9,13 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from sys_scan_graph_agent.loader import (
+from sys_scan_agent.loader import (
     _read_and_validate_file_size, _decode_and_canonicalize_text,
     _parse_json_report, _normalize_risk_naming_migration,
     _normalize_finding_risk_fields, _validate_report_schema,
     load_report
 )
-from sys_scan_graph_agent.models import AgentState
+from sys_scan_agent.models import AgentState
 
 
 class TestReadAndValidateFileSize:

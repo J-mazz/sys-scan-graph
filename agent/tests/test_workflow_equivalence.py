@@ -11,12 +11,12 @@ from typing import Dict, Any, List
 from unittest.mock import patch
 
 # Import types
-from sys_scan_graph_agent.graph_state import GraphState
+from sys_scan_agent.graph_state import GraphState
 from typing import Dict, Any
 StateType = Dict[str, Any]  # type: ignore
 
 # Import both workflow variants
-from sys_scan_graph_agent.graph import (
+from sys_scan_agent.graph import (
     enrich_findings,
     correlate_findings,
     enhanced_summarize_host_state as scaffold_summarize,
@@ -25,7 +25,7 @@ from sys_scan_graph_agent.graph import (
     compliance_checker as scaffold_compliance_checker,
 )
 
-from sys_scan_graph_agent.graph_nodes_enhanced import (
+from sys_scan_agent.graph_nodes_enhanced import (
     enhanced_enrich_findings,
     enhanced_summarize_host_state as enhanced_summarize,
     enhanced_suggest_rules as enhanced_suggest_rules,
@@ -33,8 +33,8 @@ from sys_scan_graph_agent.graph_nodes_enhanced import (
     compliance_checker as enhanced_compliance_checker,
 )
 
-from sys_scan_graph_agent.graph_state import normalize_graph_state
-from sys_scan_graph_agent.util_normalization import (
+from sys_scan_agent.graph_state import normalize_graph_state
+from sys_scan_agent.util_normalization import (
     normalize_rule_suggestions,
     unify_risk_assessment,
     unify_compliance_check,
@@ -235,7 +235,7 @@ class TestWorkflowEquivalence:
         enhanced_state = asyncio.run(self.run_enhanced_workflow(base_state.copy()))
 
         # Both should pass GraphState validation
-        from sys_scan_graph_agent.graph_state import validate_graph_state
+        from sys_scan_agent.graph_state import validate_graph_state
 
         assert validate_graph_state(scaffold_state), "Scaffold state failed validation"
         assert validate_graph_state(enhanced_state), "Enhanced state failed validation"
@@ -463,7 +463,7 @@ class TestWorkflowEquivalence:
 
     def test_schema_validation_with_unified_fields(self, base_state):
         """Test that schema validation works with unified fields."""
-        from sys_scan_graph_agent.graph_state import validate_graph_state
+        from sys_scan_agent.graph_state import validate_graph_state
 
         # Test with unified risk assessment
         unified_state = base_state.copy()
@@ -518,7 +518,7 @@ class TestContractVersioning:
 
     def test_schema_version_constants(self):
         """Test that schema version constants are properly defined."""
-        from sys_scan_graph_agent.graph_state import GRAPH_STATE_SCHEMA_VERSION, GRAPH_STATE_SCHEMA_LAST_UPDATED
+        from sys_scan_agent.graph_state import GRAPH_STATE_SCHEMA_VERSION, GRAPH_STATE_SCHEMA_LAST_UPDATED
 
         assert GRAPH_STATE_SCHEMA_VERSION, "Schema version not defined"
         assert GRAPH_STATE_SCHEMA_LAST_UPDATED, "Schema last updated not defined"

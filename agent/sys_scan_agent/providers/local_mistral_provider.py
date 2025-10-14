@@ -71,8 +71,8 @@ class LocalMistralLLMProvider:
             return str(system_model_dir)
         
         # Fallback to packaged model (for development)
-        import sys_scan_graph_agent
-        package_dir = Path(sys_scan_graph_agent.__file__).parent
+        import sys_scan_agent
+        package_dir = Path(sys_scan_agent.__file__).parent
         model_dir = package_dir / "mistral-security-lora"
         return str(model_dir)
 

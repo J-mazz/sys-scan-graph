@@ -12,7 +12,7 @@ import os
 import importlib.util
 
 # Load the main graph.py module directly
-graph_spec = importlib.util.spec_from_file_location("graph_main", "/home/joseph-mazzini/sys-scan-graph/agent/sys_scan_graph_agent/graph.py")
+graph_spec = importlib.util.spec_from_file_location("graph_main", "/home/joseph-mazzini/sys-scan-graph/agent/sys_scan_agent/graph.py")
 if graph_spec is None or graph_spec.loader is None:
     raise ImportError("Could not load graph.py module")
 graph_main = importlib.util.module_from_spec(graph_spec)
@@ -1011,8 +1011,8 @@ class TestErrorHandling:
                           enrich_findings=None):
             # Re-import to trigger the build_workflow call
             from importlib import reload
-            import sys_scan_graph_agent.graph
-            reload(sys_scan_graph_agent.graph)
+            import sys_scan_agent.graph
+            reload(sys_scan_agent.graph)
 
             # Should be None when dependencies unavailable at import time
             # Note: This test may not work as expected due to import-time execution

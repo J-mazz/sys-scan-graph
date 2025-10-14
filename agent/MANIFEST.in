@@ -1,8 +1,8 @@
 include LICENSE
 include README.md
-recursive-include sys_scan_graph_agent *.yaml
-recursive-include sys_scan_graph_agent *.json
-recursive-include sys_scan_graph_agent *.txt
+recursive-include sys_scan_agent *.yaml
+recursive-include sys_scan_agent *.json
+recursive-include sys_scan_agent *.txt
 recursive-include prompt_templates *
 recursive-include executors *
 exclude *.db

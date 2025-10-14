@@ -7,11 +7,11 @@ from unittest.mock import patch, MagicMock, mock_open
 import typer
 from typer.testing import CliRunner
 
-from sys_scan_graph_agent.cli import (
+from sys_scan_agent.cli import (
     app, _notify, build_fleet_report, risk_weights, risk_calibration,
     risk_decision, keygen, sign, verify, run_intelligence_workflow
 )
-from sys_scan_graph_agent import models
+from sys_scan_agent import models
 
 
 @pytest.fixture
@@ -79,11 +79,11 @@ class TestUtilityFunctions:
         message = "Test message"
 
         # Should not raise exception and should print disabled message
-        with patch('sys_scan_graph_agent.cli.print') as mock_print:
+        with patch('sys_scan_agent.cli.print') as mock_print:
             _notify(cfg, message)
             mock_print.assert_called_with("[yellow]Notification disabled: Air-gapped deployment - external communications not allowed[/]")
 
-    @patch('sys_scan_graph_agent.cli.baseline.BaselineStore')
+    @patch('sys_scan_agent.cli.baseline.BaselineStore')
     def test_build_fleet_report_basic(self, mock_store_class, temp_dir):
         """Test build_fleet_report with basic data."""
         # Mock the baseline store
@@ -132,8 +132,8 @@ class TestRiskCommands:
 
     def test_risk_weights_show(self, runner):
         """Test risk_weights command with show option."""
-        with patch('sys_scan_graph_agent.cli.risk.load_persistent_weights') as mock_load, \
-             patch('sys_scan_graph_agent.cli.risk.describe') as mock_describe:
+        with patch('sys_scan_agent.cli.risk.load_persistent_weights') as mock_load, \
+             patch('sys_scan_agent.cli.risk.describe') as mock_describe:
 
             mock_load.return_value = {"impact": 0.4, "exposure": 0.3, "anomaly": 0.3}
             mock_describe.return_value = "Risk weights description"
@@ -145,8 +145,8 @@ class TestRiskCommands:
 
     def test_risk_weights_update(self, runner):
         """Test risk_weights command with update options."""
-        with patch('sys_scan_graph_agent.cli.risk.load_persistent_weights') as mock_load, \
-             patch('sys_scan_graph_agent.cli.risk.save_persistent_weights') as mock_save:
+        with patch('sys_scan_agent.cli.risk.load_persistent_weights') as mock_load, \
+             patch('sys_scan_agent.cli.risk.save_persistent_weights') as mock_save:
 
             mock_load.return_value = {"impact": 0.4, "exposure": 0.3, "anomaly": 0.3}
 
@@ -157,7 +157,7 @@ class TestRiskCommands:
 
     def test_risk_calibration_show(self, runner):
         """Test risk_calibration command with show option."""
-        with patch('sys_scan_graph_agent.cli.calibration.load_calibration') as mock_load:
+        with patch('sys_scan_agent.cli.calibration.load_calibration') as mock_load:
             mock_load.return_value = {"version": "test", "type": "logistic", "params": {"a": -3.0, "b": 0.15}}
 
             result = runner.invoke(app, ["risk-calibration", "--show"])
@@ -168,8 +168,8 @@ class TestRiskCommands:
 
     def test_risk_calibration_update(self, runner):
         """Test risk_calibration command with update options."""
-        with patch('sys_scan_graph_agent.cli.calibration.load_calibration') as mock_load, \
-             patch('sys_scan_graph_agent.cli.calibration.save_calibration') as mock_save:
+        with patch('sys_scan_agent.cli.calibration.load_calibration') as mock_load, \
+             patch('sys_scan_agent.cli.calibration.save_calibration') as mock_save:
 
             mock_load.return_value = {"version": "test", "type": "logistic", "params": {"a": -3.0, "b": 0.15}}
 
@@ -185,7 +185,7 @@ class TestIntegrityCommands:
 
     def test_keygen(self, runner, temp_dir):
         """Test keygen command."""
-        with patch('sys_scan_graph_agent.cli.generate_keypair') as mock_gen:
+        with patch('sys_scan_agent.cli.generate_keypair') as mock_gen:
             mock_gen.return_value = ("test_sk_base64", "test_vk_base64")
 
             result = runner.invoke(app, ["keygen", "--out-dir", str(temp_dir), "--prefix", "test"])
@@ -203,7 +203,7 @@ class TestIntegrityCommands:
 
     def test_sign(self, runner, sample_report_file):
         """Test sign command."""
-        with patch('sys_scan_graph_agent.cli.sign_file') as mock_sign:
+        with patch('sys_scan_agent.cli.sign_file') as mock_sign:
             mock_sign.return_value = ("test_digest", "test_sig_base64")
 
             key_file = sample_report_file.parent / "test_key"
@@ -217,7 +217,7 @@ class TestIntegrityCommands:
 
     def test_verify_valid(self, runner, sample_report_file):
         """Test verify command with valid signature."""
-        with patch('sys_scan_graph_agent.cli.verify_file') as mock_verify:
+        with patch('sys_scan_agent.cli.verify_file') as mock_verify:
             mock_verify.return_value = {"digest_match": True, "signature_valid": True}
 
             key_file = sample_report_file.parent / "test_key"
@@ -230,7 +230,7 @@ class TestIntegrityCommands:
 
     def test_verify_invalid(self, runner, sample_report_file):
         """Test verify command with invalid signature."""
-        with patch('sys_scan_graph_agent.cli.verify_file') as mock_verify:
+        with patch('sys_scan_agent.cli.verify_file') as mock_verify:
             mock_verify.return_value = {"digest_match": False, "signature_valid": False}
 
             key_file = sample_report_file.parent / "test_key"
@@ -262,8 +262,8 @@ class TestRuleCommands:
             "actions": []
         }))
 
-        with patch('sys_scan_graph_agent.rules.load_rules_dir') as mock_load, \
-             patch('sys_scan_graph_agent.rules.lint_rules') as mock_lint:
+        with patch('sys_scan_agent.rules.load_rules_dir') as mock_load, \
+             patch('sys_scan_agent.rules.lint_rules') as mock_lint:
 
             mock_load.return_value = [{"id": "test_rule"}]
             mock_lint.return_value = []  # No issues
@@ -278,8 +278,8 @@ class TestRuleCommands:
         rules_dir = temp_dir / "rules"
         rules_dir.mkdir()
 
-        with patch('sys_scan_graph_agent.rules.load_rules_dir') as mock_load, \
-             patch('sys_scan_graph_agent.rules.lint_rules') as mock_lint:
+        with patch('sys_scan_agent.rules.load_rules_dir') as mock_load, \
+             patch('sys_scan_agent.rules.lint_rules') as mock_lint:
 
             mock_load.return_value = [{"id": "test_rule"}]
             mock_lint.return_value = [
@@ -308,7 +308,7 @@ class TestValidationCommands:
             }
         }))
 
-        with patch('sys_scan_graph_agent.cli.run_intelligence_workflow') as mock_workflow:
+        with patch('sys_scan_agent.cli.run_intelligence_workflow') as mock_workflow:
             mock_workflow.return_value = (MagicMock(correlations=[]), {})
 
             result = runner.invoke(app, [
@@ -345,17 +345,17 @@ class TestValidationCommands:
 class TestIntelligenceWorkflow:
     """Test the intelligence workflow runner."""
 
-    @patch('sys_scan_graph_agent.cli.graph_state.normalize_graph_state')
-    @patch('sys_scan_graph_agent.cli.graph.enrich_findings')
-    @patch('sys_scan_graph_agent.cli.graph.correlate_findings')
-    @patch('sys_scan_graph_agent.cli.graph.risk_analyzer')
-    @patch('sys_scan_graph_agent.cli.graph.compliance_checker')
-    @patch('sys_scan_graph_agent.cli.graph.metrics_collector')
-    @patch('sys_scan_graph_agent.cli.graph._generate_executive_summary')
-    @patch('sys_scan_graph_agent.cli.graph._create_reductions')
-    @patch('sys_scan_graph_agent.cli.models.EnrichedOutput')
-    @patch('sys_scan_graph_agent.cli.models.Reductions')
-    @patch('sys_scan_graph_agent.cli.models.Summaries')
+    @patch('sys_scan_agent.cli.graph_state.normalize_graph_state')
+    @patch('sys_scan_agent.cli.graph.enrich_findings')
+    @patch('sys_scan_agent.cli.graph.correlate_findings')
+    @patch('sys_scan_agent.cli.graph.risk_analyzer')
+    @patch('sys_scan_agent.cli.graph.compliance_checker')
+    @patch('sys_scan_agent.cli.graph.metrics_collector')
+    @patch('sys_scan_agent.cli.graph._generate_executive_summary')
+    @patch('sys_scan_agent.cli.graph._create_reductions')
+    @patch('sys_scan_agent.cli.models.EnrichedOutput')
+    @patch('sys_scan_agent.cli.models.Reductions')
+    @patch('sys_scan_agent.cli.models.Summaries')
     def test_run_intelligence_workflow_success(self, mock_summaries, mock_reductions,
                                                mock_enriched_output, mock_create_reductions,
                                                mock_generate_summary, mock_metrics_collector,
@@ -425,7 +425,7 @@ class TestIntelligenceWorkflow:
         finally:
             report_path.unlink()
 
-    @patch('sys_scan_graph_agent.cli.graph_state.normalize_graph_state')
+    @patch('sys_scan_agent.cli.graph_state.normalize_graph_state')
     def test_run_intelligence_workflow_exception(self, mock_normalize):
         """Test intelligence workflow with exception."""
         # Mock normalize to raise exception
@@ -447,11 +447,11 @@ class TestIntelligenceWorkflow:
 class TestAnalyzeCommand:
     """Test the analyze CLI command."""
 
-    @patch('sys_scan_graph_agent.sandbox.configure')
-    @patch('sys_scan_graph_agent.cli.config.load_config')
-    @patch('sys_scan_graph_agent.cli.run_intelligence_workflow')
-    @patch('sys_scan_graph_agent.cli.report_html.write_html')
-    @patch('sys_scan_graph_agent.cli.config.write_manifest')
+    @patch('sys_scan_agent.sandbox.configure')
+    @patch('sys_scan_agent.cli.config.load_config')
+    @patch('sys_scan_agent.cli.run_intelligence_workflow')
+    @patch('sys_scan_agent.cli.report_html.write_html')
+    @patch('sys_scan_agent.cli.config.write_manifest')
     def test_analyze_basic(self, mock_write_manifest, mock_write_html, mock_run_workflow,
                           mock_load_config, mock_sandbox_config):
         """Test basic analyze command."""
@@ -497,9 +497,9 @@ class TestAnalyzeCommand:
             finally:
                 Path(report_path).unlink()
 
-    @patch('sys_scan_graph_agent.cli.sandbox')
-    @patch('sys_scan_graph_agent.cli.config.load_config')
-    @patch('sys_scan_graph_agent.cli.run_intelligence_workflow')
+    @patch('sys_scan_agent.cli.sandbox')
+    @patch('sys_scan_agent.cli.config.load_config')
+    @patch('sys_scan_agent.cli.run_intelligence_workflow')
     def test_analyze_dry_run(self, mock_run_workflow, mock_load_config, mock_sandbox):
         """Test analyze command with dry run."""
         mock_sandbox.configure = MagicMock()
@@ -531,10 +531,10 @@ class TestAnalyzeCommand:
         finally:
             Path(report_path).unlink()
 
-    @patch('sys_scan_graph_agent.cli.config.load_config')
-    @patch('sys_scan_graph_agent.cli.run_intelligence_workflow')
-    @patch('sys_scan_graph_agent.cli.metrics_exporter.write_metrics_json')
-    @patch('sys_scan_graph_agent.cli.metrics_exporter.print_metrics_summary')
+    @patch('sys_scan_agent.cli.config.load_config')
+    @patch('sys_scan_agent.cli.run_intelligence_workflow')
+    @patch('sys_scan_agent.cli.metrics_exporter.write_metrics_json')
+    @patch('sys_scan_agent.cli.metrics_exporter.print_metrics_summary')
     def test_analyze_with_metrics_json(self, mock_print_summary, mock_write_json,
                                       mock_run_workflow, mock_load_config):
         """Test analyze command with JSON metrics export."""
@@ -570,9 +570,9 @@ class TestAnalyzeCommand:
             finally:
                 Path(report_path).unlink()
 
-    @patch('sys_scan_graph_agent.cli.config.load_config')
-    @patch('sys_scan_graph_agent.cli.run_intelligence_workflow')
-    @patch('sys_scan_graph_agent.cli.metrics_exporter.export_metrics_csv')
+    @patch('sys_scan_agent.cli.config.load_config')
+    @patch('sys_scan_agent.cli.run_intelligence_workflow')
+    @patch('sys_scan_agent.cli.metrics_exporter.export_metrics_csv')
     def test_analyze_with_metrics_csv(self, mock_export_csv, mock_run_workflow, mock_load_config):
         """Test analyze command with CSV metrics export."""
         mock_config = MagicMock()
@@ -610,7 +610,7 @@ class TestAnalyzeCommand:
 class TestValidateBatchCommand:
     """Test the validate-batch CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.run_intelligence_workflow')
+    @patch('sys_scan_agent.cli.run_intelligence_workflow')
     def test_validate_batch_success(self, mock_run_workflow, runner, temp_dir):
         """Test successful batch validation."""
         # Create multiple report files
@@ -688,8 +688,8 @@ class TestValidateBatchCommand:
 class TestRiskDecisionCommand:
     """Test the risk-decision CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.run_intelligence_workflow')
-    @patch('sys_scan_graph_agent.cli.baseline.BaselineStore')
+    @patch('sys_scan_agent.cli.run_intelligence_workflow')
+    @patch('sys_scan_agent.cli.baseline.BaselineStore')
     def test_risk_decision(self, mock_store_class, mock_run_workflow, runner):
         """Test risk decision recording."""
         mock_store = MagicMock()
@@ -722,9 +722,9 @@ class TestRiskDecisionCommand:
 class TestRuleDryRunCommand:
     """Test the rule-dry-run CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.load_rules_dir')
-    @patch('sys_scan_graph_agent.cli.dry_run_apply')
-    @patch('sys_scan_graph_agent.cli.models.Finding')
+    @patch('sys_scan_agent.cli.load_rules_dir')
+    @patch('sys_scan_agent.cli.dry_run_apply')
+    @patch('sys_scan_agent.cli.models.Finding')
     def test_rule_dry_run_with_matches(self, mock_finding, mock_apply, mock_load, runner, temp_dir):
         """Test rule dry run with matches."""
         mock_load.return_value = {"rules": []}
@@ -764,7 +764,7 @@ class TestRuleDryRunCommand:
 class TestBaselineIntegrityCommand:
     """Test the baseline-integrity CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.baseline.BaselineStore')
+    @patch('sys_scan_agent.cli.baseline.BaselineStore')
     def test_baseline_integrity_complete(self, mock_store_class, runner):
         """Test baseline integrity with complete data."""
         mock_store = MagicMock()
@@ -785,7 +785,7 @@ class TestBaselineIntegrityCommand:
         assert "OK" in result.output
         mock_store.scan_days_present.assert_called_once_with('test-host', 3)
 
-    @patch('sys_scan_graph_agent.cli.baseline.BaselineStore')
+    @patch('sys_scan_agent.cli.baseline.BaselineStore')
     def test_baseline_integrity_missing_days(self, mock_store_class, runner):
         """Test baseline integrity with missing days."""
         mock_store = MagicMock()
@@ -811,7 +811,7 @@ class TestBaselineIntegrityCommand:
 class TestRarityGenerateCommand:
     """Test the rarity-generate-cmd CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.rarity_generate_func')
+    @patch('sys_scan_agent.cli.rarity_generate_func')
     def test_rarity_generate_cmd(self, mock_generate, runner, temp_dir):
         """Test rarity generation command."""
         mock_generate.return_value = Path("test_rarity.yaml")
@@ -831,7 +831,7 @@ class TestRarityGenerateCommand:
 class TestSandboxCommand:
     """Test the sandbox CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.sandbox')
+    @patch('sys_scan_agent.cli.sandbox')
     def test_sandbox_configure(self, mock_sandbox, runner):
         """Test sandbox configuration command."""
         mock_sandbox.configure = MagicMock()
@@ -852,7 +852,7 @@ class TestSandboxCommand:
 class TestBaselineDiffCommand:
     """Test the baseline-diff CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.baseline.BaselineStore')
+    @patch('sys_scan_agent.cli.baseline.BaselineStore')
     def test_baseline_diff_days(self, mock_store_class, runner):
         """Test baseline diff with days duration."""
         mock_store = MagicMock()
@@ -868,7 +868,7 @@ class TestBaselineDiffCommand:
         assert result.exit_code == 0
         mock_store.diff_since_days.assert_called_once_with('test-host', 7)
 
-    @patch('sys_scan_graph_agent.cli.baseline.BaselineStore')
+    @patch('sys_scan_agent.cli.baseline.BaselineStore')
     def test_baseline_diff_hours(self, mock_store_class, runner):
         """Test baseline diff with hours duration."""
         mock_store = MagicMock()
@@ -898,7 +898,7 @@ class TestBaselineDiffCommand:
 class TestFleetReportCommand:
     """Test the fleet-report CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.build_fleet_report')
+    @patch('sys_scan_agent.cli.build_fleet_report')
     def test_fleet_report_cmd(self, mock_build, runner, temp_dir):
         """Test fleet report command."""
         mock_build.return_value = {
@@ -927,7 +927,7 @@ class TestFleetReportCommand:
 class TestAuditTailCommand:
     """Test the audit-tail CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.tail_since')
+    @patch('sys_scan_agent.cli.tail_since')
     def test_audit_tail(self, mock_tail, runner):
         """Test audit tail command."""
         mock_tail.return_value = [
@@ -949,8 +949,8 @@ class TestAuditTailCommand:
 class TestRuleGapMineCommand:
     """Test the rule-gap-mine CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.mine_gap_candidates')
-    @patch('sys_scan_graph_agent.cli.refine_with_llm')
+    @patch('sys_scan_agent.cli.mine_gap_candidates')
+    @patch('sys_scan_agent.cli.refine_with_llm')
     def test_rule_gap_mine_without_refine(self, mock_refine, mock_mine, runner, temp_dir):
         """Test rule gap mining without LLM refinement."""
         mock_mine.return_value = {
@@ -976,8 +976,8 @@ class TestRuleGapMineCommand:
         assert "refined=False" in result.output
         mock_refine.assert_not_called()
 
-    @patch('sys_scan_graph_agent.cli.mine_gap_candidates')
-    @patch('sys_scan_graph_agent.cli.refine_with_llm')
+    @patch('sys_scan_agent.cli.mine_gap_candidates')
+    @patch('sys_scan_agent.cli.refine_with_llm')
     def test_rule_gap_mine_with_refine(self, mock_refine, mock_mine, runner, temp_dir):
         """Test rule gap mining with LLM refinement."""
         mock_mine.return_value = {
@@ -1007,7 +1007,7 @@ class TestRuleGapMineCommand:
 class TestVerifySignatureCommand:
     """Test the verify-signature CLI command."""
 
-    @patch('sys_scan_graph_agent.cli.verify_file')
+    @patch('sys_scan_agent.cli.verify_file')
     def test_verify_signature_valid(self, mock_verify, runner, sample_report_file):
         """Test verify signature command with valid signature."""
         mock_verify.return_value = {
@@ -1027,7 +1027,7 @@ class TestVerifySignatureCommand:
         assert result.exit_code == 0
         assert "Verification status" in result.output
 
-    @patch('sys_scan_graph_agent.cli.verify_file')
+    @patch('sys_scan_agent.cli.verify_file')
     def test_verify_signature_invalid(self, mock_verify, runner, sample_report_file):
         """Test verify signature command with invalid signature."""
         mock_verify.return_value = {

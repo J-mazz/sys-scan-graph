@@ -1,5 +1,5 @@
 from __future__ import annotations
-from sys_scan_graph_agent.graph import should_suggest_rules, choose_post_summarize
+from sys_scan_agent.graph import should_suggest_rules, choose_post_summarize
 
 
 def _end_symbol():

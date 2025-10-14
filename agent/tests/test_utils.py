@@ -6,11 +6,11 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from sys_scan_graph_agent.utils import (
+from sys_scan_agent.utils import (
     CAT_MAP, POLICY_MULTIPLIER, SEVERITY_BASE,
     _recompute_finding_risk, _log_error
 )
-from sys_scan_graph_agent.models import AgentWarning
+from sys_scan_agent.models import AgentWarning
 
 
 class TestConstants:
@@ -75,9 +75,9 @@ class TestRecomputeFindingRisk:
         }
 
         # Mock the modules that are imported inside the function
-        with patch('sys_scan_graph_agent.risk.load_persistent_weights', return_value={"impact": 0.4, "exposure": 0.3, "anomaly": 0.2, "confidence": 0.1}), \
-             patch('sys_scan_graph_agent.risk.compute_risk', return_value=(75.5, 45.2)), \
-             patch('sys_scan_graph_agent.calibration.apply_probability', return_value=0.85):
+        with patch('sys_scan_agent.risk.load_persistent_weights', return_value={"impact": 0.4, "exposure": 0.3, "anomaly": 0.2, "confidence": 0.1}), \
+             patch('sys_scan_agent.risk.compute_risk', return_value=(75.5, 45.2)), \
+             patch('sys_scan_agent.calibration.apply_probability', return_value=0.85):
 
             _recompute_finding_risk(finding)
 
@@ -112,8 +112,8 @@ class TestRecomputeFindingRisk:
         }
 
         # Mock to raise ValueError
-        with patch('sys_scan_graph_agent.risk.load_persistent_weights', side_effect=ValueError("Computation error")), \
-             patch('sys_scan_graph_agent.audit.log_stage') as mock_log:
+        with patch('sys_scan_agent.risk.load_persistent_weights', side_effect=ValueError("Computation error")), \
+             patch('sys_scan_agent.audit.log_stage') as mock_log:
 
             _recompute_finding_risk(finding)
 
@@ -135,8 +135,8 @@ class TestRecomputeFindingRisk:
         }
 
         # Mock to raise unexpected error
-        with patch('sys_scan_graph_agent.risk.load_persistent_weights', side_effect=RuntimeError("Unexpected error")), \
-             patch('sys_scan_graph_agent.audit.log_stage') as mock_log:
+        with patch('sys_scan_agent.risk.load_persistent_weights', side_effect=RuntimeError("Unexpected error")), \
+             patch('sys_scan_agent.audit.log_stage') as mock_log:
 
             _recompute_finding_risk(finding)
 
@@ -153,14 +153,14 @@ class TestLogError:
 
     def test_log_error_with_state(self):
         """Test error logging with state attachment."""
-        from sys_scan_graph_agent.models import AgentState
+        from sys_scan_agent.models import AgentState
 
         state = AgentState()
         state.agent_warnings = []
 
         error = ValueError("Test error")
 
-        with patch('sys_scan_graph_agent.audit.log_stage') as mock_log:
+        with patch('sys_scan_agent.audit.log_stage') as mock_log:
             _log_error("test_stage", error, state, "test_module", "warning", "test hint")
 
             # Should add warning to state
@@ -184,7 +184,7 @@ class TestLogError:
         """Test error logging without state."""
         error = RuntimeError("Test runtime error")
 
-        with patch('sys_scan_graph_agent.audit.log_stage') as mock_log:
+        with patch('sys_scan_agent.audit.log_stage') as mock_log:
             _log_error("another_stage", error, None, "another_module", "error")
 
             # Should log to audit
@@ -201,7 +201,7 @@ class TestLogError:
 
         error = Exception("Test exception")
 
-        with patch('sys_scan_graph_agent.audit.log_stage') as mock_log:
+        with patch('sys_scan_agent.audit.log_stage') as mock_log:
             # Should not crash despite append failure
             _log_error("stage", error, state, "module")
 
@@ -216,7 +216,7 @@ class TestLogError:
         """Test error logging when audit logging fails."""
         error = Exception("Test exception")
 
-        with patch('sys_scan_graph_agent.audit.log_stage', side_effect=Exception("Audit failed")):
+        with patch('sys_scan_agent.audit.log_stage', side_effect=Exception("Audit failed")):
             # Should not crash despite audit failure
             _log_error("stage", error, None, "module")
 

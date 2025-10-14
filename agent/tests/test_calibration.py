@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from sys_scan_graph_agent.calibration import (
+from sys_scan_agent.calibration import (
     load_calibration, save_calibration, logistic, apply_probability,
     CALIBRATION_FILE, DEFAULT_CALIBRATION
 )
@@ -20,7 +20,7 @@ class TestLoadCalibration:
 
     def test_load_calibration_default_when_file_missing(self):
         """Test loading default calibration when file doesn't exist."""
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE') as mock_file:
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE') as mock_file:
             mock_file.exists.return_value = False
 
             result = load_calibration()
@@ -41,7 +41,7 @@ class TestLoadCalibration:
         cal_file = tmp_path / "test_calibration.json"
         cal_file.write_text(json.dumps(cal_data))
 
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE', cal_file):
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE', cal_file):
             result = load_calibration()
 
             assert result == cal_data
@@ -54,7 +54,7 @@ class TestLoadCalibration:
         cal_file = tmp_path / "invalid_calibration.json"
         cal_file.write_text("invalid json content")
 
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE', cal_file):
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE', cal_file):
             result = load_calibration()
 
             # Should return default on JSON error
@@ -70,7 +70,7 @@ class TestLoadCalibration:
         cal_file = tmp_path / "missing_type_calibration.json"
         cal_file.write_text(json.dumps(cal_data))
 
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE', cal_file):
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE', cal_file):
             result = load_calibration()
 
             # Should return default when type is missing
@@ -86,7 +86,7 @@ class TestLoadCalibration:
         cal_file = tmp_path / "missing_params_calibration.json"
         cal_file.write_text(json.dumps(cal_data))
 
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE', cal_file):
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE', cal_file):
             result = load_calibration()
 
             # Should return default when params is missing
@@ -103,7 +103,7 @@ class TestLoadCalibration:
         cal_file = tmp_path / "wrong_type_calibration.json"
         cal_file.write_text(json.dumps(cal_data))
 
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE', cal_file):
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE', cal_file):
             result = load_calibration()
 
             # Should return default when type is not logistic
@@ -123,7 +123,7 @@ class TestSaveCalibration:
 
         cal_file = tmp_path / "save_test_calibration.json"
 
-        with patch('sys_scan_graph_agent.calibration.CALIBRATION_FILE', cal_file):
+        with patch('sys_scan_agent.calibration.CALIBRATION_FILE', cal_file):
             save_calibration(cal_data)
 
             # Verify file was written
@@ -166,7 +166,7 @@ class TestApplyProbability:
 
     def test_apply_probability_default_calibration(self):
         """Test apply_probability with default calibration."""
-        with patch('sys_scan_graph_agent.calibration.load_calibration', return_value=DEFAULT_CALIBRATION):
+        with patch('sys_scan_agent.calibration.load_calibration', return_value=DEFAULT_CALIBRATION):
             result = apply_probability(50.0)
 
             # Should use default params: a=-3.0, b=0.15
@@ -181,7 +181,7 @@ class TestApplyProbability:
             "params": {"a": -2.0, "b": 0.2}
         }
 
-        with patch('sys_scan_graph_agent.calibration.load_calibration', return_value=custom_cal):
+        with patch('sys_scan_agent.calibration.load_calibration', return_value=custom_cal):
             result = apply_probability(25.0)
 
             expected = round(logistic(-2.0, 0.2, 25.0), 4)
@@ -195,7 +195,7 @@ class TestApplyProbability:
             "params": {}  # Missing a and b
         }
 
-        with patch('sys_scan_graph_agent.calibration.load_calibration', return_value=bad_cal):
+        with patch('sys_scan_agent.calibration.load_calibration', return_value=bad_cal):
             result = apply_probability(10.0)
 
             # Should use defaults when params missing
@@ -210,7 +210,7 @@ class TestApplyProbability:
             "params": {"a": -2.0, "b": 0.2}
         }
 
-        with patch('sys_scan_graph_agent.calibration.load_calibration', return_value=non_logistic_cal):
+        with patch('sys_scan_agent.calibration.load_calibration', return_value=non_logistic_cal):
             result = apply_probability(10.0)
 
             # Should return 0.0 for non-logistic types

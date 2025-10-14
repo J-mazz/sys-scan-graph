@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import hashlib
-import sys_scan_graph_agent.sandbox as sandbox
+import sys_scan_agent.sandbox as sandbox
 
 SANDBOX = sandbox.SANDBOX
 

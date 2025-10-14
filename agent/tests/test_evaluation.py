@@ -9,7 +9,7 @@ import os
 EVALUATION_AVAILABLE = False
 evaluation = None
 try:
-    import sys_scan_graph_agent.evaluation as evaluation
+    import sys_scan_agent.evaluation as evaluation
     # Check if the module has the required functions
     required_attrs = ['Path', 'load_fixture', 'evaluate_fixture', 'run_evaluation', 'write_report']
     if all(hasattr(evaluation, attr) for attr in required_attrs):
@@ -24,7 +24,7 @@ except ImportError:
 class TestEvaluation:
     """Test evaluation utilities for attack detection."""
 
-    @patch('sys_scan_graph_agent.evaluation.Path')
+    @patch('sys_scan_agent.evaluation.Path')
     def test_load_fixture_success(self, mock_path_class):
         """Test successful loading of a fixture file."""
         # Create mock paths
@@ -46,7 +46,7 @@ class TestEvaluation:
         assert result == mock_final_path
         mock_final_path.exists.assert_called_once()
 
-    @patch('sys_scan_graph_agent.evaluation.Path')
+    @patch('sys_scan_agent.evaluation.Path')
     def test_load_fixture_file_not_found(self, mock_path_class):
         """Test loading a fixture that doesn't exist."""
         # Create mock paths
@@ -66,8 +66,8 @@ class TestEvaluation:
         with pytest.raises(FileNotFoundError):
             evaluation.load_fixture('nonexistent')
 
-    @patch('sys_scan_graph_agent.evaluation.run_pipeline')
-    @patch('sys_scan_graph_agent.evaluation.load_fixture')
+    @patch('sys_scan_agent.evaluation.run_pipeline')
+    @patch('sys_scan_agent.evaluation.load_fixture')
     def test_evaluate_fixture_success(self, mock_load_fixture, mock_run_pipeline):
         """Test successful evaluation of a fixture."""
         # Mock the fixture path
@@ -100,8 +100,8 @@ class TestEvaluation:
         assert len(result['hit_indicators']) == 2
         assert 'top_risks' in result
 
-    @patch('sys_scan_graph_agent.evaluation.run_pipeline')
-    @patch('sys_scan_graph_agent.evaluation.load_fixture')
+    @patch('sys_scan_agent.evaluation.run_pipeline')
+    @patch('sys_scan_agent.evaluation.load_fixture')
     def test_evaluate_fixture_no_indicators(self, mock_load_fixture, mock_run_pipeline):
         """Test evaluation when fixture has no expected indicators."""
         mock_path = Path('/fake/path/test.json')
@@ -116,8 +116,8 @@ class TestEvaluation:
         assert result['indicators_hits'] == 0
         assert result['detection_rate'] == 0.0
 
-    @patch('sys_scan_graph_agent.evaluation.run_pipeline')
-    @patch('sys_scan_graph_agent.evaluation.load_fixture')
+    @patch('sys_scan_agent.evaluation.run_pipeline')
+    @patch('sys_scan_agent.evaluation.load_fixture')
     def test_evaluate_fixture_no_risks_found(self, mock_load_fixture, mock_run_pipeline):
         """Test evaluation when no top risks are found."""
         mock_path = Path('/fake/path/test.json')
@@ -132,7 +132,7 @@ class TestEvaluation:
         assert result['indicators_hits'] == 0
         assert result['detection_rate'] == 0.0
 
-    @patch('sys_scan_graph_agent.evaluation.evaluate_fixture')
+    @patch('sys_scan_agent.evaluation.evaluate_fixture')
     def test_run_evaluation_single_fixture(self, mock_evaluate_fixture):
         """Test running evaluation on a single fixture."""
         mock_evaluate_fixture.return_value = {
@@ -151,7 +151,7 @@ class TestEvaluation:
         assert result['overall']['total_hits'] == 3
         assert result['overall']['overall_detection_rate'] == 0.6
 
-    @patch('sys_scan_graph_agent.evaluation.evaluate_fixture')
+    @patch('sys_scan_agent.evaluation.evaluate_fixture')
     def test_run_evaluation_multiple_fixtures(self, mock_evaluate_fixture):
         """Test running evaluation on multiple fixtures."""
         mock_evaluate_fixture.side_effect = [
@@ -180,7 +180,7 @@ class TestEvaluation:
         assert result['overall']['total_hits'] == 6
         assert result['overall']['overall_detection_rate'] == 0.6
 
-    @patch('sys_scan_graph_agent.evaluation.evaluate_fixture')
+    @patch('sys_scan_agent.evaluation.evaluate_fixture')
     def test_run_evaluation_no_indicators(self, mock_evaluate_fixture):
         """Test running evaluation when no indicators are found."""
         mock_evaluate_fixture.return_value = {
@@ -198,7 +198,7 @@ class TestEvaluation:
         assert result['overall']['total_hits'] == 0
         assert result['overall']['overall_detection_rate'] == 0.0
 
-    @patch('sys_scan_graph_agent.evaluation.run_evaluation')
+    @patch('sys_scan_agent.evaluation.run_evaluation')
     def test_write_report_success(self, mock_run_evaluation):
         """Test successful writing of evaluation report."""
         mock_data = {

@@ -34,13 +34,13 @@ from typing import List, Dict, Any
 
 # Import the modules to test
 try:
-    from sys_scan_graph_agent.legacy.graph_nodes_performance import (
+    from sys_scan_agent.legacy.graph_nodes_performance import (
         batch_process_findings,
         AdvancedCache,
         perf_config,
         FindingBatch
     )
-    from sys_scan_graph_agent.models import Finding
+    from sys_scan_agent.models import Finding
     PERFORMANCE_OPTIMIZATIONS_AVAILABLE = True
 except ImportError:
     PERFORMANCE_OPTIMIZATIONS_AVAILABLE = False
@@ -246,7 +246,7 @@ class TestParallelExecution(unittest.TestCase):
     def test_parallel_batch_processor_empty(self):
         """Test parallel batch processor with empty input."""
         async def run_test():
-            from sys_scan_graph_agent.legacy.graph_nodes_performance import parallel_batch_processor
+            from sys_scan_agent.legacy.graph_nodes_performance import parallel_batch_processor
             results = await parallel_batch_processor([], lambda x: x)
             return results
 
@@ -256,7 +256,7 @@ class TestParallelExecution(unittest.TestCase):
     def test_parallel_batch_processor_basic(self):
         """Test basic parallel batch processing."""
         async def run_test():
-            from sys_scan_graph_agent.legacy.graph_nodes_performance import parallel_batch_processor
+            from sys_scan_agent.legacy.graph_nodes_performance import parallel_batch_processor
             items = list(range(10))
 
             async def double_item(item: int) -> int:
@@ -275,7 +275,7 @@ class TestParallelExecution(unittest.TestCase):
     def test_parallel_batch_processor_with_errors(self):
         """Test parallel batch processor error handling."""
         async def run_test():
-            from sys_scan_graph_agent.legacy.graph_nodes_performance import parallel_batch_processor
+            from sys_scan_agent.legacy.graph_nodes_performance import parallel_batch_processor
             items = list(range(5))
 
             async def failing_processor(item: int) -> int:
@@ -354,7 +354,7 @@ class TestIntegration(unittest.TestCase):
     def test_concurrent_operations_limit(self):
         """Test that concurrent operations respect limits."""
         async def run_test():
-            from sys_scan_graph_agent.legacy.graph_nodes_performance import parallel_batch_processor
+            from sys_scan_agent.legacy.graph_nodes_performance import parallel_batch_processor
             items = list(range(20))
 
             async def slow_processor(item: int) -> int:
