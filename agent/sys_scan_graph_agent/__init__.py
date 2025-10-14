@@ -17,15 +17,15 @@ import subprocess
 import sys
 
 def _check_sys_scan():
-    """Check if sys-scan core is installed and available."""
+    """Check if sys-scan-graph core is installed and available."""
     try:
-        # Check if 'sys-scan' is in the system's PATH
-        subprocess.run(["which", "sys-scan"], check=True, capture_output=True)
+        # Check if 'sys-scan-graph' is in the system's PATH
+        subprocess.run(["which", "sys-scan-graph"], check=True, capture_output=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         print(
-            "Error: 'sys-scan' core not found.\n"
+            "Error: 'sys-scan-graph' core not found.\n"
             "Please install the core package first by running:\n"
-            "sudo apt install sys-scan",
+            "sudo apt install sys-scan-graph",
             file=sys.stderr
         )
         sys.exit(1)
