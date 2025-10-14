@@ -53,7 +53,7 @@ gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
 
 # Update and install
 sudo apt update
-sudo apt install sys-scan
+sudo apt install sys-scan-graph
 
 # Install Python intelligence layer (optional, for AI analysis)
 pip install sys-scan-graph
