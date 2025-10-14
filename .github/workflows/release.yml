@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup CMake toolchain
-        uses: lukka/get-cmake@v3
+        uses: lukka/get-cmake@latest
 
       - name: Install deps (apt)
         run: |
