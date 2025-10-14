@@ -17,7 +17,7 @@ Vcs-Browser: https://github.com/J-mazz/sys-scan-graph
 Vcs-Git: https://github.com/J-mazz/sys-scan-graph.git
 Rules-Requires-Root: no
 
-Package: sys-scan
+Package: sys-scan-graph
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
