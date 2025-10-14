@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch, mock_open
 import json
 try:
-    from sys_scan_graph_agent import performance_baseline
+    from sys_scan_agent import performance_baseline
     PERFORMANCE_BASELINE_AVAILABLE = True
 except ImportError:
     PERFORMANCE_BASELINE_AVAILABLE = False
@@ -55,7 +55,7 @@ from pathlib import Path
 from unittest.mock import patch, mock_open
 import json
 try:
-    from sys_scan_graph_agent import performance_baseline
+    from sys_scan_agent import performance_baseline
     PERFORMANCE_BASELINE_AVAILABLE = True
 except ImportError:
     PERFORMANCE_BASELINE_AVAILABLE = False
@@ -70,7 +70,7 @@ class TestPerformanceBaseline:
         """Test loading baseline when file exists."""
         mock_data = {"version": "1.0", "test": "data"}
 
-        with patch('sys_scan_graph_agent.performance_baseline.Path') as mock_path_class:
+        with patch('sys_scan_agent.performance_baseline.Path') as mock_path_class:
             mock_path = mock_path_class.return_value
             mock_path.exists.return_value = True
 
@@ -84,7 +84,7 @@ class TestPerformanceBaseline:
 
     def test_load_baseline_file_not_exists(self):
         """Test loading baseline when file doesn't exist."""
-        with patch('sys_scan_graph_agent.performance_baseline.Path') as mock_path_class:
+        with patch('sys_scan_agent.performance_baseline.Path') as mock_path_class:
             mock_path = mock_path_class.return_value
             mock_path.exists.return_value = False
 
@@ -97,7 +97,7 @@ class TestPerformanceBaseline:
 
     def test_load_baseline_default_path(self):
         """Test loading baseline with default path."""
-        with patch('sys_scan_graph_agent.performance_baseline.Path') as mock_path_class:
+        with patch('sys_scan_agent.performance_baseline.Path') as mock_path_class:
             mock_path = mock_path_class.return_value
             mock_path.exists.return_value = False
 
@@ -107,20 +107,20 @@ class TestPerformanceBaseline:
             # Should create Path with default path
             mock_path_class.assert_called_once_with("build/performance_baseline.json")
 
-    @patch('sys_scan_graph_agent.performance_baseline.datetime')
+    @patch('sys_scan_agent.performance_baseline.datetime')
     def test_save_baseline(self, mock_datetime):
         """Test saving baseline to file."""
         mock_datetime.now.return_value.isoformat.return_value = "2024-01-01T12:00:00"
 
         baseline_data = {"version": "1.0", "test": "data"}
 
-        with patch('sys_scan_graph_agent.performance_baseline.Path') as mock_path_class:
+        with patch('sys_scan_agent.performance_baseline.Path') as mock_path_class:
             mock_path = mock_path_class.return_value
             mock_parent = mock_path_class.return_value
             mock_path.parent = mock_parent
 
             with patch('builtins.open', mock_open()) as mock_file, \
-                 patch('sys_scan_graph_agent.performance_baseline.json.dump') as mock_json_dump:
+                 patch('sys_scan_agent.performance_baseline.json.dump') as mock_json_dump:
                 performance_baseline.save_baseline(baseline_data, "test.json")
 
                 # Verify parent.mkdir was called
@@ -136,12 +136,12 @@ class TestPerformanceBaseline:
                 assert written_data["test"] == "data"
                 assert written_data["last_updated"] == "2024-01-01T12:00:00"
 
-    @patch('sys_scan_graph_agent.performance_baseline.datetime')
+    @patch('sys_scan_agent.performance_baseline.datetime')
     def test_save_baseline_default_path(self, mock_datetime):
         """Test saving baseline with default path."""
         mock_datetime.now.return_value.isoformat.return_value = "2024-01-01T12:00:00"
 
-        with patch('sys_scan_graph_agent.performance_baseline.Path') as mock_path_class:
+        with patch('sys_scan_agent.performance_baseline.Path') as mock_path_class:
             mock_path = mock_path_class.return_value
             mock_parent = mock_path_class.return_value
             mock_path.parent = mock_parent
@@ -152,7 +152,7 @@ class TestPerformanceBaseline:
                 # Should use default path
                 mock_path_class.assert_called_once_with("build/performance_baseline.json")
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_check_performance_regression_no_violations(self, mock_load_baseline):
         """Test performance regression check with no violations."""
         mock_load_baseline.return_value = performance_baseline.BASELINE_METRICS
@@ -175,7 +175,7 @@ class TestPerformanceBaseline:
         assert result['summary']['cache_hit_rate'] == 0.5
         assert result['summary']['total_execution_time'] == 5.0
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_check_performance_regression_duration_violation(self, mock_load_baseline):
         """Test detection of duration regression."""
         mock_load_baseline.return_value = performance_baseline.BASELINE_METRICS
@@ -199,7 +199,7 @@ class TestPerformanceBaseline:
         assert violation['actual'] == 3.0
         assert violation['regression_factor'] == 3.0
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_check_performance_regression_node_count_violations(self, mock_load_baseline):
         """Test detection of node count violations."""
         mock_load_baseline.return_value = performance_baseline.BASELINE_METRICS
@@ -225,7 +225,7 @@ class TestPerformanceBaseline:
         assert len(result['violations']) == 1
         assert result['violations'][0]['type'] == 'excessive_nodes'
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_check_performance_regression_cache_violation(self, mock_load_baseline):
         """Test detection of cache hit rate violation."""
         mock_load_baseline.return_value = performance_baseline.BASELINE_METRICS
@@ -242,7 +242,7 @@ class TestPerformanceBaseline:
         assert len(result['violations']) == 1
         assert result['violations'][0]['type'] == 'low_cache_hit_rate'
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_check_performance_regression_multiple_violations(self, mock_load_baseline):
         """Test detection of multiple types of violations."""
         mock_load_baseline.return_value = performance_baseline.BASELINE_METRICS
@@ -264,7 +264,7 @@ class TestPerformanceBaseline:
         assert 'insufficient_nodes' in violation_types
         assert 'low_cache_hit_rate' in violation_types
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_check_performance_regression_recommendations(self, mock_load_baseline):
         """Test that appropriate recommendations are generated."""
         mock_load_baseline.return_value = performance_baseline.BASELINE_METRICS
@@ -283,8 +283,8 @@ class TestPerformanceBaseline:
         assert any("regression" in rec.lower() for rec in result['recommendations'])
         assert any("optimizing" in rec.lower() for rec in result['recommendations'])
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
-    @patch('sys_scan_graph_agent.performance_baseline.save_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.save_baseline')
     def test_update_baseline_from_metrics_new_node(self, mock_save_baseline, mock_load_baseline):
         """Test updating baseline with a new node."""
         baseline = performance_baseline.BASELINE_METRICS.copy()
@@ -308,8 +308,8 @@ class TestPerformanceBaseline:
         assert new_node_data['mean'] == 0.5
         assert new_node_data['max'] == 1.0
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
-    @patch('sys_scan_graph_agent.performance_baseline.save_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.save_baseline')
     def test_update_baseline_from_metrics_existing_node(self, mock_save_baseline, mock_load_baseline):
         """Test updating baseline for existing node with smoothing."""
         baseline = performance_baseline.BASELINE_METRICS.copy()
@@ -334,7 +334,7 @@ class TestPerformanceBaseline:
         assert abs(updated_node['mean'] - 0.54) < 0.001
         assert updated_node['max'] == 1.2  # Should take the higher max
 
-    @patch('sys_scan_graph_agent.performance_baseline.load_baseline')
+    @patch('sys_scan_agent.performance_baseline.load_baseline')
     def test_update_baseline_from_metrics_custom_smoothing(self, mock_load_baseline):
         """Test updating baseline with custom smoothing factor."""
         baseline = performance_baseline.BASELINE_METRICS.copy()
@@ -349,7 +349,7 @@ class TestPerformanceBaseline:
             }
         }
 
-        with patch('sys_scan_graph_agent.performance_baseline.save_baseline') as mock_save:
+        with patch('sys_scan_agent.performance_baseline.save_baseline') as mock_save:
             performance_baseline.update_baseline_from_metrics(current_metrics, smoothing_factor=0.5)
 
             saved_baseline = mock_save.call_args[0][0]

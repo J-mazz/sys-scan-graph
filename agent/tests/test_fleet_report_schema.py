@@ -2,8 +2,8 @@ import json, os, tempfile, shutil
 from pathlib import Path
 from jsonschema import validate
 import pytest
-from sys_scan_graph_agent.cli import build_fleet_report
-from sys_scan_graph_agent.baseline import BaselineStore
+from sys_scan_agent.cli import build_fleet_report
+from sys_scan_agent.baseline import BaselineStore
 
 # We directly invoke the function to generate a fleet report; baseline DB may be empty.
 

@@ -7,13 +7,13 @@ from unittest.mock import patch, MagicMock
 import os
 import time
 
-from sys_scan_graph_agent.pipeline import (
+from sys_scan_agent.pipeline import (
     load_report, augment, correlate, baseline_rarity,
     process_novelty, sequence_correlation, reduce, summarize,
     build_output, apply_policy, run_pipeline, generate_causal_hypotheses,
     _recompute_finding_risk
 )
-from sys_scan_graph_agent.models import AgentState, Report, ScannerResult, Finding, Correlation, ActionItem, Summaries
+from sys_scan_agent.models import AgentState, Report, ScannerResult, Finding, Correlation, ActionItem, Summaries
 
 
 @pytest.fixture(autouse=True)
@@ -347,11 +347,11 @@ class TestReduce:
 class TestSummarize:
     """Test summarize function."""
 
-    @patch('sys_scan_graph_agent.pipeline.LLMClient')
+    @patch('sys_scan_agent.pipeline.LLMClient')
     def test_summarize_basic(self, mock_llm_client_class, sample_report_path):
         """Test basic summarize functionality."""
         # Mock the LLM client class and instance
-        from sys_scan_graph_agent.models import Summaries
+        from sys_scan_agent.models import Summaries
         mock_summaries = Summaries(
             executive_summary="Test executive summary",
             analyst={"correlation_count": 0, "top_findings_count": 3},
@@ -498,14 +498,14 @@ class TestRunPipeline:
         baseline_db = tmp_path / "test_baseline.db"
 
         # Configure for sequential execution with limited cores to prevent memory issues
-        with patch('sys_scan_graph_agent.pipeline.get_llm_provider', return_value=MagicMock(
+        with patch('sys_scan_agent.pipeline.get_llm_provider', return_value=MagicMock(
                 summarize=MagicMock(return_value=(
                     MagicMock(metrics={'tokens_prompt': 100, 'tokens_completion': 50}),
                     MagicMock(model_name="test", provider_name="test", latency_ms=10,
                              tokens_prompt=100, tokens_completion=50)
                 ))
             )), \
-             patch('sys_scan_graph_agent.pipeline.load_config', return_value=MagicMock(
+             patch('sys_scan_agent.pipeline.load_config', return_value=MagicMock(
                 performance=MagicMock(parallel_baseline=False, workers=1),  # Force single worker
                 thresholds=MagicMock(summarization_risk_sum=0, process_novelty_distance=1.0),
                 paths=MagicMock(rule_dirs=[])

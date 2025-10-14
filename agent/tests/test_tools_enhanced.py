@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
 import json
 
-from sys_scan_graph_agent import tools_enhanced
+from sys_scan_agent import tools_enhanced
 
 
 class TestQueryBaselineEnhanced:
@@ -28,8 +28,8 @@ class TestQueryBaselineEnhanced:
             {'id': 'finding_2', 'title': 'Test finding 2'}
         ]
 
-        with patch('sys_scan_graph_agent.baseline.BaselineStore') as mock_store_class, \
-             patch('sys_scan_graph_agent.tools_enhanced._query_external_baseline', new_callable=AsyncMock) as mock_external:
+        with patch('sys_scan_agent.baseline.BaselineStore') as mock_store_class, \
+             patch('sys_scan_agent.tools_enhanced._query_external_baseline', new_callable=AsyncMock) as mock_external:
 
             # Setup mock local baseline
             mock_store = MagicMock()
@@ -61,8 +61,8 @@ class TestQueryBaselineEnhanced:
         """Test baseline querying with only local source available."""
         findings = [{'id': 'finding_1', 'title': 'Test finding'}]
 
-        with patch('sys_scan_graph_agent.baseline.BaselineStore') as mock_store_class, \
-             patch('sys_scan_graph_agent.tools_enhanced._query_external_baseline', new_callable=AsyncMock) as mock_external:
+        with patch('sys_scan_agent.baseline.BaselineStore') as mock_store_class, \
+             patch('sys_scan_agent.tools_enhanced._query_external_baseline', new_callable=AsyncMock) as mock_external:
 
             # Setup mock local baseline
             mock_store = MagicMock()
@@ -107,8 +107,8 @@ class TestQueryBaselineEnhanced:
         """Test baseline querying when all sources fail."""
         findings = [{'id': 'finding_1', 'title': 'Test finding'}]
 
-        with patch('sys_scan_graph_agent.baseline.BaselineStore') as mock_store_class, \
-             patch('sys_scan_graph_agent.tools_enhanced._query_external_baseline', new_callable=AsyncMock) as mock_external:
+        with patch('sys_scan_agent.baseline.BaselineStore') as mock_store_class, \
+             patch('sys_scan_agent.tools_enhanced._query_external_baseline', new_callable=AsyncMock) as mock_external:
 
             # Local baseline fails
             mock_store_class.side_effect = Exception("Baseline store unavailable")
@@ -131,8 +131,8 @@ class TestSearchExternalData:
         """Test successful external data search."""
         queries = ['vulnerability_1', 'threat_2']
 
-        with patch('sys_scan_graph_agent.tools_enhanced._search_cve_database', new_callable=AsyncMock) as mock_cve, \
-             patch('sys_scan_graph_agent.tools_enhanced._search_threat_intelligence', new_callable=AsyncMock) as mock_ti:
+        with patch('sys_scan_agent.tools_enhanced._search_cve_database', new_callable=AsyncMock) as mock_cve, \
+             patch('sys_scan_agent.tools_enhanced._search_threat_intelligence', new_callable=AsyncMock) as mock_ti:
 
             # Setup mock CVE results
             mock_cve.return_value = [
@@ -176,8 +176,8 @@ class TestSearchExternalData:
         """Test external data search when CVE search fails."""
         queries = ['test_query']
 
-        with patch('sys_scan_graph_agent.tools_enhanced._search_cve_database', new_callable=AsyncMock) as mock_cve, \
-             patch('sys_scan_graph_agent.tools_enhanced._search_threat_intelligence', new_callable=AsyncMock) as mock_ti:
+        with patch('sys_scan_agent.tools_enhanced._search_cve_database', new_callable=AsyncMock) as mock_cve, \
+             patch('sys_scan_agent.tools_enhanced._search_threat_intelligence', new_callable=AsyncMock) as mock_ti:
 
             # CVE search fails
             mock_cve.side_effect = Exception("CVE service unavailable")
@@ -204,8 +204,8 @@ class TestSearchExternalData:
         """Test external data search when all sources fail."""
         queries = ['test_query']
 
-        with patch('sys_scan_graph_agent.tools_enhanced._search_cve_database', new_callable=AsyncMock) as mock_cve, \
-             patch('sys_scan_graph_agent.tools_enhanced._search_threat_intelligence', new_callable=AsyncMock) as mock_ti:
+        with patch('sys_scan_agent.tools_enhanced._search_cve_database', new_callable=AsyncMock) as mock_cve, \
+             patch('sys_scan_agent.tools_enhanced._search_threat_intelligence', new_callable=AsyncMock) as mock_ti:
 
             # All sources fail
             mock_cve.side_effect = Exception("CVE service unavailable")

@@ -40,7 +40,7 @@ from tests.tools.mock_tool_server import MockToolServer, get_mock_server
 
 # Import tool wrapper
 try:
-    from sys_scan_graph_agent.tool_wrapper import ToolWrapper, get_tool_wrapper
+    from sys_scan_agent.tool_wrapper import ToolWrapper, get_tool_wrapper
     TOOL_WRAPPER_AVAILABLE = True
 except ImportError:
     TOOL_WRAPPER_AVAILABLE = False
@@ -48,8 +48,8 @@ except ImportError:
 
 # Try to import graph components
 try:
-    from sys_scan_graph_agent.graph_nodes import plan_baseline_queries, integrate_baseline_results
-    from sys_scan_graph_agent.graph import BaselineQueryGraph
+    from sys_scan_agent.graph_nodes import plan_baseline_queries, integrate_baseline_results
+    from sys_scan_agent.graph import BaselineQueryGraph
     GRAPH_AVAILABLE = True
 except ImportError:
     GRAPH_AVAILABLE = False

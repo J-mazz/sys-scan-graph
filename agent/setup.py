@@ -77,8 +77,8 @@ setup(
     # This creates the `sys-scan-graph` command
     entry_points={
         'console_scripts': [
-            'sys-scan-graph=sys_scan_graph_agent.cli:app',
-            'sys-scan-intelligence=sys_scan_graph_agent.cli:app'
+            'sys-scan-graph=sys_scan_agent.cli:app',
+            'sys-scan-intelligence=sys_scan_agent.cli:app'
         ],
     },
 )

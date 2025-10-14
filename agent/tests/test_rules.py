@@ -6,7 +6,7 @@ import json
 import tempfile
 from unittest.mock import MagicMock, patch
 
-from sys_scan_graph_agent import rules, models
+from sys_scan_agent import rules, models
 
 
 class TestCorrelatorApply:

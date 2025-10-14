@@ -2,8 +2,8 @@
 from unittest.mock import MagicMock
 import pytest
 
-from sys_scan_graph_agent import graph_analysis
-from sys_scan_graph_agent.models import AgentState, Finding, Correlation, Report, ScannerResult, Meta, Summary, SummaryExtension
+from sys_scan_agent import graph_analysis
+from sys_scan_agent.models import AgentState, Finding, Correlation, Report, ScannerResult, Meta, Summary, SummaryExtension
 
 
 class TestGraphAnalysis:

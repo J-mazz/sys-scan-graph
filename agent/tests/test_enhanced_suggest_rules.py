@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 import copy
-from sys_scan_graph_agent.graph import enhanced_enrich_findings, enhanced_suggest_rules
+from sys_scan_agent.graph import enhanced_enrich_findings, enhanced_suggest_rules
 
 
 def test_enhanced_suggest_rules_monkeypatch(monkeypatch):
@@ -16,7 +16,7 @@ def test_enhanced_suggest_rules_monkeypatch(monkeypatch):
         return {"suggestions": [
             {"id":"rule1","title":"Process pattern","conditions":[{"field":"title","contains":"process"}],"rationale":"test rationale","tags":["candidate"]}
         ]}
-    import sys_scan_graph_agent.rule_gap_miner as miner
+    import sys_scan_agent.rule_gap_miner as miner
     orig = miner.mine_gap_candidates
     monkeypatch.setattr(miner, 'mine_gap_candidates', fake_mine)
 

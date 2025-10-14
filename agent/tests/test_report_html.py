@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import json
 from datetime import datetime
 
-from sys_scan_graph_agent import report_html, models
+from sys_scan_agent import report_html, models
 
 
 class TestRenderHTML:

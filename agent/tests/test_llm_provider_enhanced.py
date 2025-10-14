@@ -8,9 +8,9 @@ sys.modules['torch'] = MagicMock()
 sys.modules['transformers'] = MagicMock()
 sys.modules['peft'] = MagicMock()
 
-from sys_scan_graph_agent import llm_provider_enhanced
-from sys_scan_graph_agent.llm_provider import ProviderMetadata, NullLLMProvider
-from sys_scan_graph_agent.models import Reductions, Correlation, ActionItem, Summaries
+from sys_scan_agent import llm_provider_enhanced
+from sys_scan_agent.llm_provider import ProviderMetadata, NullLLMProvider
+from sys_scan_agent.models import Reductions, Correlation, ActionItem, Summaries
 
 
 class TestEnhancedLLMProvider:
@@ -31,7 +31,7 @@ class TestEnhancedLLMProvider:
         assert provider.local_provider is not None
         assert provider.metrics == {'calls_made': 0, 'errors': 0}
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
     def test_summarize_success(self, mock_local_provider_class):
         """Test successful summarize operation."""
         # Setup mock local provider
@@ -63,7 +63,7 @@ class TestEnhancedLLMProvider:
             skip=False, previous=None, skip_reason=None, baseline_context=None
         )
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
     def test_summarize_with_parameters(self, mock_local_provider_class):
         """Test summarize with all parameters."""
         mock_local_provider = MagicMock()
@@ -99,8 +99,8 @@ class TestEnhancedLLMProvider:
             baseline_context=baseline_context
         )
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
-    @patch('sys_scan_graph_agent.llm_provider.NullLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider.NullLLMProvider')
     def test_summarize_fallback_on_error(self, mock_null_provider_class, mock_local_provider_class):
         """Test fallback to null provider when local provider fails."""
         # Setup mock local provider to raise exception
@@ -133,7 +133,7 @@ class TestEnhancedLLMProvider:
         assert provider.metrics['calls_made'] == 0  # Local call failed
         assert provider.metrics['errors'] == 1
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
     def test_refine_rules_success(self, mock_local_provider_class):
         """Test successful refine_rules operation."""
         mock_local_provider = MagicMock()
@@ -160,8 +160,8 @@ class TestEnhancedLLMProvider:
         assert provider.metrics['errors'] == 0
         mock_local_provider.refine_rules.assert_called_once_with(suggestions, examples)
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
-    @patch('sys_scan_graph_agent.llm_provider.NullLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider.NullLLMProvider')
     def test_refine_rules_fallback_on_error(self, mock_null_provider_class, mock_local_provider_class):
         """Test fallback to null provider when local provider fails."""
         # Setup mock local provider to raise exception
@@ -193,7 +193,7 @@ class TestEnhancedLLMProvider:
         assert provider.metrics['calls_made'] == 0  # Local call failed
         assert provider.metrics['errors'] == 1
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
     def test_triage_success(self, mock_local_provider_class):
         """Test successful triage operation."""
         mock_local_provider = MagicMock()
@@ -220,8 +220,8 @@ class TestEnhancedLLMProvider:
         assert provider.metrics['errors'] == 0
         mock_local_provider.triage.assert_called_once_with(reductions, correlations)
 
-    @patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider')
-    @patch('sys_scan_graph_agent.llm_provider.NullLLMProvider')
+    @patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider')
+    @patch('sys_scan_agent.llm_provider.NullLLMProvider')
     def test_triage_fallback_on_error(self, mock_null_provider_class, mock_local_provider_class):
         """Test fallback to null provider when triage fails."""
         mock_local_provider = MagicMock()
@@ -287,7 +287,7 @@ class TestEnhancedLLMProvider:
 
     def test_multiple_operations_metrics(self):
         """Test metrics accumulation across multiple operations."""
-        with patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider') as mock_class:
+        with patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider') as mock_class:
             mock_provider = MagicMock()
             mock_class.return_value = mock_provider
 
@@ -314,12 +314,12 @@ class TestEnhancedLLMProvider:
 
     def test_error_handling_with_multiple_failures(self):
         """Test error handling with multiple consecutive failures."""
-        with patch('sys_scan_graph_agent.llm_provider_enhanced.LocalMistralLLMProvider') as mock_class:
+        with patch('sys_scan_agent.llm_provider_enhanced.LocalMistralLLMProvider') as mock_class:
             mock_provider = MagicMock()
             mock_provider.summarize.side_effect = Exception("Persistent failure")
             mock_class.return_value = mock_provider
 
-            with patch('sys_scan_graph_agent.llm_provider.NullLLMProvider') as mock_null_class:
+            with patch('sys_scan_agent.llm_provider.NullLLMProvider') as mock_null_class:
                 mock_null = MagicMock()
                 mock_null.summarize.return_value = (Summaries(), ProviderMetadata(
                     model_name="null", provider_name="null", latency_ms=0, tokens_prompt=0, tokens_completion=0

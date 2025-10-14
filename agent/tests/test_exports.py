@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # Star import to validate __all__ content (flake8 ignore in project root if any)
-from sys_scan_graph_agent.graph import *  # type: ignore  # noqa: F401,F403
+from sys_scan_agent.graph import *  # type: ignore  # noqa: F401,F403
 
 expected_symbols = [
     'enrich_findings', 'enhanced_enrich_findings', 'enhanced_summarize_host_state',

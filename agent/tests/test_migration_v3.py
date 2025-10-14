@@ -2,8 +2,8 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import Mock
 try:
-    from sys_scan_graph_agent import migration_v3
-    from sys_scan_graph_agent import models
+    from sys_scan_agent import migration_v3
+    from sys_scan_agent import models
     MIGRATION_AVAILABLE = True
 except ImportError:
     MIGRATION_AVAILABLE = False

@@ -325,7 +325,7 @@ The Intelligence Layer consumes the C++ scanner's JSON output and produces an en
 - **Quality Assurance**: Each generated batch undergoes automated validation before inclusion in training corpus
 - **MLOps Pipeline**: Complete training infrastructure and data generation framework available at [sys-scan-agent-MLops](https://github.com/Mazzlabs/sys-scan-agent-MLops)
 
-**LangGraph Workflow Orchestration**: Two operational modes implemented in `agent/sys_scan_graph_agent/graph_nodes_scaffold.py`:
+**LangGraph Workflow Orchestration**: Two operational modes implemented in `agent/sys_scan_agent/graph_nodes_scaffold.py`:
 1. **Enhanced Workflow**: Full LLM-powered analysis with embedding generation, semantic clustering, and attack path correlation
 2. **Baseline Workflow**: Fast statistical analysis without LLM inference for benchmarking
 

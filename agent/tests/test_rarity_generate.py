@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch, mock_open
 import yaml
 try:
-    from sys_scan_graph_agent import rarity_generate
+    from sys_scan_agent import rarity_generate
     RARITY_GENERATE_AVAILABLE = True
 except ImportError:
     RARITY_GENERATE_AVAILABLE = False

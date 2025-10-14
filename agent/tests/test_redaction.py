@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from sys_scan_graph_agent.pipeline import run_pipeline
+from sys_scan_agent.pipeline import run_pipeline
 import json
 
 def test_home_dir_redaction(tmp_path):

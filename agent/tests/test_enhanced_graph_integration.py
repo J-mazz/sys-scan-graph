@@ -5,9 +5,9 @@ def test_enhanced_workflow_end_to_end(monkeypatch):
     # Force fresh import to avoid any caching issues
     import importlib
     import sys
-    if 'sys_scan_graph_agent.graph' in sys.modules:
-        importlib.reload(sys.modules['sys_scan_graph_agent.graph'])
-    from sys_scan_graph_agent.graph import build_workflow
+    if 'sys_scan_agent.graph' in sys.modules:
+        importlib.reload(sys.modules['sys_scan_agent.graph'])
+    from sys_scan_agent.graph import build_workflow
     wf, app = build_workflow(enhanced=True)
     assert app is not None, 'Compiled app should not be None in enhanced mode'
     initial_state = {

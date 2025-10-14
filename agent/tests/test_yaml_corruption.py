@@ -1,8 +1,8 @@
 from __future__ import annotations
 import textwrap, os, shutil
 from pathlib import Path
-from sys_scan_graph_agent import knowledge as K
-from sys_scan_graph_agent.models import AgentState, Report, Meta, Summary, SummaryExtension, ScannerResult, Finding
+from sys_scan_agent import knowledge as K
+from sys_scan_agent.models import AgentState, Report, Meta, Summary, SummaryExtension, ScannerResult, Finding
 
 def _state():
     # Provide one network finding so ports.yaml is actually loaded

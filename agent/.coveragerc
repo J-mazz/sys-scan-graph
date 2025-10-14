@@ -1,6 +1,6 @@
 [run]
-source = sys_scan_graph_agent
+source = sys_scan_agent
 
 [report]
-include = sys_scan_graph_agent/*
+include = sys_scan_agent/*
 

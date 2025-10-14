@@ -4,7 +4,7 @@ import tempfile
 from unittest.mock import patch, mock_open, MagicMock
 import pytest
 
-from sys_scan_graph_agent import hf_loader
+from sys_scan_agent import hf_loader
 
 
 class TestHFLoader:
@@ -98,8 +98,8 @@ class TestHFLoader:
         mock_pd.read_json.return_value = mock_df
         test_token = 'hf_testtoken123'
 
-        with patch('sys_scan_graph_agent.hf_loader._import_pd', return_value=mock_pd):
-            with patch('sys_scan_graph_agent.hf_loader._get_token', return_value=test_token):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value=test_token):
                 result = hf_loader.load_cybersec_jsonl()
 
                 assert result is mock_df
@@ -115,8 +115,8 @@ class TestHFLoader:
         mock_pd.read_json.return_value = mock_df
         test_token = 'hf_testtoken123'
 
-        with patch('sys_scan_graph_agent.hf_loader._import_pd', return_value=mock_pd):
-            with patch('sys_scan_graph_agent.hf_loader._get_token', return_value=test_token):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value=test_token):
                 result = hf_loader.load_cybersec_jsonl(lines=False)
 
                 assert result is mock_df
@@ -130,8 +130,8 @@ class TestHFLoader:
         mock_pd = MagicMock()
         mock_pd.read_json.side_effect = Exception("Network error")
 
-        with patch('sys_scan_graph_agent.hf_loader._import_pd', return_value=mock_pd):
-            with patch('sys_scan_graph_agent.hf_loader._get_token', return_value='hf_testtoken123'):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value='hf_testtoken123'):
                 result = hf_loader.load_cybersec_jsonl()
                 assert result is None
 
@@ -157,8 +157,8 @@ class TestHFLoader:
         mock_pd.read_parquet.return_value = mock_df
         test_token = 'hf_testtoken123'
 
-        with patch('sys_scan_graph_agent.hf_loader._import_pd', return_value=mock_pd):
-            with patch('sys_scan_graph_agent.hf_loader._get_token', return_value=test_token):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value=test_token):
                 result = hf_loader.load_cybersec_parquet()
 
                 assert result is mock_df
@@ -169,8 +169,8 @@ class TestHFLoader:
         mock_pd = MagicMock()
         mock_pd.read_parquet.side_effect = Exception("Network error")
 
-        with patch('sys_scan_graph_agent.hf_loader._import_pd', return_value=mock_pd):
-            with patch('sys_scan_graph_agent.hf_loader._get_token', return_value='hf_testtoken123'):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value='hf_testtoken123'):
                 result = hf_loader.load_cybersec_parquet()
                 assert result is None
 

@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch, MagicMock
 import asyncio
 from typing import Dict, Any, List
 
-from sys_scan_graph_agent.graph import (
+from sys_scan_agent.graph import (
     GraphState,
     memory_manager,
     reflection_engine,
@@ -41,7 +41,7 @@ from sys_scan_graph_agent.graph import (
 )
 
 # Import analysis functions directly
-from sys_scan_graph_agent.graph.analysis import risk_analyzer, compliance_checker, metrics_collector
+from sys_scan_agent.graph.analysis import risk_analyzer, compliance_checker, metrics_collector
 
 
 class TestGraphState:
@@ -586,7 +586,7 @@ class TestReflectionHelperFunctions:
 class TestSyncWrapperFunctions:
     """Test sync wrapper functions for async nodes."""
 
-    @patch('sys_scan_graph_agent.graph.enhanced_summarize_host_state')
+    @patch('sys_scan_agent.graph.enhanced_summarize_host_state')
     def test_summarize_host_state_with_function(self, mock_func):
         """Test summarize_host_state when function is available."""
         mock_func.return_value = {'summary': 'test summary'}
@@ -599,13 +599,13 @@ class TestSyncWrapperFunctions:
 
     def test_summarize_host_state_without_function(self):
         """Test summarize_host_state when function is None."""
-        with patch('sys_scan_graph_agent.graph.enhanced_summarize_host_state', None):
+        with patch('sys_scan_agent.graph.enhanced_summarize_host_state', None):
             state: GraphState = {'raw_findings': []}
             result = summarize_host_state(state)
 
             assert result == state  # Should return unchanged state
 
-    @patch('sys_scan_graph_agent.graph.enhanced_suggest_rules')
+    @patch('sys_scan_agent.graph.enhanced_suggest_rules')
     def test_suggest_rules_with_function(self, mock_func):
         """Test suggest_rules when function is available."""
         mock_func.return_value = {'suggested_rules': ['rule1']}
@@ -618,13 +618,13 @@ class TestSyncWrapperFunctions:
 
     def test_suggest_rules_without_function(self):
         """Test suggest_rules when function is None."""
-        with patch('sys_scan_graph_agent.graph.enhanced_suggest_rules', None):
+        with patch('sys_scan_agent.graph.enhanced_suggest_rules', None):
             state: GraphState = {'enriched_findings': []}
             result = suggest_rules(state)
 
             assert result == state  # Should return unchanged state
 
-    @patch('sys_scan_graph_agent.graph.tool_coordinator')
+    @patch('sys_scan_agent.graph.tool_coordinator')
     def test_tool_coordinator_sync_with_function(self, mock_func):
         """Test tool_coordinator_sync when function is available."""
         mock_func.return_value = {'tool_calls': ['call1']}
@@ -637,13 +637,13 @@ class TestSyncWrapperFunctions:
 
     def test_tool_coordinator_sync_without_function(self):
         """Test tool_coordinator_sync when function is None."""
-        with patch('sys_scan_graph_agent.graph.tool_coordinator', None):
+        with patch('sys_scan_agent.graph.tool_coordinator', None):
             state: GraphState = {'pending_tool_calls': []}
             result = tool_coordinator_sync(state)
 
             assert result == state  # Should return unchanged state
 
-    @patch('sys_scan_graph_agent.graph.risk_analyzer')
+    @patch('sys_scan_agent.graph.risk_analyzer')
     def test_risk_analyzer_sync_with_function(self, mock_func):
         """Test risk_analyzer_sync when function is available."""
         mock_func.return_value = {'risk_assessment': {'level': 'high'}}
@@ -654,7 +654,7 @@ class TestSyncWrapperFunctions:
         assert result == {'risk_assessment': {'level': 'high'}}
         mock_func.assert_called_once_with(state)
 
-    @patch('sys_scan_graph_agent.graph.compliance_checker')
+    @patch('sys_scan_agent.graph.compliance_checker')
     def test_compliance_checker_sync_with_function(self, mock_func):
         """Test compliance_checker_sync when function is available."""
         mock_func.return_value = {'compliance_check': {'passed': 5}}
@@ -665,7 +665,7 @@ class TestSyncWrapperFunctions:
         assert result == {'compliance_check': {'passed': 5}}
         mock_func.assert_called_once_with(state)
 
-    @patch('sys_scan_graph_agent.graph.metrics_collector')
+    @patch('sys_scan_agent.graph.metrics_collector')
     def test_metrics_collector_sync_with_function(self, mock_func):
         """Test metrics_collector_sync when function is available."""
         mock_func.return_value = {'metrics': {'duration': 100}}
@@ -676,7 +676,7 @@ class TestSyncWrapperFunctions:
         assert result == {'metrics': {'duration': 100}}
         mock_func.assert_called_once_with(state)
 
-    @patch('sys_scan_graph_agent.graph.query_baseline')
+    @patch('sys_scan_agent.graph.query_baseline')
     def test_baseline_tools_sync_with_function(self, mock_func):
         """Test baseline_tools_sync when function is available."""
         mock_func.return_value = {'baseline_data': 'test'}
@@ -704,7 +704,7 @@ class TestSyncWrapperFunctions:
 
     def test_baseline_tools_sync_without_messages(self):
         """Test baseline_tools_sync when no messages present."""
-        with patch('sys_scan_graph_agent.graph.query_baseline', None):
+        with patch('sys_scan_agent.graph.query_baseline', None):
             state: GraphState = {}
             result = baseline_tools_sync(state)
 
@@ -712,7 +712,7 @@ class TestSyncWrapperFunctions:
 
     def test_baseline_tools_sync_without_tool_calls(self):
         """Test baseline_tools_sync when messages have no tool calls."""
-        with patch('sys_scan_graph_agent.graph.query_baseline', None):
+        with patch('sys_scan_agent.graph.query_baseline', None):
             state: GraphState = {'messages': [{'content': 'no tools'}]}
             result = baseline_tools_sync(state)
 
@@ -720,7 +720,7 @@ class TestSyncWrapperFunctions:
 
     def test_baseline_tools_sync_without_function(self):
         """Test baseline_tools_sync when query_baseline is None."""
-        with patch('sys_scan_graph_agent.graph.query_baseline', None):
+        with patch('sys_scan_agent.graph.query_baseline', None):
             state: GraphState = {
                 'messages': [{
                     'tool_calls': [{
@@ -740,10 +740,10 @@ class TestBuildWorkflow:
 
     def test_build_workflow_with_dependencies(self):
         """Test build_workflow when all dependencies are available."""
-        with patch('sys_scan_graph_agent.graph.StateGraph') as mock_state_graph, \
-             patch('sys_scan_graph_agent.graph.END', 'END'), \
-             patch('sys_scan_graph_agent.graph.START', 'START'), \
-             patch('sys_scan_graph_agent.graph.ToolNode', 'ToolNode'):
+        with patch('sys_scan_agent.graph.StateGraph') as mock_state_graph, \
+             patch('sys_scan_agent.graph.END', 'END'), \
+             patch('sys_scan_agent.graph.START', 'START'), \
+             patch('sys_scan_agent.graph.ToolNode', 'ToolNode'):
             
             # Mock the required components
             mock_wf = Mock()
@@ -755,7 +755,7 @@ class TestBuildWorkflow:
             mock_state_graph.return_value = mock_wf
 
             # Mock the imported functions
-            with patch.multiple('sys_scan_graph_agent.graph',
+            with patch.multiple('sys_scan_agent.graph',
                               enrich_findings=Mock(),
                               enhanced_summarize_host_state=Mock(),
                               enhanced_suggest_rules=Mock(),
@@ -776,7 +776,7 @@ class TestBuildWorkflow:
     def test_build_workflow_without_dependencies(self):
         """Test build_workflow when dependencies are not available."""
         # Mock imports to return None
-        with patch.multiple('sys_scan_graph_agent.graph',
+        with patch.multiple('sys_scan_agent.graph',
                           StateGraph=None,
                           END=None,
                           START=None,
@@ -798,7 +798,7 @@ class TestBuildWorkflow:
 
     def test_build_workflow_partial_dependencies(self):
         """Test build_workflow with some dependencies missing."""
-        with patch.multiple('sys_scan_graph_agent.graph',
+        with patch.multiple('sys_scan_agent.graph',
                           StateGraph=Mock(),
                           END='END',
                           START='START',
@@ -822,7 +822,7 @@ class TestErrorHandling:
         async def failing_func(state):
             raise Exception("Test exception")
 
-        with patch('sys_scan_graph_agent.graph.enhanced_summarize_host_state', failing_func):
+        with patch('sys_scan_agent.graph.enhanced_summarize_host_state', failing_func):
             state: GraphState = {}  # Empty state
             result = summarize_host_state(state)
 
@@ -833,13 +833,13 @@ class TestErrorHandling:
         """Test that global workflow variables handle missing dependencies."""
         # The workflow and app variables should be set appropriately
         # when dependencies are missing
-        with patch.multiple('sys_scan_graph_agent.graph',
+        with patch.multiple('sys_scan_agent.graph',
                           StateGraph=None,
                           enrich_findings=None):
             # Re-import to trigger the build_workflow call
             from importlib import reload
-            import sys_scan_graph_agent.graph
-            reload(sys_scan_graph_agent.graph)
+            import sys_scan_agent.graph
+            reload(sys_scan_agent.graph)
 
             # Should be None when dependencies unavailable at import time
             # Note: This test may not work as expected due to import-time execution
@@ -938,7 +938,7 @@ class TestAnalysisFunctions:
     @pytest.mark.asyncio
     async def test_risk_analyzer_with_correlations(self):
         """Test risk_analyzer with correlation bonus."""
-        from sys_scan_graph_agent import models
+        from sys_scan_agent import models
 
         correlation = models.Correlation(
             id='corr1',
@@ -1093,7 +1093,7 @@ class TestAnalysisFunctions:
     @pytest.mark.asyncio
     async def test_metrics_collector_basic_functionality(self):
         """Test metrics_collector collects basic metrics."""
-        from sys_scan_graph_agent import models
+        from sys_scan_agent import models
 
         correlation = models.Correlation(
             id='corr1',
@@ -1177,7 +1177,7 @@ class TestEnrichmentFunctions:
 
     def test_enrich_findings_basic_functionality(self):
         """Test enrich_findings with basic raw findings."""
-        from sys_scan_graph_agent.graph.enrichment import enrich_findings
+        from sys_scan_agent.graph.enrichment import enrich_findings
 
         state: Dict[str, Any] = {
             'raw_findings': [
@@ -1198,7 +1198,7 @@ class TestEnrichmentFunctions:
 
     def test_enrich_findings_empty_findings(self):
         """Test enrich_findings with no findings."""
-        from sys_scan_graph_agent.graph.enrichment import enrich_findings
+        from sys_scan_agent.graph.enrichment import enrich_findings
 
         state: Dict[str, Any] = {
             'raw_findings': []
@@ -1211,7 +1211,7 @@ class TestEnrichmentFunctions:
 
     def test_correlate_findings_basic_functionality(self):
         """Test correlate_findings with enriched findings."""
-        from sys_scan_graph_agent.graph.enrichment import correlate_findings
+        from sys_scan_agent.graph.enrichment import correlate_findings
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1231,7 +1231,7 @@ class TestEnrichmentFunctions:
 
     def test_correlate_findings_no_findings(self):
         """Test correlate_findings with no enriched findings."""
-        from sys_scan_graph_agent.graph.enrichment import correlate_findings
+        from sys_scan_agent.graph.enrichment import correlate_findings
 
         state: Dict[str, Any] = {
             'enriched_findings': []
@@ -1245,7 +1245,7 @@ class TestEnrichmentFunctions:
     @pytest.mark.asyncio
     async def test_enhanced_enrich_findings_basic_functionality(self):
         """Test enhanced_enrich_findings with caching."""
-        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+        from sys_scan_agent.graph.enrichment import enhanced_enrich_findings
 
         state: Dict[str, Any] = {
             'raw_findings': [
@@ -1268,7 +1268,7 @@ class TestEnrichmentFunctions:
     @pytest.mark.asyncio
     async def test_enhanced_enrich_findings_cache_hit(self):
         """Test enhanced_enrich_findings cache hit scenario."""
-        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+        from sys_scan_agent.graph.enrichment import enhanced_enrich_findings
 
         # Pre-populate cache
         cached_findings = [
@@ -1286,7 +1286,7 @@ class TestEnrichmentFunctions:
         }
 
         # Mock the cache key generation to return the known key
-        with patch('sys_scan_graph_agent.graph.enrichment._generate_cache_key', return_value='enrich:some_key'):
+        with patch('sys_scan_agent.graph.enrichment._generate_cache_key', return_value='enrich:some_key'):
             result = await enhanced_enrich_findings(state)
 
             # Should use cached results
@@ -1296,7 +1296,7 @@ class TestEnrichmentFunctions:
     @pytest.mark.asyncio
     async def test_enhanced_enrich_findings_empty_findings(self):
         """Test enhanced_enrich_findings with no findings."""
-        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+        from sys_scan_agent.graph.enrichment import enhanced_enrich_findings
 
         state: Dict[str, Any] = {
             'raw_findings': []
@@ -1311,7 +1311,7 @@ class TestEnrichmentFunctions:
     @pytest.mark.asyncio
     async def test_enhanced_enrich_findings_error_handling(self):
         """Test enhanced_enrich_findings error handling."""
-        from sys_scan_graph_agent.graph.enrichment import enhanced_enrich_findings
+        from sys_scan_agent.graph.enrichment import enhanced_enrich_findings
 
         state: Dict[str, Any] = {
             'raw_findings': [
@@ -1320,7 +1320,7 @@ class TestEnrichmentFunctions:
         }
 
         # Mock pipeline to raise an exception
-        with patch('sys_scan_graph_agent.graph.enrichment._perform_enrichment_pipeline', side_effect=Exception("Test error")):
+        with patch('sys_scan_agent.graph.enrichment._perform_enrichment_pipeline', side_effect=Exception("Test error")):
             result = await enhanced_enrich_findings(state)
 
             # Should handle error gracefully - enriched_findings may be empty or fallback to raw
@@ -1333,7 +1333,7 @@ class TestEnrichmentFunctions:
 
     def test_enrich_findings_with_existing_enriched(self):
         """Test enrich_findings when enriched findings already exist."""
-        from sys_scan_graph_agent.graph.enrichment import enrich_findings
+        from sys_scan_agent.graph.enrichment import enrich_findings
 
         state: Dict[str, Any] = {
             'raw_findings': [
@@ -1352,7 +1352,7 @@ class TestEnrichmentFunctions:
 
     def test_correlate_findings_with_existing_correlations(self):
         """Test correlate_findings when correlations already exist."""
-        from sys_scan_graph_agent.graph.enrichment import correlate_findings
+        from sys_scan_agent.graph.enrichment import correlate_findings
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1373,7 +1373,7 @@ class TestRoutingFunctions:
 
     def test_advanced_router_human_feedback_pending(self):
         """Test advanced_router returns human_feedback when pending."""
-        from sys_scan_graph_agent.graph.routing import advanced_router
+        from sys_scan_agent.graph.routing import advanced_router
 
         state: Dict[str, Any] = {
             'human_feedback_pending': True,
@@ -1385,7 +1385,7 @@ class TestRoutingFunctions:
 
     def test_advanced_router_no_findings(self):
         """Test advanced_router returns summarize when no findings."""
-        from sys_scan_graph_agent.graph.routing import advanced_router
+        from sys_scan_agent.graph.routing import advanced_router
 
         state: Dict[str, Any] = {
             'enriched_findings': [],
@@ -1397,7 +1397,7 @@ class TestRoutingFunctions:
 
     def test_advanced_router_compliance_violations(self):
         """Test advanced_router routes to compliance_checker for compliance violations."""
-        from sys_scan_graph_agent.graph.routing import advanced_router
+        from sys_scan_agent.graph.routing import advanced_router
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1411,7 +1411,7 @@ class TestRoutingFunctions:
 
     def test_advanced_router_baseline_missing(self):
         """Test advanced_router routes to plan_baseline for missing baseline."""
-        from sys_scan_graph_agent.graph.routing import advanced_router
+        from sys_scan_agent.graph.routing import advanced_router
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1425,7 +1425,7 @@ class TestRoutingFunctions:
 
     def test_advanced_router_default_summarize(self):
         """Test advanced_router defaults to summarize."""
-        from sys_scan_graph_agent.graph.routing import advanced_router
+        from sys_scan_agent.graph.routing import advanced_router
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1439,7 +1439,7 @@ class TestRoutingFunctions:
 
     def test_should_suggest_rules_no_findings(self):
         """Test should_suggest_rules with no findings."""
-        from sys_scan_graph_agent.graph.routing import should_suggest_rules
+        from sys_scan_agent.graph.routing import should_suggest_rules
 
         state: Dict[str, Any] = {
             'enriched_findings': []
@@ -1450,7 +1450,7 @@ class TestRoutingFunctions:
 
     def test_should_suggest_rules_high_severity(self):
         """Test should_suggest_rules routes to suggest_rules for high severity findings."""
-        from sys_scan_graph_agent.graph.routing import should_suggest_rules
+        from sys_scan_agent.graph.routing import should_suggest_rules
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1464,7 +1464,7 @@ class TestRoutingFunctions:
 
     def test_should_suggest_rules_no_high_severity(self):
         """Test should_suggest_rules ends workflow when no high severity findings."""
-        from sys_scan_graph_agent.graph.routing import should_suggest_rules
+        from sys_scan_agent.graph.routing import should_suggest_rules
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1478,7 +1478,7 @@ class TestRoutingFunctions:
 
     def test_choose_post_summarize_baseline_needed(self):
         """Test choose_post_summarize routes to plan_baseline when baseline cycle not done."""
-        from sys_scan_graph_agent.graph.routing import choose_post_summarize
+        from sys_scan_agent.graph.routing import choose_post_summarize
 
         state: Dict[str, Any] = {
             'baseline_cycle_done': False,
@@ -1492,7 +1492,7 @@ class TestRoutingFunctions:
 
     def test_choose_post_summarize_baseline_done(self):
         """Test choose_post_summarize delegates to should_suggest_rules when baseline done."""
-        from sys_scan_graph_agent.graph.routing import choose_post_summarize
+        from sys_scan_agent.graph.routing import choose_post_summarize
 
         state: Dict[str, Any] = {
             'baseline_cycle_done': True,
@@ -1507,7 +1507,7 @@ class TestRoutingFunctions:
     @pytest.mark.asyncio
     async def test_tool_coordinator_no_findings(self):
         """Test tool_coordinator with no findings."""
-        from sys_scan_graph_agent.graph.routing import tool_coordinator
+        from sys_scan_agent.graph.routing import tool_coordinator
 
         state: Dict[str, Any] = {
             'enriched_findings': [],
@@ -1522,7 +1522,7 @@ class TestRoutingFunctions:
     @pytest.mark.asyncio
     async def test_tool_coordinator_with_missing_baseline(self):
         """Test tool_coordinator creates tool calls for missing baseline."""
-        from sys_scan_graph_agent.graph.routing import tool_coordinator
+        from sys_scan_agent.graph.routing import tool_coordinator
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1542,7 +1542,7 @@ class TestRoutingFunctions:
     @pytest.mark.asyncio
     async def test_tool_coordinator_all_baselines_present(self):
         """Test tool_coordinator when all findings have baseline."""
-        from sys_scan_graph_agent.graph.routing import tool_coordinator
+        from sys_scan_agent.graph.routing import tool_coordinator
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1558,7 +1558,7 @@ class TestRoutingFunctions:
     @pytest.mark.asyncio
     async def test_tool_coordinator_error_handling(self):
         """Test tool_coordinator error handling."""
-        from sys_scan_graph_agent.graph.routing import tool_coordinator
+        from sys_scan_agent.graph.routing import tool_coordinator
 
         state: Dict[str, Any] = {
             'enriched_findings': [
@@ -1567,7 +1567,7 @@ class TestRoutingFunctions:
         }
 
         # Mock to raise an exception
-        with patch('sys_scan_graph_agent.graph.routing._prepare_tool_coordination_data', side_effect=Exception("Test error")):
+        with patch('sys_scan_agent.graph.routing._prepare_tool_coordination_data', side_effect=Exception("Test error")):
             result = await tool_coordinator(state)
 
             # Should handle error gracefully and add warning
@@ -1581,7 +1581,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_basic_functionality(self):
         """Test canonicalize_enriched_output_dict with basic enriched output."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         output_dict = {
             'correlations': [
@@ -1634,7 +1634,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_empty_lists(self):
         """Test canonicalize_enriched_output_dict with empty lists."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         output_dict = {
             'correlations': [],
@@ -1652,7 +1652,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_missing_fields(self):
         """Test canonicalize_enriched_output_dict with missing fields."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         output_dict = {
             'some_field': 'value'
@@ -1668,7 +1668,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_non_dict_items(self):
         """Test canonicalize_enriched_output_dict with non-dict items in lists."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         output_dict = {
             'correlations': ['string_corr3', 'string_corr1', 'string_corr2'],
@@ -1691,7 +1691,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_non_list_fields(self):
         """Test canonicalize_enriched_output_dict with non-list fields."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         output_dict = {
             'correlations': 'not_a_list',
@@ -1710,7 +1710,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_preserves_original(self):
         """Test canonicalize_enriched_output_dict preserves the original dict."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         original = {
             'correlations': [{'id': 'corr2'}, {'id': 'corr1'}],
@@ -1729,7 +1729,7 @@ class TestCanonicalizeFunctions:
 
     def test_canonicalize_enriched_output_dict_complex_nested(self):
         """Test canonicalize_enriched_output_dict with complex nested structures."""
-        from sys_scan_graph_agent.canonicalize import canonicalize_enriched_output_dict
+        from sys_scan_agent.canonicalize import canonicalize_enriched_output_dict
 
         output_dict = {
             'correlations': [
@@ -1765,8 +1765,8 @@ class TestEndpointClassification:
 
     def test_classify_empty_report(self):
         """Test classify with empty report."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         report = models.Report(
             meta=models.Meta(),
@@ -1782,7 +1782,7 @@ class TestEndpointClassification:
 
     def test_classify_none_report(self):
         """Test classify with None report."""
-        from sys_scan_graph_agent.endpoint_classification import classify
+        from sys_scan_agent.endpoint_classification import classify
 
         role, signals = classify(None)
 
@@ -1791,8 +1791,8 @@ class TestEndpointClassification:
 
     def test_classify_bastion_role(self):
         """Test classify identifies bastion role."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         # Create findings with bastion signals: multiple SSH listeners + routing
         findings = [
@@ -1842,8 +1842,8 @@ class TestEndpointClassification:
 
     def test_classify_lightweight_router_ip_forward(self):
         """Test classify identifies lightweight_router with IP forwarding."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = [
             models.Finding(
@@ -1876,8 +1876,8 @@ class TestEndpointClassification:
 
     def test_classify_lightweight_router_nat(self):
         """Test classify identifies lightweight_router with NAT."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = [
             models.Finding(
@@ -1910,8 +1910,8 @@ class TestEndpointClassification:
 
     def test_classify_container_host(self):
         """Test classify identifies container_host."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = [
             models.Finding(
@@ -1952,8 +1952,8 @@ class TestEndpointClassification:
 
     def test_classify_dev_workstation(self):
         """Test classify identifies dev_workstation."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = [
             # Dev ports
@@ -2012,8 +2012,8 @@ class TestEndpointClassification:
 
     def test_classify_workstation_fallback(self):
         """Test classify defaults to workstation."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = [
             models.Finding(
@@ -2046,8 +2046,8 @@ class TestEndpointClassification:
 
     def test_classify_bastion_with_many_services(self):
         """Test classify bastion with many services gets additional signal."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = []
         # Create 15 listening services (more than 12)
@@ -2110,8 +2110,8 @@ class TestEndpointClassification:
 
     def test_classify_multiple_scanner_types(self):
         """Test classify with multiple scanner result types."""
-        from sys_scan_graph_agent.endpoint_classification import classify
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify
+        from sys_scan_agent import models
 
         findings = [
             # Network findings
@@ -2164,8 +2164,8 @@ class TestEndpointClassification:
 
     def test_classify_role_order_precedence(self):
         """Test that role ordering is respected (bastion > lightweight_router > container_host > dev_workstation > workstation)."""
-        from sys_scan_graph_agent.endpoint_classification import classify, ROLE_ORDER
-        from sys_scan_graph_agent import models
+        from sys_scan_agent.endpoint_classification import classify, ROLE_ORDER
+        from sys_scan_agent import models
 
         # Test that bastion takes precedence over others
         findings = [

@@ -15,12 +15,12 @@ import pytest
 from typing import Dict, Any
 
 try:
-    from sys_scan_graph_agent.graph import app  # type: ignore
+    from sys_scan_agent.graph import app  # type: ignore
 except Exception:  # pragma: no cover
     app = None  # type: ignore
 
 # Import scaffold nodes explicitly for fallback/manual execution
-from sys_scan_graph_agent.graph import (
+from sys_scan_agent.graph import (
     enrich_findings,
     enhanced_summarize_host_state,
     enhanced_suggest_rules,

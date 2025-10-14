@@ -144,7 +144,7 @@ cd agent/
 python3 -m pytest -v
 
 # Run with coverage
-python3 -m pytest --cov=sys_scan_graph_agent --cov-report=html
+python3 -m pytest --cov=sys_scan_agent --cov-report=html
 
 # View coverage report
 open htmlcov/index.html

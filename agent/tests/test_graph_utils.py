@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock
 import time
 import os
 
-from sys_scan_graph_agent.graph import utils
-from sys_scan_graph_agent import models
+from sys_scan_agent.graph import utils
+from sys_scan_agent import models
 
 
 class TestEnvironmentVariableCaching:
@@ -712,7 +712,7 @@ class TestRiskCalculation:
 class TestStateNormalization:
     """Test _normalize_state function."""
 
-    @patch('sys_scan_graph_agent.graph.utils.graph_state.normalize_graph_state')
+    @patch('sys_scan_agent.graph.utils.graph_state.normalize_graph_state')
     def test_normalize_state(self, mock_normalize):
         """Test state normalization delegates to graph_state."""
         mock_normalize.return_value = {'normalized': True}
