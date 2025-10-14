@@ -39,16 +39,14 @@ jobs:
       - name: Add Mazzlabs APT repository
         run: |
           echo "deb [signed-by=/etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
-      - name: Install sys-scan-graph core package
-        run: sudo apt-get update && sudo apt-get install -y sys-scan-graph
+      - name: install sys-scan-graph intelligence layer
+        run: |
+          pip install sys-scan-agent
       - name: Verify sys-scan installation
         run: |
           which sys-scan
           sys-scan --version || echo "sys-scan version check failed"
           ls -la /usr/bin/sys-scan || echo "/usr/bin/sys-scan not found"
-      - name: install sys-scan-graph intelligence layer
-        run: |
-          pip install sys-scan-graph
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -58,6 +56,7 @@ jobs:
           cd agent
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e .
       - name: Run Python tests
         run: |
           cd agent

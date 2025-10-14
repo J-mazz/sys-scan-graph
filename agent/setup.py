@@ -27,7 +27,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name='sys-scan-graph',
+    name='sys-scan-agent',
     version='5.0.0',  # Increment this for every new version you publish
     author='Joseph Mazzini',
     author_email='joseph@mazzlabs.works',
