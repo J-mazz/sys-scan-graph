@@ -41,6 +41,15 @@ jobs:
         working-directory: build
         run: ctest --output-on-failure
 
+      - name: Validate binary
+        run: |
+          if [ ! -f build/sys-scan ]; then
+            echo "Error: sys-scan binary not found"
+            exit 1
+          fi
+          file build/sys-scan
+          ls -lh build/sys-scan
+
       - name: Package artifacts
         run: |
           mkdir -p dist
@@ -49,14 +58,15 @@ jobs:
 
       # Optional GPG signing if secrets are provided
       - name: Import GPG key
-        if: ${{ secrets.GPG_PRIVATE_KEY != '' && secrets.GPG_PASSPHRASE != '' }}
+        continue-on-error: true
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Sign checksums
-        if: ${{ env.GPG_FINGERPRINT }}
+        if: ${{ env.GPG_FINGERPRINT != '' }}
+        continue-on-error: true
         run: |
           gpg --batch --yes --armor --detach-sign -u "${GPG_FINGERPRINT}" dist/sha256sums.txt
 
@@ -69,5 +79,6 @@ jobs:
             dist/sys-scan-graph-${{ github.ref_name }}-linux-x86_64.tar.gz
             dist/sha256sums.txt
             dist/sha256sums.txt.asc
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
