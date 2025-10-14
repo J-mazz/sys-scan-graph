@@ -20,7 +20,7 @@ gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
 sudo apt update
 
 # Install sys-scan-graph
-sudo apt install sys-scan
+sudo apt install sys-scan-graph
 ```
 
 ### Verify Installation

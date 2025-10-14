@@ -59,7 +59,7 @@ gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
 
 # Update package lists and install
 sudo apt update
-sudo apt install sys-scan
+sudo apt install sys-scan-graph
 ```
 
 #### Option 2: Build from Source
