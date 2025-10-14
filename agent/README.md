@@ -49,13 +49,13 @@ It combines a high-performance C++20 scanning engine with a Python-based intelli
 
 ```bash
 # Add the Mazzlabs repository
-echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works/ testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
+echo "deb [signed-by=/etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
 
 # Import the GPG key
-sudo wget -qO /usr/share/keyrings/mazzlabs-archive-keyring.gpg https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg
+curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg > /dev/null
 
 # Verify the key fingerprint (optional but recommended)
-gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+gpg --show-keys /etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg
 
 # Update package lists and install
 sudo apt update

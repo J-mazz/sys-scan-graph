@@ -33,12 +33,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Import Mazzlabs APT GPG Key
         run: |
-          sudo wget -qO /usr/share/keyrings/mazzlabs-archive-keyring.gpg https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg
+          curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg > /dev/null
       - name: Verify Mazzlabs GPG Key fingerprint
-        run: gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+        run: gpg --show-keys /etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg
       - name: Add Mazzlabs APT repository
         run: |
-          echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
+          echo "deb [signed-by=/etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
       - name: Install sys-scan-graph core package
         run: sudo apt-get update && sudo apt-get install -y sys-scan-graph
       - name: Verify sys-scan installation
