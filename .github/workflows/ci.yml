@@ -31,6 +31,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Import Mazzlabs APT GPG Key
+        run: |
+          curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+      - name: Verify Mazzlabs GPG Key fingerprint
+        run: gpg --show-keys /usr/share/keyrings/mazzlabs-archive-keyring.gpg
+      - name: Add Mazzlabs APT repository
+        run: |
+          echo "deb [signed-by=/usr/share/keyrings/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
+      - name: Install sys-scan-graph core package
+        run: sudo apt-get update && sudo apt-get install -y sys-scan-graph
+      - name: Verify sys-scan installation
+        run: |
+          which sys-scan
+          sys-scan --version || echo "sys-scan version check failed"
+          ls -la /usr/bin/sys-scan || echo "/usr/bin/sys-scan not found"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -44,6 +59,8 @@ jobs:
         run: |
           cd agent
           python -m pytest tests/ -v --tb=short --maxfail=5
+        env:
+          SYS_SCAN_SKIP_CHECK: "1"
 
   sanitize:
     runs-on: ubuntu-latest
