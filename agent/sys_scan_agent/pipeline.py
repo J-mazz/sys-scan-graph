@@ -15,6 +15,7 @@ from .correlator import correlate as _correlate, sequence_correlation as _sequen
 from .reduction import reduce_all
 from .llm import LLMClient
 from .utils import _recompute_finding_risk
+from .audit import log_stage
 
 # Import model classes
 Finding = models.Finding
@@ -331,20 +332,25 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     state = AgentState()
 
     # Load report
+    log_stage('load_report', report_path=str(report_path))
     state = load_report(state, report_path)
 
     # Augment findings
+    log_stage('augment')
     state = augment(state)
 
     # Apply correlations
+    log_stage('correlate')
     correlate(state)
     sequence_correlation(state)
 
     # Baseline and novelty processing
+    log_stage('baseline_rarity')
     baseline_rarity(state)
     process_novelty(state)
 
     # Reduce findings
+    log_stage('reduce')
     all_findings = []
     if state.report and state.report.results:
         for sr in state.report.results:
@@ -355,7 +361,11 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     # Counterfactual reduction
     reduce(state)
 
+    # Actions (placeholder for now)
+    log_stage('actions')
+
     # Summarize
+    log_stage('summarize')
     state = summarize(state)
 
     # Extract enriched findings (flattened from all scanner results)

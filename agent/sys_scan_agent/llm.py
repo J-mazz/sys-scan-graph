@@ -4,6 +4,8 @@ from . import redaction
 from . import llm_models
 from typing import List
 import textwrap, json
+import yaml
+import os
 
 class LLMClient:
     def __init__(self):
@@ -11,6 +13,47 @@ class LLMClient:
         self.avg_prompt_tokens = 0.0
         self.avg_completion_tokens = 0.0
         self.alpha = 0.3
+
+    def _load_attack_mapping(self):
+        """Load attack technique mapping from YAML file."""
+        mapping_path = os.path.join(os.path.dirname(__file__), '..', 'attack_mapping.yaml')
+        try:
+            with open(mapping_path, 'r') as f:
+                return yaml.safe_load(f)
+        except Exception:
+            return {}
+
+    def _generate_attack_coverage(self, reductions: models.Reductions, correlations: List[models.Correlation]) -> dict:
+        """Generate ATT&CK technique coverage summary from findings and correlations."""
+        mapping = self._load_attack_mapping()
+        techniques = set()
+        
+        # Collect techniques from findings
+        for finding in reductions.get('top_findings', []):
+            tags = finding.get('tags', [])
+            for tag in tags:
+                if tag in mapping:
+                    technique_list = mapping[tag]
+                    if isinstance(technique_list, list):
+                        techniques.update(technique_list)
+                    else:
+                        techniques.add(technique_list)
+        
+        # Collect techniques from correlations
+        for correlation in correlations:
+            tags = correlation.tags or []
+            for tag in tags:
+                if tag in mapping:
+                    technique_list = mapping[tag]
+                    if isinstance(technique_list, list):
+                        techniques.update(technique_list)
+                    else:
+                        techniques.add(technique_list)
+        
+        return {
+            'technique_count': len(techniques),
+            'techniques': sorted(list(techniques))
+        } if techniques else None
 
     def _update_avgs(self, pt: int, ct: int):
         if self.avg_prompt_tokens == 0:
@@ -115,12 +158,14 @@ class LLMClient:
             'avg_completion_tokens': round(avg_ct,2),
             'budget_alert': drift_flag
         }
+        attack_coverage = self._generate_attack_coverage(red_red, correlations)
         return models.Summaries(
             executive_summary=executive,
             analyst=analyst,
             consistency_findings=[i.model_dump() for i in consistency_obj.findings],
             triage_summary={"top_findings": [tf.model_dump() for tf in triage_obj.top_findings], "correlation_count": triage_obj.correlation_count},
             action_narrative=action_obj.narrative,
-            metrics=metrics
+            metrics=metrics,
+            attack_coverage=attack_coverage
         )
 

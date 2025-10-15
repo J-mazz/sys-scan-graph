@@ -78,7 +78,7 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
 # -------- Manifest Helpers ---------
 
 def compute_rule_pack_sha(rule_dirs: List[str]) -> str:
-    import rules
+    from . import rules
     all_rules = []
     for rd in rule_dirs:
         all_rules.extend(rules.load_rules_dir(rd))
