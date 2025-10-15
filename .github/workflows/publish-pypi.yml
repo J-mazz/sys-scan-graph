@@ -29,10 +29,15 @@ jobs:
 
       - name: Build package
         working-directory: agent
-        run: python -m build
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # For main branch pushes, create a development version
+            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+            sed -i "s/version='5.0.3'/version='5.0.3.dev${COMMIT_SHA}'/" setup.py
+          fi
+          python -m build
 
       - name: Publish to PyPI
-        if: github.event_name == 'release'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: agent/dist/
