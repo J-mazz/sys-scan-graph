@@ -39,9 +39,6 @@ jobs:
       - name: Add Mazzlabs APT repository
         run: |
           echo "deb [signed-by=/etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
-      - name: install sys-scan-graph intelligence layer
-        run: |
-          pip install sys-scan-agent
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
