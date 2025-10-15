@@ -6,6 +6,16 @@ import pytest
 
 from sys_scan_agent import hf_loader
 
+# Check if pandas is available for optional tests
+try:
+    import pandas  # noqa: F401
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+
+# Skip all tests if pandas is not available
+hf_loader = pytest.importorskip("sys_scan_agent.hf_loader")
+
 
 class TestHFLoader:
     """Test Hugging Face dataset loading utilities."""
@@ -91,6 +101,7 @@ class TestHFLoader:
                 # pandas should not be called
                 mock_pd.read_json.assert_not_called()
 
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not available")
     def test_load_cybersec_jsonl_success(self):
         """Test successful JSONL loading."""
         mock_pd = MagicMock()
@@ -108,6 +119,7 @@ class TestHFLoader:
                     lines=True
                 )
 
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not available")
     def test_load_cybersec_jsonl_lines_false(self):
         """Test JSONL loading with lines=False."""
         mock_pd = MagicMock()
@@ -125,6 +137,7 @@ class TestHFLoader:
                     lines=False
                 )
 
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not available")
     def test_load_cybersec_jsonl_read_fails(self):
         """Test JSONL loading when read_json fails."""
         mock_pd = MagicMock()
@@ -150,6 +163,7 @@ class TestHFLoader:
                 assert result is None
                 mock_pd.read_parquet.assert_not_called()
 
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not available")
     def test_load_cybersec_parquet_success(self):
         """Test successful Parquet loading."""
         mock_pd = MagicMock()
@@ -164,6 +178,7 @@ class TestHFLoader:
                 assert result is mock_df
                 mock_pd.read_parquet.assert_called_once_with(hf_loader._PARQUET_PATH)
 
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not available")
     def test_load_cybersec_parquet_read_fails(self):
         """Test Parquet loading when read_parquet fails."""
         mock_pd = MagicMock()

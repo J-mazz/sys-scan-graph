@@ -316,6 +316,19 @@ def summarize(state):
             metrics={"findings_count": len(all_findings)}
         )
 
+    # Extract compliance information from raw report if present
+    if state.raw_report and 'compliance_summary' in state.raw_report:
+        compliance_summary = state.raw_report['compliance_summary']
+        if state.summaries.metrics is None:
+            state.summaries.metrics = {}
+        state.summaries.metrics['compliance_summary'] = compliance_summary
+        
+        # Also extract compliance_gaps if present
+        if 'compliance_gaps' in state.raw_report:
+            compliance_gaps = state.raw_report['compliance_gaps']
+            state.summaries.metrics['compliance_gaps'] = compliance_gaps
+            state.summaries.metrics['compliance_gap_count'] = len(compliance_gaps)
+
     # Generate causal hypotheses
     try:
         if state.summaries:
