@@ -32,8 +32,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             # For main branch pushes, create a development version
-            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-            sed -i "s/version='5.0.3'/version='5.0.3.dev${COMMIT_SHA}'/" setup.py
+            sed -i "s/version='5.0.3'/version='5.0.3.dev0'/" setup.py
           fi
           python -m build
 
