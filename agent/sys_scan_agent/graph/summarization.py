@@ -271,6 +271,26 @@ async def enhanced_summarize_host_state(state: StateType) -> StateType:
     except Exception as e:  # pragma: no cover
         logger.exception('enhanced_summarize_host_state failed: %s', e)
         _append_warning(state, WarningInfo('graph', 'enhanced_summarize', f"{type(e).__name__}: {e}"))  # type: ignore
+        # Create fallback summary when LLM fails
+        enriched_findings = _extract_findings_from_state(state, 'correlated_findings')
+        correlations = [models.Correlation(**c) for c in state.get('correlations', []) or [] if isinstance(c, dict)]
+        risk_assessment = state.get('risk_assessment', {})
+        
+        fallback_summary = _generate_executive_summary(enriched_findings, correlations, risk_assessment)
+        fallback_reductions = _create_reductions(enriched_findings)
+        
+        fallback_summaries = models.Summaries(
+            executive_summary=fallback_summary,
+            analyst={"finding_count": len(enriched_findings), "correlation_count": len(correlations)},
+            consistency_findings=[],
+            triage_summary={"top_findings": fallback_reductions.get('top_findings', []), "correlation_count": len(correlations)},
+            action_narrative="Analysis completed with fallback summarization",
+            metrics={"findings_count": len(enriched_findings), "fallback_mode": True}
+        )
+        
+        iters = int(state.get('iteration_count', 0) or 0)
+        _update_summarization_state(state, fallback_summaries, iters)
+        _extract_summarization_metrics(state, fallback_summaries)
     finally:
         _update_metrics_duration(state, 'summarize_duration', start)
     return state
