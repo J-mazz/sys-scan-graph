@@ -36,15 +36,8 @@ setup(
     long_description_content_type="text/markdown",
     url='https://github.com/J-mazz/sys-scan-graph',
     license='Apache License 2.0',
-    # Explicitly list all packages to ensure they're included
-    packages=[
-        'sys_scan_agent',
-        'sys_scan_agent.graph',
-        'sys_scan_agent.models',
-        'executors',
-        'prompt_templates',
-        'tests',
-    ],
+    # Let setuptools find all packages automatically
+    packages=find_packages(),
     # Include non-python files specified in MANIFEST.in
     include_package_data=True,
     classifiers=[
