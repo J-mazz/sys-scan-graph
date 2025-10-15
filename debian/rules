@@ -10,7 +10,7 @@ export DEB_CXXFLAGS_MAINT_APPEND:=-O2 -pipe
 override_dh_auto_configure:
 	dh_auto_configure -- \
 	  -DCMAKE_BUILD_TYPE=Release \
-	  -DBUILD_TESTS=OFF \
+	  -DBUILD_TESTS=ON \
 	  -DENABLE_OPENSSL=ON
 
 override_dh_auto_build:
@@ -26,5 +26,5 @@ override_dh_auto_install:
 	cp agent/sys_scan_agent/mistral-security-lora/*.jinja debian/sys-scan-graph/usr/share/sys-scan/models/
 
 override_dh_auto_test:
-	# Tests disabled for now in packaging build (can enable later)
+	dh_auto_test
 
