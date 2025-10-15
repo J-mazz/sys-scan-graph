@@ -87,15 +87,15 @@ class TestHFLoader:
 
     def test_load_cybersec_jsonl_no_pandas(self):
         """Test JSONL loading when pandas is not available."""
-        with patch('hf_loader._import_pd', return_value=None):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=None):
             result = hf_loader.load_cybersec_jsonl()
             assert result is None
 
     def test_load_cybersec_jsonl_no_token(self):
         """Test JSONL loading when no token is available."""
         mock_pd = MagicMock()
-        with patch('hf_loader._import_pd', return_value=mock_pd):
-            with patch('hf_loader._get_token', return_value=None):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value=None):
                 result = hf_loader.load_cybersec_jsonl()
                 assert result is None
                 # pandas should not be called
@@ -150,15 +150,15 @@ class TestHFLoader:
 
     def test_load_cybersec_parquet_no_pandas(self):
         """Test Parquet loading when pandas is not available."""
-        with patch('hf_loader._import_pd', return_value=None):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=None):
             result = hf_loader.load_cybersec_parquet()
             assert result is None
 
     def test_load_cybersec_parquet_no_token(self):
         """Test Parquet loading when no token is available."""
         mock_pd = MagicMock()
-        with patch('hf_loader._import_pd', return_value=mock_pd):
-            with patch('hf_loader._get_token', return_value=None):
+        with patch('sys_scan_agent.hf_loader._import_pd', return_value=mock_pd):
+            with patch('sys_scan_agent.hf_loader._get_token', return_value=None):
                 result = hf_loader.load_cybersec_parquet()
                 assert result is None
                 mock_pd.read_parquet.assert_not_called()

@@ -232,7 +232,10 @@ async def _execute_summarization(provider: Any, reductions: Any, corr_objs: List
 
 def _update_summarization_state(state: StateType, summaries: Any, iters: int) -> None:
     """Update state with summarization results."""
-    state['summary'] = summaries.model_dump()
+    summary_dict = summaries.model_dump()
+    if 'metrics' not in summary_dict or summary_dict['metrics'] is None:
+        summary_dict['metrics'] = {}
+    state['summary'] = summary_dict
     state['iteration_count'] = iters + 1
 
 
