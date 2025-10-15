@@ -10,13 +10,17 @@ def _log_path() -> Path:
     return Path(p) if p else DEFAULT_LOG
 
 def append(record: Dict[str, Any]):
-    rec = record.copy()
-    rec.setdefault('ts', time.time())
-    rec.setdefault('version', 1)
-    path = _log_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('a') as f:
-        f.write(json.dumps(rec, separators=(',',':')) + '\n')
+    try:
+        rec = record.copy()
+        rec.setdefault('ts', time.time())
+        rec.setdefault('version', 1)
+        path = _log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a') as f:
+            f.write(json.dumps(rec, separators=(',',':')) + '\n')
+    except Exception:
+        # Silently ignore audit logging failures to avoid breaking functionality
+        pass
 
 def log_stage(stage: str, **fields):
     append({'stage': stage, **fields})

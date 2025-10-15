@@ -236,6 +236,15 @@ def _check_baseline_routing(fields: Dict[str, List[Any]], state: StateType) -> O
     return None
 
 
+def _check_risk_routing(fields: Dict[str, List[Any]]) -> Optional[str]:
+    """Check for findings requiring external risk assessment."""
+    metadata_list = fields.get('metadata_list', [])
+    for metadata in metadata_list:
+        if isinstance(metadata, dict) and metadata.get('requires_external'):
+            return 'risk'
+    return None
+
+
 def advanced_router(state: StateType) -> str:
     """Priority-based routing decision with optimized batch processing.
 
@@ -268,6 +277,11 @@ def advanced_router(state: StateType) -> str:
 
         # 3. High severity missing baseline (batch check)
         route = _check_baseline_routing(fields, state)
+        if route:
+            return route
+
+        # 4. External requirements (batch check)
+        route = _check_risk_routing(fields)
         if route:
             return route
 

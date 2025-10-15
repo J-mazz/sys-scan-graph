@@ -190,7 +190,7 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
     # Diff markdown
     if prev and prev.exists():
         try:
-            from models import EnrichedOutput
+            from .models import EnrichedOutput
             prev_obj = EnrichedOutput.model_validate(json.loads(prev.read_text()))
             report_diff.write_diff(prev_obj, enriched, Path(cfg.reports.diff_markdown_path))
             print(f"[cyan]Diff markdown -> {cfg.reports.diff_markdown_path}")
@@ -315,7 +315,7 @@ def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw v2 rep
     raw = json.loads(report.read_text())
     host_id = raw.get('meta',{}).get('host_id') or enriched.enriched_findings[0].metadata.get('host_id','unknown_host') if enriched.enriched_findings else 'unknown_host'
     # Build map from id to composite hash
-    from baseline import hashlib_sha
+    from .baseline import hashlib_sha
     composite_map = {}
     for sr in raw.get('results', []):
         scanner = sr.get('scanner')
@@ -345,7 +345,7 @@ def rule_lint(rules_dir: Path = typer.Option(..., exists=True, help="Directory w
 @app.command()
 def rule_dry_run(rules_dir: Path = typer.Option(..., exists=True),
                  findings_json: Path = typer.Option(..., exists=True, help="JSON array of findings to test")):
-    from models import Finding
+    from .models import Finding
     data = json.loads(findings_json.read_text())
     rules_data = load_rules_dir(str(rules_dir))
     findings = []
