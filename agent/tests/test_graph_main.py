@@ -12,7 +12,8 @@ import os
 import importlib.util
 
 # Load the main graph.py module directly
-graph_spec = importlib.util.spec_from_file_location("graph_main", "/home/joseph-mazzini/sys-scan-graph/agent/sys_scan_agent/graph.py")
+graph_py_path = os.path.join(os.path.dirname(__file__), '..', 'sys_scan_agent', 'graph.py')
+graph_spec = importlib.util.spec_from_file_location("graph_main", graph_py_path)
 if graph_spec is None or graph_spec.loader is None:
     raise ImportError("Could not load graph.py module")
 graph_main = importlib.util.module_from_spec(graph_spec)
