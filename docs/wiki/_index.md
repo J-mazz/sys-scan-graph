@@ -4,6 +4,10 @@
 
 Welcome to the comprehensive documentation for sys-scan-graph. This index provides quick access to detailed documentation pages covering all aspects of the project.
 
+<div align="center">
+  <img src="../../assets/sys-scan-graph_primary_logo.png" alt="sys-scan-graph Primary Logo" width="400"/>
+</div>
+
 ## Quick Links
 
 - **[GitHub Repository](https://github.com/J-mazz/sys-scan-graph)** - Main project repository
