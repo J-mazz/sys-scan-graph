@@ -41,6 +41,9 @@ It combines a high-performance C++20 scanning engine with a Python-based intelli
 
 #### Option 1: Install from Debian Package (Recommended)
 
+The complete Debian package is available at [apt.mazzlabs.works](https://apt.mazzlabs.works).  
+Debian packaging repository: [J-mazz/sys-scan-debian_package](https://github.com/J-mazz/sys-scan-debian_package)
+
 ```bash
 # Add the Mazzlabs repository
 echo "deb [signed-by=/etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
@@ -167,3 +170,4 @@ This project is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE) 
 <div align="center">
   <img src="assets/Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>
 </div>
+
