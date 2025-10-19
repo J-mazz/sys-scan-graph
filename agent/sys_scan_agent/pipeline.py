@@ -362,6 +362,10 @@ def run_pipeline(report_path: Path) -> EnrichedOutput:
     baseline_rarity(state)
     process_novelty(state)
 
+    # Apply policy adjustments
+    log_stage('apply_policy')
+    apply_policy(state)
+
     # Reduce findings
     log_stage('reduce')
     all_findings = []
@@ -416,6 +420,44 @@ def build_output(state) -> EnrichedOutput:
 
 
 def apply_policy(state: AgentState) -> AgentState:
-    """Apply policy adjustments (placeholder for now)."""
-    # Policy application logic would go here
+    """Apply policy adjustments to findings based on approved directories and allowlists."""
+    if not state.report or not state.report.results:
+        return state
+    
+    # Get policy configuration from environment
+    approved_dirs = os.environ.get('AGENT_APPROVED_DIRS', '').split(':') if os.environ.get('AGENT_APPROVED_DIRS') else []
+    allowlist = os.environ.get('AGENT_POLICY_ALLOWLIST', '').split(',') if os.environ.get('AGENT_POLICY_ALLOWLIST') else []
+    
+    # Clean up empty strings
+    approved_dirs = [d for d in approved_dirs if d.strip()]
+    allowlist = [a for a in allowlist if a.strip()]
+    
+    for sr in state.report.results:
+        for finding in sr.findings:
+            if finding.metadata and 'exe' in finding.metadata:
+                exe_path = finding.metadata['exe']
+                
+                # Check if path is in approved directories
+                is_approved = any(exe_path.startswith(approved_dir) for approved_dir in approved_dirs)
+                
+                # Check if path is in allowlist
+                is_allowlisted = exe_path in allowlist
+                
+                if not is_approved and not is_allowlisted:
+                    # Escalate severity to high
+                    finding.severity = 'high'
+                    
+                    # Add policy tag
+                    if not finding.tags:
+                        finding.tags = []
+                    if 'policy:denied_path' not in finding.tags:
+                        finding.tags.append('policy:denied_path')
+                    
+                    # Add rationale
+                    rationale = f"policy escalation: executable '{exe_path}' not in approved directories {approved_dirs} and not in allowlist {allowlist}"
+                    if finding.rationale:
+                        finding.rationale.append(rationale)
+                    else:
+                        finding.rationale = [rationale]
+    
     return state
