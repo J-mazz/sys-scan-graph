@@ -739,33 +739,32 @@ class TestBuildWorkflow:
     """Test workflow building functionality."""
 
     def test_build_workflow_with_dependencies(self):
-        """Test build_workflow when all dependencies are available."""
-        with patch('sys_scan_agent.graph.StateGraph') as mock_state_graph, \
-             patch('sys_scan_agent.graph.END', 'END'), \
-             patch('sys_scan_agent.graph.START', 'START'), \
-             patch('sys_scan_agent.graph.ToolNode', 'ToolNode'):
-            
-            # Mock the required components
-            mock_wf = Mock()
-            mock_wf.add_node = Mock()
-            mock_wf.add_edge = Mock()
-            mock_wf.set_entry_point = Mock()
-            mock_wf.compile = Mock(return_value='compiled_app')
+        """Test build_workflow with all dependencies available."""
+        with patch.multiple('sys_scan_agent.graph',
+                          END='END',
+                          START='START',
+                          ToolNode=Mock(),
+                          enrich_findings=Mock(),
+                          enhanced_summarize_host_state=Mock(),
+                          enhanced_suggest_rules=Mock(),
+                          tool_coordinator=Mock(),
+                          plan_baseline_queries=Mock(),
+                          integrate_baseline_results=Mock(),
+                          risk_analyzer=Mock(),
+                          compliance_checker=Mock(),
+                          metrics_collector=Mock(),
+                          query_baseline=Mock()):
+            with patch('sys_scan_agent.graph.StateGraph') as mock_state_graph:
+                # Mock the required components
+                mock_wf = Mock()
+                mock_wf.add_node = Mock()
+                mock_wf.add_edge = Mock()
+                mock_wf.set_entry_point = Mock()
+                mock_wf.compile = Mock(return_value='compiled_app')
 
-            mock_state_graph.return_value = mock_wf
+                # Configure StateGraph mock
+                mock_state_graph.return_value = mock_wf
 
-            # Mock the imported functions
-            with patch.multiple('sys_scan_agent.graph',
-                              enrich_findings=Mock(),
-                              enhanced_summarize_host_state=Mock(),
-                              enhanced_suggest_rules=Mock(),
-                              tool_coordinator=Mock(),
-                              plan_baseline_queries=Mock(),
-                              integrate_baseline_results=Mock(),
-                              risk_analyzer=Mock(),
-                              compliance_checker=Mock(),
-                              metrics_collector=Mock(),
-                              query_baseline=Mock()):
                 wf, app = build_workflow()
 
                 assert wf == mock_wf
