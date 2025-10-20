@@ -65,6 +65,7 @@ struct Config {
     bool rules_enable = false; // enable rule enrichment
     std::string rules_dir = ""; // directory containing rule definition files
     bool rules_allow_legacy = false; // if false, fail hard on unsupported rule_version
+    std::vector<std::string> yara_scan_roots; // custom scan roots for YARA (empty = use defaults)
     // PII suppression flags
     bool no_user_meta = false;     // suppress user/uid/euid/gid/egid fields
     bool no_cmdline_meta = false;  // suppress process command line

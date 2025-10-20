@@ -26,6 +26,7 @@ protected:
         fs::create_directories(test_scan_dir);
 
         config.rules_dir = "/tmp/test_yara";  // Parent dir of yara subdir
+        config.yara_scan_roots = {test_scan_dir};  // Use our test directory
 
         report = std::make_unique<Report>();
         context = std::make_unique<ScanContext>(config, *report);
@@ -91,27 +92,32 @@ TEST_F(YaraScannerTest, NoYaraSubdirectory) {
 
 // Test pattern loading from rule files
 TEST_F(YaraScannerTest, PatternLoading) {
+    // Create the yara subdirectory as expected by the scanner
+    std::string yara_dir = "/tmp/test_yara/yara";
+    fs::create_directories(yara_dir);
+
     // Create a rule file with some patterns
-    createRuleFile("test.yar", {"malware_signature", "suspicious_pattern", "# This is a comment", ""});
+    std::ofstream rule_file(yara_dir + "/test.yar");
+    rule_file << "malware_signature\n";
+    rule_file << "suspicious_pattern\n";
+    rule_file << "# This is a comment\n";
+    rule_file << "\n";  // Empty line
+    rule_file.close();
 
     YaraScanner scanner;
 
-    // Test the pattern loading function indirectly through scanning
-    // Since we can't easily access the private load_patterns function,
-    // we'll test by creating files that should match
-
-    // Create a test file with matching content
+    // Create a test file with matching content in our test scan directory
     createTestFile("test_binary", "This file contains malware_signature and some other data");
-
-    // Temporarily modify the scan roots to include our test directory
-    // This is a limitation - the scanner hardcodes the roots
-    // In a real test, we'd need to mock or modify the scanner
 
     scanner.scan(*context);
 
     auto results = report->results();
-    // May or may not find matches depending on the hardcoded paths
-    EXPECT_GE(results.size(), 0);
+    // Should find the malware_signature pattern
+    EXPECT_EQ(results.size(), 1);
+    if (!results.empty()) {
+        EXPECT_EQ(results[0].metadata["pattern"], "malware_signature");
+        EXPECT_EQ(results[0].metadata["path"], test_scan_dir + "/test_binary");
+    }
 }
 
 // Test with empty rule files
@@ -141,8 +147,14 @@ TEST_F(YaraScannerTest, CommentsAndEmptyLines) {
 
 // Test pattern matching behavior
 TEST_F(YaraScannerTest, PatternMatching) {
+    // Create the yara subdirectory
+    std::string yara_dir = "/tmp/test_yara/yara";
+    fs::create_directories(yara_dir);
+
     // Create rule file with a simple pattern
-    createRuleFile("simple.yar", {"test_pattern"});
+    std::ofstream rule_file(yara_dir + "/simple.yar");
+    rule_file << "test_pattern\n";
+    rule_file.close();
 
     YaraScanner scanner;
 
@@ -153,8 +165,12 @@ TEST_F(YaraScannerTest, PatternMatching) {
     scanner.scan(*context);
 
     auto results = report->results();
-    // Results depend on hardcoded scan paths
-    EXPECT_GE(results.size(), 0);
+    // Should find exactly one match
+    EXPECT_EQ(results.size(), 1);
+    if (!results.empty()) {
+        EXPECT_EQ(results[0].metadata["pattern"], "test_pattern");
+        EXPECT_EQ(results[0].metadata["path"], test_scan_dir + "/matching_file");
+    }
 }
 
 // Test with very long patterns (should be truncated)

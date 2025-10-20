@@ -483,6 +483,10 @@ if(BUILD_TESTS)
   target_link_libraries(test_yara_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME yara_scanner COMMAND test_yara_scanner)
   
+  add_executable(test_mac_scanner tests/test_mac_scanner.cpp)
+  target_link_libraries(test_mac_scanner PRIVATE sys_scan_core GTest::gtest_main)
+  add_test(NAME mac_scanner COMMAND test_mac_scanner)
+  
   add_executable(test_module_utils tests/test_module_utils.cpp)
   target_link_libraries(test_module_utils PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME module_utils COMMAND test_module_utils)
