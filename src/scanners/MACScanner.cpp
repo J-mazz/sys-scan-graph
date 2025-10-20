@@ -29,14 +29,16 @@ static const size_t MAX_PATH_LEN_LEAN = 512;
 static const size_t MAX_BUF_SIZE = 512;
 
 // Ultra-fast file existence check
-static inline bool file_exists_lean(const char* path) {
+static inline bool file_exists_lean(const char* path, const char* test_root = nullptr) {
+    std::string full_path = test_root ? std::string(test_root) + path : std::string(path);
     struct stat st;
-    return stat(path, &st) == 0;
+    return stat(full_path.c_str(), &st) == 0;
 }
 
 // Ultra-fast file read to buffer
-static ssize_t read_file_to_buffer_lean(const char* path, char* buffer, size_t buffer_size) {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
+static ssize_t read_file_to_buffer_lean(const char* path, char* buffer, size_t buffer_size, const char* test_root = nullptr) {
+    std::string full_path = test_root ? std::string(test_root) + path : std::string(path);
+    int fd = open(full_path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd == -1) return -1;
     ssize_t total_read = 0;
     while (total_read < static_cast<ssize_t>(buffer_size)) {
@@ -145,8 +147,10 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
 }
 
 void MACScanner::scan(ScanContext& context) {
+    const char* test_root = context.config.test_root.empty() ? nullptr : context.config.test_root.c_str();
+
     // Detect container (simple heuristics) to potentially downgrade severity
-    bool in_container = file_exists_lean("/.dockerenv") || file_exists_lean("/run/.containerenv");
+    bool in_container = file_exists_lean("/.dockerenv", test_root) || file_exists_lean("/run/.containerenv", test_root);
 
     // SELinux detection (ultra-fast)
     bool selinux_present = false;
@@ -154,11 +158,11 @@ void MACScanner::scan(ScanContext& context) {
     bool selinux_permissive = false;
     char buffer[MAX_BUF_SIZE];
 
-    if (file_exists_lean("/sys/fs/selinux")) {
+    if (file_exists_lean("/sys/fs/selinux", test_root)) {
         selinux_present = true;
 
         // Read enforce status
-        ssize_t len = read_file_to_buffer_lean("/sys/fs/selinux/enforce", buffer, sizeof(buffer) - 1);
+        ssize_t len = read_file_to_buffer_lean("/sys/fs/selinux/enforce", buffer, sizeof(buffer) - 1, test_root);
         if (len > 0) {
             buffer[len] = '\0';
             trim_string_lean(buffer);
@@ -169,8 +173,9 @@ void MACScanner::scan(ScanContext& context) {
 
     // Read SELinux config
     char selinux_cfg_mode[MAX_BUF_SIZE] = "";
-    if (file_exists_lean("/etc/selinux/config")) {
-        int fd = open("/etc/selinux/config", O_RDONLY | O_CLOEXEC);
+    if (file_exists_lean("/etc/selinux/config", test_root)) {
+        std::string config_path = test_root ? std::string(test_root) + "/etc/selinux/config" : "/etc/selinux/config";
+        int fd = open(config_path.c_str(), O_RDONLY | O_CLOEXEC);
         if (fd != -1) {
             ssize_t len = read(fd, buffer, sizeof(buffer) - 1);
             close(fd);
@@ -199,9 +204,9 @@ void MACScanner::scan(ScanContext& context) {
     bool apparmor_enabled = false;
     char apparmor_mode_line[MAX_BUF_SIZE] = "";
 
-    if (file_exists_lean("/sys/module/apparmor/parameters/enabled")) {
+    if (file_exists_lean("/sys/module/apparmor/parameters/enabled", test_root)) {
         ssize_t len = read_file_to_buffer_lean("/sys/module/apparmor/parameters/enabled",
-                                             apparmor_mode_line, sizeof(apparmor_mode_line) - 1);
+                                             apparmor_mode_line, sizeof(apparmor_mode_line) - 1, test_root);
         if (len > 0) {
             apparmor_mode_line[len] = '\0';
             trim_string_lean(apparmor_mode_line);

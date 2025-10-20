@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+# Export needed flags
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+export DEB_CXXFLAGS_MAINT_APPEND:=-O2 -pipe
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+	  -DCMAKE_BUILD_TYPE=Release \
+	  -DBUILD_TESTS=ON \
+	  -DENABLE_OPENSSL=ON
+
+override_dh_auto_build:
+	dh_auto_build
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install model files
+	mkdir -p debian/sys-scan-graph/usr/share/sys-scan/models
+	cp agent/sys_scan_agent/mistral-security-lora/*.safetensors debian/sys-scan-graph/usr/share/sys-scan/models/
+	cp agent/sys_scan_agent/mistral-security-lora/*.json debian/sys-scan-graph/usr/share/sys-scan/models/
+	cp agent/sys_scan_agent/mistral-security-lora/*.model debian/sys-scan-graph/usr/share/sys-scan/models/
+	cp agent/sys_scan_agent/mistral-security-lora/*.jinja debian/sys-scan-graph/usr/share/sys-scan/models/
+
+override_dh_auto_test:
+	dh_auto_test
+
