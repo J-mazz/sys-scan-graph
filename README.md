@@ -8,19 +8,11 @@
 
 **Sys-Scan-Graph** is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
 
-<div align="center">
-  <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/images/analyzed-by-codescene-badge.svg" alt="CodeScene Analysis" />
-  </a>
-    <a href="https://codescene.io/projects/72512"><img src="https://codescene.io/projects/72512/status-badges/average-code-health" alt="Average Code Health"></a>
-  </a>
-  <a href="https://codescene.io/projects/71206">
-    <a href="https://codescene.io/projects/72512"><img src="https://codescene.io/projects/72512/status-badges/system-mastery" alt="System Mastery"></a>
-  </a>
-    <a href="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml">
-    <img src="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" />
-  </a>
-</div>
+[![CodeScene Analysis](https://codescene.io/images/analyzed-by-codescene-badge.svg)](https://codescene.io/projects/71206)
+[![CodeScene Average Code Health](https://codescene.io/projects/72512/status-badges/average-code-health)](https://codescene.io/projects/72512)
+[![CodeScene System Mastery](https://codescene.io/projects/72512/status-badges/system-mastery)](https://codescene.io/projects/72512)
+[![CodeQL](https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml/badge.svg)](https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml)
+
 
 It combines a high-performance C++20 scanning engine with a Python-based intelligence layer featuring an embedded, fine-tuned Mistral-7B LLM with LoRA adapters. The core engine uses modern dependency injection patterns and type-safe enums to gather security data across 16 specialized scanners, outputting canonical JSON, NDJSON, SARIF, or HTML. The intelligence layer uses LangGraph state machines for cyclical reasoning, baseline learning via SQLite, and 32-dimensional process embeddings for novelty detection—all running locally with zero external API calls.
 
