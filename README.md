@@ -12,13 +12,12 @@
   <a href="https://codescene.io/projects/71206">
     <img src="https://codescene.io/images/analyzed-by-codescene-badge.svg" alt="CodeScene Analysis" />
   </a>
-  <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/projects/71206/status-badges/average-code-health" alt="CodeScene Average Code Health" />
+    <a href="https://codescene.io/projects/72512"><img src="https://codescene.io/projects/72512/status-badges/average-code-health" alt="Average Code Health"></a>
   </a>
   <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/projects/71206/status-badges/system-mastery" alt="CodeScene System Mastery" />
+    <a href="https://codescene.io/projects/72512"><img src="https://codescene.io/projects/72512/status-badges/system-mastery" alt="System Mastery"></a>
   </a>
-  <a href="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml">
+    <a href="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml">
     <img src="https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" />
   </a>
 </div>
