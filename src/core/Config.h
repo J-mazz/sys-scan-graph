@@ -84,6 +84,7 @@ struct Config {
     bool fast_scan = false;        // skip heavy scanners (modules, integrity, ebpf) for quick triage
     bool timings = false;          // include per-scanner timing metrics in output meta
     std::string test_root = "";    // root directory for testing (allows overriding system paths)
+    bool test_mode = false;        // skip actual system calls for unit testing
 };
 
 Config& config();

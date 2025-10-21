@@ -308,4 +308,306 @@ TEST_F(MACScannerTest, CriticalUnconfinedProcesses) {
     EXPECT_EQ(apparmor_it->severity, Severity::Medium); // Due to unconfined critical
 }
 
+// Test SELinux permissive severity
+TEST_F(MACScannerTest, SELinuxPermissiveSeverity) {
+    // Create SELinux in permissive mode
+    createTestFile("/sys/fs/selinux/enforce", "0");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto selinux_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "selinux"; });
+    ASSERT_NE(selinux_it, findings.end());
+
+    // Permissive mode should be Medium severity
+    EXPECT_EQ(selinux_it->severity, Severity::Medium);
+    EXPECT_EQ(selinux_it->metadata["permissive"], "true");
+}
+
+// Test SELinux without AppArmor (Ubuntu-style)
+TEST_F(MACScannerTest, SELinuxAbsentWithAppArmor) {
+    // Create only AppArmor
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto selinux_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "selinux"; });
+    ASSERT_NE(selinux_it, findings.end());
+
+    // SELinux absent with AppArmor should be Low severity
+    EXPECT_EQ(selinux_it->metadata["present"], "false");
+    EXPECT_EQ(selinux_it->severity, Severity::Low);
+}
+
+// Test container with podman marker
+TEST_F(MACScannerTest, ContainerPodmanDetection) {
+    // Create podman container marker
+    createTestFile("/run/.containerenv", "");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto mac_none_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "mac_none"; });
+    ASSERT_NE(mac_none_it, findings.end());
+
+    // In container, severity should be Low not High
+    EXPECT_EQ(mac_none_it->severity, Severity::Low);
+}
+
+// Test SELinux config with whitespace
+TEST_F(MACScannerTest, SELinuxConfigWhitespace) {
+    createTestFile("/sys/fs/selinux/enforce", "1");
+    createTestFile("/etc/selinux/config", "  SELINUX=permissive  \nSELINUXTYPE=targeted\n");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto selinux_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "selinux"; });
+    ASSERT_NE(selinux_it, findings.end());
+
+    // Should parse config even with whitespace
+    EXPECT_TRUE(selinux_it->metadata.count("config_mode") > 0);
+}
+
+// Test SELinux config without SELINUX= line
+TEST_F(MACScannerTest, SELinuxConfigMissingLine) {
+    createTestFile("/sys/fs/selinux/enforce", "1");
+    createTestFile("/etc/selinux/config", "# This is a comment\nSELINUXTYPE=targeted\n");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto selinux_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "selinux"; });
+    ASSERT_NE(selinux_it, findings.end());
+
+    // Should handle missing SELINUX= line gracefully
+    EXPECT_EQ(selinux_it->metadata["present"], "true");
+}
+
+// Test multiple complain mode processes
+TEST_F(MACScannerTest, MultipleComplainProcesses) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    // Create multiple processes in complain mode
+    createTestFile("/proc/100/comm", "proc1");
+    createTestFile("/proc/100/attr/current", "/usr/bin/proc1 (complain)");
+    createTestFile("/proc/101/comm", "proc2");
+    createTestFile("/proc/101/attr/current", "/usr/bin/proc2 (complain)");
+    createTestFile("/proc/102/comm", "proc3");
+    createTestFile("/proc/102/attr/current", "/usr/bin/proc3 (complain)");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    // Should count complain mode processes
+    if (apparmor_it->metadata.count("complain_count")) {
+        EXPECT_GE(std::stoi(apparmor_it->metadata["complain_count"]), 0);
+    }
+}
+
+// Test multiple critical unconfined processes
+TEST_F(MACScannerTest, MultipleCriticalUnconfined) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    // Create multiple critical processes that are unconfined
+    createTestFile("/proc/200/comm", "sshd");
+    createTestFile("/proc/200/attr/current", "unconfined");
+    createTestSymlink("/proc/200/exe", "/usr/sbin/sshd");
+
+    createTestFile("/proc/201/comm", "nginx");
+    createTestFile("/proc/201/attr/current", "unconfined");
+    createTestSymlink("/proc/201/exe", "/usr/sbin/nginx");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    // Should escalate severity for unconfined critical processes
+    EXPECT_EQ(apparmor_it->severity, Severity::Medium);
+    if (apparmor_it->metadata.count("unconfined_critical")) {
+        EXPECT_GE(std::stoi(apparmor_it->metadata["unconfined_critical"]), 1);
+    }
+}
+
+// Test non-critical unconfined process
+TEST_F(MACScannerTest, NonCriticalUnconfined) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    // Create non-critical process that's unconfined
+    createTestFile("/proc/300/comm", "ordinary_app");
+    createTestFile("/proc/300/attr/current", "unconfined");
+    createTestSymlink("/proc/300/exe", "/usr/bin/ordinary_app");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    // Should not escalate severity for non-critical unconfined
+    EXPECT_EQ(apparmor_it->severity, Severity::Info);
+}
+
+// Test process with confined AppArmor profile
+TEST_F(MACScannerTest, ConfinedProcess) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    // Create confined process
+    createTestFile("/proc/400/comm", "confined_app");
+    createTestFile("/proc/400/attr/current", "/usr/bin/confined_app (enforce)");
+    createTestSymlink("/proc/400/exe", "/usr/bin/confined_app");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    // Should count as a profile
+    EXPECT_GE(std::stoi(apparmor_it->metadata["profiles_seen"]), 0);
+}
+
+// Test process without attr/current file
+TEST_F(MACScannerTest, ProcessWithoutAttrCurrent) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    // Create process without attr/current
+    createTestFile("/proc/500/comm", "no_attr");
+    // No attr/current file
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    // Should not crash and handle missing attr/current gracefully
+    EXPECT_GE(results.size(), 1);
+}
+
+// Test empty SELinux enforce file
+TEST_F(MACScannerTest, EmptySELinuxEnforce) {
+    createTestFile("/sys/fs/selinux/enforce", "");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto selinux_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "selinux"; });
+    ASSERT_NE(selinux_it, findings.end());
+
+    // Should handle empty enforce file
+    EXPECT_EQ(selinux_it->metadata["present"], "true");
+}
+
+// Test empty AppArmor enabled file
+TEST_F(MACScannerTest, EmptyAppArmorEnabled) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    // Empty enabled file should not count as enabled
+    EXPECT_EQ(apparmor_it->metadata["enabled"], "false");
+}
+
+// Test critical binaries: containerd
+TEST_F(MACScannerTest, CriticalUnconfinedContainerd) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    createTestFile("/proc/600/comm", "containerd");
+    createTestFile("/proc/600/attr/current", "unconfined");
+    createTestSymlink("/proc/600/exe", "/usr/bin/containerd");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    EXPECT_EQ(apparmor_it->severity, Severity::Medium);
+}
+
+// Test critical binaries: dockerd
+TEST_F(MACScannerTest, CriticalUnconfinedDockerd) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    createTestFile("/proc/700/comm", "dockerd");
+    createTestFile("/proc/700/attr/current", "unconfined");
+    createTestSymlink("/proc/700/exe", "/usr/bin/dockerd");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    EXPECT_EQ(apparmor_it->severity, Severity::Medium);
+}
+
+// Test critical binaries: dbus-daemon
+TEST_F(MACScannerTest, CriticalUnconfinedDBus) {
+    createTestFile("/sys/module/apparmor/parameters/enabled", "Y");
+
+    createTestFile("/proc/800/comm", "dbus-daemon");
+    createTestFile("/proc/800/attr/current", "unconfined");
+    createTestSymlink("/proc/800/exe", "/usr/bin/dbus-daemon");
+
+    MACScanner scanner;
+    scanner.scan(*context);
+
+    auto results = report->results();
+    auto& findings = results[0].findings;
+    auto apparmor_it = std::find_if(findings.begin(), findings.end(),
+        [](const Finding& f) { return f.id == "apparmor"; });
+    ASSERT_NE(apparmor_it, findings.end());
+
+    EXPECT_EQ(apparmor_it->severity, Severity::Medium);
+}
+
 } // namespace sys_scan

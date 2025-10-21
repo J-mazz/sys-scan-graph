@@ -527,6 +527,10 @@ add_executable(test_module_scanner_extended tests/test_module_scanner_extended.c
 target_link_libraries(test_module_scanner_extended PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME module_scanner_extended COMMAND test_module_scanner_extended)
 
+add_executable(test_module_helpers tests/test_module_helpers.cpp)
+target_link_libraries(test_module_helpers PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+add_test(NAME module_helpers COMMAND test_module_helpers)
+
 add_executable(test_suid_scanner tests/test_suid_scanner.cpp)
 target_link_libraries(test_suid_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
 add_test(NAME suid_scanner COMMAND test_suid_scanner)
@@ -606,13 +610,18 @@ if(ENABLE_COVERAGE AND BUILD_TESTS)
       COMMAND $<TARGET_FILE:test_scanner>
       COMMAND $<TARGET_FILE:test_scanner_registry>
       COMMAND $<TARGET_FILE:test_integration>
+      COMMAND $<TARGET_FILE:test_integrity_scanner>
+      COMMAND $<TARGET_FILE:test_kernel_hardening_scanner>
+      COMMAND $<TARGET_FILE:test_yara_scanner>
       COMMAND $<TARGET_FILE:test_container_scanner>
       COMMAND $<TARGET_FILE:test_module_scanner_extended>
+      COMMAND $<TARGET_FILE:test_module_helpers>
       COMMAND $<TARGET_FILE:test_network_scanner>
       COMMAND $<TARGET_FILE:test_process_scanner>
       COMMAND $<TARGET_FILE:test_systemd_unit_scanner>
       COMMAND $<TARGET_FILE:test_ioc_scanner>
       COMMAND $<TARGET_FILE:test_suid_scanner>
+      COMMAND $<TARGET_FILE:test_mount_scanner>
       COMMAND $<TARGET_FILE:test_json_writer>
       COMMAND lcov --capture --directory . --output-file coverage/coverage.info --ignore-errors mismatch,unused
       COMMAND lcov --extract coverage/coverage.info "${CMAKE_SOURCE_DIR}/src/*" --output-file coverage/coverage_filtered.info --ignore-errors unused

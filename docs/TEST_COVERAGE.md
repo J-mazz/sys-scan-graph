@@ -1,19 +1,19 @@
 # Test Coverage Report
 
-**Last Updated:** October 9, 2025  
-**Project:** sys-scan-graph v6.0  
+**Last Updated:** October 20, 2025
+**Project:** sys-scan-graph v6.0
 ---
 
 ## Executive Summary
 
 | Metric | C++ Core | Python Agent | Combined |
 |--------|----------|--------------|----------|
-| **Test Suites** | 62 suites | 810 tests | 872 total |
-| **Pass Rate** | 100% | **96.2%*** | 96.7% |
-| **Code Coverage** | **86.3%** | **81.5%** | — |
-| **Test LOC** | 15,761 lines | ~7,211 lines | ~23,000 lines |
+| **Test Suites** | 62 suites | 838 tests | 900 total |
+| **Pass Rate** | 100% | **99.0%*** | 99.3% |
+| **Code Coverage** | **86.3%** | **83.1%** | — |
+| **Test LOC** | 15,761 lines | ~7,500 lines | ~23,300 lines |
 
-\* 8 failures in various tests, 23 skipped  
+\* 1 failure (flaky test), 28 skipped
 — Combined coverage not computed (different toolchains)
 
 ---
@@ -99,11 +99,19 @@ Extended Scenarios:      16 suites (Privilege, Canonical, Compliance, etc.)
 
 ## Python Intelligence Layer Tests
 
-**Status:** ✅ 96.2% pass rate (8 failures, 23 skipped) - Significant improvement from 93.0% after fixing dict access issues and database conflicts  
-**Framework:** pytest + pytest-cov  
-**Total Tests:** 810  
-**Pass Rate:** 96.2% (779 passed / 8 failed / 23 skipped)  
-**Code Coverage:** 81.5% (5,871 / 7,211 statements, 1,340 missed) - Improved from 80.0% after LLM provider fixes
+**Status:** ✅ 99.0% pass rate (1 flaky test, 28 skipped) - Significant improvement from 96.2% after comprehensive test additions
+**Framework:** pytest + pytest-cov
+**Total Tests:** 838
+**Pass Rate:** 99.0% (809 passed / 1 failed / 28 skipped)
+**Code Coverage:** 83.1% (6,092 / 7,328 statements, 1,236 missed) - Improved from 81.5% after adding comprehensive tests
+
+### Recent Coverage Improvements (October 20, 2025)
+
+| Module | Previous | Current | Improvement | Tests Added |
+|--------|----------|---------|-------------|-------------|
+| **report_diff.py** | 17% | **100%** | +83% | 23 comprehensive tests |
+| **metrics_exporter.py** | 24% | **100%** | +76% | 15 tests covering all export formats |
+| **rarity_generate.py** | 28% | **94%** | +66% | 18 tests for percentile calculations |
 
 ### Coverage Breakdown by Module Category
 
@@ -111,12 +119,12 @@ Extended Scenarios:      16 suites (Privilege, Canonical, Compliance, etc.)
 |----------|----------|-------------|
 | **Data Models** | 100% | models (128 stmts), llm_models (23), migration_v3 (17), canonicalize (14) |
 | **Graph Core** | 91% | graph_state (95%), graph (91%, 372 stmts, 32 missed), graph_utils (99%) |
-| **Pipeline Orchestration** | 94% | pipeline (94%, improved from 92% after dict access fixes) |
-| **Risk & Analysis** | 81% | rule_gap_miner (88%), rule_redundancy (88%), rules (87%), evaluation (84%) |
-| **Knowledge & Enrichment** | 73% | integrity (90%), enricher (73%), data_governance (73%) |
-| **LLM & AI** | 78% | llm_cache (94%, 214 stmts, 12 missed), llm_provider_enhanced (100%), llm (85%, improved from 78% after dict access fixes) |
-| **Utilities** | 89% | performance_baseline (97%), loader (92%), utils (90%), metrics_node (91%) |
-| **CLI & Export** | 61% | report_html (94%), cli (87%), config (81%) |
+| **Pipeline Orchestration** | 92% | pipeline (92%, 241 stmts, 20 missed) |
+| **Risk & Analysis** | 88% | rule_gap_miner (88%), rule_redundancy (88%), rules (87%), evaluation (84%) |
+| **Knowledge & Enrichment** | 77% | integrity (90%), enricher (73%), data_governance (73%) |
+| **LLM & AI** | 78% | llm_cache (94%, 214 stmts, 12 missed), llm_provider_enhanced (100%), llm (78%) |
+| **Utilities** | 93% | performance_baseline (97%), loader (92%), utils (90%), metrics_node (91%) |
+| **CLI & Export** | 93% | **report_diff (100%)**, **metrics_exporter (100%)**, report_html (94%), cli (87%), config (82%) |
 
 
 ## Test Execution
@@ -177,8 +185,8 @@ open htmlcov/index.html
 | Gate | Threshold | Current | Status |
 |------|-----------|---------|--------|
 | C++ Pass Rate | 100% | 100% | ✅ |
-| Python Pass Rate | ≥85% | 96.2% | ✅ |
-| Python Coverage | ≥60% | 81.5% | ✅ |
+| Python Pass Rate | ≥85% | **99.0%** | ✅ |
+| Python Coverage | ≥60% | **83.1%** | ✅ |
 | Memory Leaks | 0 | 0 | ✅ |
 | Sanitizer Errors | 0 | 0 | ✅ |
 

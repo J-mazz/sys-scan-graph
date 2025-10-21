@@ -1,149 +1,316 @@
+"""Tests for rarity_generate module."""
 import pytest
-from pathlib import Path
-from unittest.mock import patch, mock_open
 import yaml
-try:
-    from sys_scan_agent import rarity_generate
-    RARITY_GENERATE_AVAILABLE = True
-except ImportError:
-    RARITY_GENERATE_AVAILABLE = False
-    rarity_generate = None
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+from sys_scan_agent import rarity_generate
 
 
-# Commented out because rarity_generate module does not exist
-# @pytest.mark.skipif(not RARITY_GENERATE_AVAILABLE, reason="Rarity generate module not available")
-# class TestRarityGenerate:
-#     """Test rarity score generation utilities."""
+class TestComputePercentiles:
+    """Tests for compute_percentiles function."""
 
-#     def test_compute_percentiles_empty_dict(self):
-#         """Test computing percentiles for empty frequency dictionary."""
-#         result = rarity_generate.compute_percentiles({})
-#         assert result == {}
+    def test_compute_percentiles_empty(self):
+        """Test compute_percentiles with empty dict."""
+        result = rarity_generate.compute_percentiles({})
+        assert result == {}
 
-#     def test_compute_percentiles_single_item(self):
-#         """Test computing percentiles for single item."""
-#         freqs = {"module1": 5}
-#         result = rarity_generate.compute_percentiles(freqs)
-#         assert result == {"module1": 1.0}
+    def test_compute_percentiles_single_module(self):
+        """Test compute_percentiles with single module."""
+        freqs = {'module1': 5}
+        result = rarity_generate.compute_percentiles(freqs)
+        assert result == {'module1': 1.0}  # Only value, so 100th percentile
 
-#     def test_compute_percentiles_multiple_items(self):
-#         """Test computing percentiles for multiple items."""
-#         freqs = {"module1": 1, "module2": 2, "module3": 2, "module4": 3}
-#         result = rarity_generate.compute_percentiles(freqs)
+    def test_compute_percentiles_uniform_distribution(self):
+        """Test compute_percentiles with all same frequencies."""
+        freqs = {'mod1': 10, 'mod2': 10, 'mod3': 10}
+        result = rarity_generate.compute_percentiles(freqs)
+        # All have same count, all at 100th percentile
+        assert all(v == 1.0 for v in result.values())
 
-#         # Expected percentiles:
-#         # Unique sorted counts: [1, 2, 3]
-#         # n = 3
-#         # module1 (1): less_equal = 1 (1 <= 1) → 1/3 ≈ 0.333
-#         # module2 (2): less_equal = 2 (1,2 <= 2) → 2/3 ≈ 0.667
-#         # module3 (2): less_equal = 2 → 2/3 ≈ 0.667
-#         # module4 (3): less_equal = 3 → 3/3 = 1.0
-#         expected = {
-#             "module1": 1/3,
-#             "module2": 2/3,
-#             "module3": 2/3,
-#             "module4": 1.0
-#         }
-#         assert result == expected
+    def test_compute_percentiles_varied_distribution(self):
+        """Test compute_percentiles with varied frequencies."""
+        freqs = {
+            'rare': 1,      # Most rare
+            'uncommon': 5,
+            'common': 10,
+            'very_common': 20
+        }
+        result = rarity_generate.compute_percentiles(freqs)
 
-#     def test_compute_percentiles_all_same_frequency(self):
-#         """Test computing percentiles when all modules have same frequency."""
-#         freqs = {"module1": 5, "module2": 5, "module3": 5}
-#         result = rarity_generate.compute_percentiles(freqs)
+        # rare should have lowest percentile (25%)
+        assert result['rare'] == 0.25
+        # uncommon should have 50%
+        assert result['uncommon'] == 0.50
+        # common should have 75%
+        assert result['common'] == 0.75
+        # very_common should have 100%
+        assert result['very_common'] == 1.0
 
-#         # All should have percentile 1.0 since all counts <= 5
-#         expected = {"module1": 1.0, "module2": 1.0, "module3": 1.0}
-#         assert result == expected
+    def test_compute_percentiles_duplicate_counts(self):
+        """Test compute_percentiles handles duplicate counts correctly."""
+        freqs = {
+            'mod1': 5,
+            'mod2': 5,
+            'mod3': 10,
+            'mod4': 10,
+            'mod5': 15
+        }
+        result = rarity_generate.compute_percentiles(freqs)
 
-#     def test_rarity_scores_empty_dict(self):
-#         """Test rarity scores for empty frequency dictionary."""
-#         result = rarity_generate.rarity_scores({})
-#         assert result == {}
+        # Both mod1 and mod2 have count 5 (lowest), should be at same percentile
+        assert result['mod1'] == result['mod2'] == pytest.approx(0.333, abs=0.01)
+        # mod3 and mod4 have count 10
+        assert result['mod3'] == result['mod4'] == pytest.approx(0.666, abs=0.01)
+        # mod5 has highest count
+        assert result['mod5'] == 1.0
 
-#     def test_rarity_scores_basic_calculation(self):
-#         """Test basic rarity score calculation."""
-#         freqs = {"common": 10, "rare": 1, "medium": 5}
-#         result = rarity_generate.rarity_scores(freqs)
 
-#         # Percentiles: common=1.0, medium=2/3≈0.667, rare=1/3≈0.333
-#         # Rarity scores: (1-pr)*2, clamped to [0,2]
-#         # common: (1-1.0)*2 = 0.0
-#         # medium: (1-0.667)*2 ≈ 0.666
-#         # rare: (1-0.333)*2 ≈ 1.334
+class TestRarityScores:
+    """Tests for rarity_scores function."""
 
-#         assert abs(result["common"] - 0.0) < 0.001
-#         assert abs(result["medium"] - 0.67) < 0.01  # rounded to 3 decimal places
-#         assert abs(result["rare"] - 1.33) < 0.01
+    def test_rarity_scores_empty(self):
+        """Test rarity_scores with empty dict."""
+        result = rarity_generate.rarity_scores({})
+        assert result == {}
 
-#     def test_rarity_scores_clamping(self):
-#         """Test that rarity scores are properly clamped to [0, 2]."""
-#         # Test that scores are clamped - create a scenario where raw score would be negative
-#         # This is hard to test directly since percentiles are always 0-1, so scores are always 0-2
-#         # Just test that scores are within bounds
-#         freqs = {"common": 10, "rare": 1}
-#         result = rarity_generate.rarity_scores(freqs)
+    def test_rarity_scores_single_module(self):
+        """Test rarity_scores with single module."""
+        freqs = {'module1': 5}
+        result = rarity_generate.rarity_scores(freqs)
+        # Percentile is 1.0, so rarity = (1-1)*2 = 0
+        assert result['module1'] == 0.0
 
-#         for score in result.values():
-#             assert 0.0 <= score <= 2.0
+    def test_rarity_scores_calculation(self):
+        """Test rarity_scores calculation formula."""
+        freqs = {
+            'very_rare': 1,       # percentile 0.25 -> rarity (1-0.25)*2 = 1.5
+            'uncommon': 5,        # percentile 0.5  -> rarity (1-0.5)*2 = 1.0
+            'common': 10,         # percentile 0.75 -> rarity (1-0.75)*2 = 0.5
+            'very_common': 20     # percentile 1.0  -> rarity (1-1.0)*2 = 0.0
+        }
+        result = rarity_generate.rarity_scores(freqs)
 
-#     def test_rarity_scores_rounding(self):
-#         """Test that rarity scores are rounded to 3 decimal places."""
-#        freqs = {"module1": 3}
-#         result = rarity_generate.rarity_scores(freqs)
+        assert result['very_rare'] == 1.5
+        assert result['uncommon'] == 1.0
+        assert result['common'] == 0.5
+        assert result['very_common'] == 0.0
 
-#         # Should be exactly 3 decimal places
-#         score_str = f"{result['module1']:.10f}"
-#         decimal_part = score_str.split('.')[1]
-#         assert len(decimal_part.rstrip('0')) <= 3
+    def test_rarity_scores_clamped_at_2(self):
+        """Test rarity_scores are clamped at maximum 2.0."""
+        # Even if percentile is 0, rarity should be max 2.0
+        freqs = {'rare_mod': 1, 'common_mod': 100}
+        result = rarity_generate.rarity_scores(freqs)
 
-#     @patch('rarity_generate.baseline.BaselineStore')
-#     def test_generate_success(self, mock_baseline_store):
-#         """Test successful generation of rarity file."""
-#         # Mock the baseline store
-#         mock_store = mock_baseline_store.return_value
-#         mock_store.aggregate_module_frequencies.return_value = {
-#             "module1": 5,
-#             "module2": 1,
-#             "module3": 10
-#         }
+        # rare_mod percentile 0.5, rarity (1-0.5)*2 = 1.0
+        assert result['rare_mod'] <= 2.0
+        assert result['common_mod'] >= 0.0
 
-#         # Mock Path operations
-#         with patch('pathlib.Path') as mock_path_class:
-#             mock_db_path = mock_path_class.return_value
-#             mock_out_path = mock_path_class.return_value
+    def test_rarity_scores_rounding(self):
+        """Test rarity_scores are rounded to 3 decimal places."""
+        freqs = {
+            'mod1': 1,
+            'mod2': 2,
+            'mod3': 3
+        }
+        result = rarity_generate.rarity_scores(freqs)
 
-#             # Configure the paths
-#             mock_db_path.__str__ = lambda: "test.db"
-#             mock_out_path.__str__ = lambda: "rarity.yaml"
-#             mock_out_path.write_text = mock_open()
+        # Check all values are rounded to 3 decimals
+        for score in result.values():
+            assert len(str(score).split('.')[-1]) <= 3 or score == int(score)
 
-#             # Call generate
-#             result = rarity_generate.generate(mock_db_path, mock_out_path)
 
-#             # Verify baseline store was created correctly
-#             mock_baseline_store.assert_called_once_with(mock_db_path)
+class TestGenerate:
+    """Tests for generate function."""
 
-#             # Verify aggregate_module_frequencies was called
-#             mock_store.aggregate_module_frequencies.assert_called_once()
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_basic(self, mock_store_class):
+        """Test basic generate functionality."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {
+            'module1': 5,
+            'module2': 10,
+            'module3': 2
+        }
+        mock_store_class.return_value = mock_store
 
-#             # Verify write_text was called
-#             mock_out_path.write_text.assert_called_once()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / 'test.db'
+            out_path = Path(tmpdir) / 'rarity.yaml'
 
-#             # Check the written content
-#             call_args = mock_out_path.write_text.call_args[0][0]
-#             data = yaml.safe_load(call_args)
+            result = rarity_generate.generate(db_path, out_path)
 
-#             # Verify structure
-#             assert "modules" in data
-#             assert "signature" in data
-#             assert len(data["modules"]) == 3
+            assert result == out_path
+            assert out_path.exists()
 
-#             # Verify modules are sorted and have correct structure
-#             modules = data["modules"]
-#             assert modules[0]["module"] == "module1"
-#             assert modules[1]["module"] == "module2"
-#             assert modules[2]["module"] == "module3"
+            # Verify YAML structure
+            content = yaml.safe_load(out_path.read_text())
+            assert 'modules' in content
+            assert 'signature' in content
+            assert isinstance(content['modules'], list)
+            assert len(content['modules']) == 3
 
-#             # Verify signature is present and is a string
-#             assert isinstance(data["signature"], str)
-#             assert len(data["signature"]) == 64  # SHA256 hex length
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_includes_signature(self, mock_store_class):
+        """Test generate includes signature for tamper-evidence."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {
+            'module1': 5
+        }
+        mock_store_class.return_value = mock_store
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / 'rarity.yaml'
+
+            rarity_generate.generate(Path(tmpdir) / 'test.db', out_path)
+
+            content = yaml.safe_load(out_path.read_text())
+            assert 'signature' in content
+            assert len(content['signature']) == 64  # SHA256 hex length
+
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_module_structure(self, mock_store_class):
+        """Test generate creates correct module structure."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {
+            'test_module': 7
+        }
+        mock_store_class.return_value = mock_store
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / 'rarity.yaml'
+
+            rarity_generate.generate(Path(tmpdir) / 'test.db', out_path)
+
+            content = yaml.safe_load(out_path.read_text())
+            module_entry = content['modules'][0]
+
+            assert 'module' in module_entry
+            assert 'hosts' in module_entry
+            assert 'rarity_score' in module_entry
+            assert module_entry['module'] == 'test_module'
+            assert module_entry['hosts'] == 7
+
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_sorted_modules(self, mock_store_class):
+        """Test generate sorts modules alphabetically."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {
+            'zebra': 5,
+            'alpha': 10,
+            'beta': 3
+        }
+        mock_store_class.return_value = mock_store
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / 'rarity.yaml'
+
+            rarity_generate.generate(Path(tmpdir) / 'test.db', out_path)
+
+            content = yaml.safe_load(out_path.read_text())
+            module_names = [m['module'] for m in content['modules']]
+
+            assert module_names == ['alpha', 'beta', 'zebra']
+
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_empty_frequencies(self, mock_store_class):
+        """Test generate handles empty module frequencies."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {}
+        mock_store_class.return_value = mock_store
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / 'rarity.yaml'
+
+            rarity_generate.generate(Path(tmpdir) / 'test.db', out_path)
+
+            content = yaml.safe_load(out_path.read_text())
+            assert content['modules'] == []
+            assert 'signature' in content
+
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_signature_consistency(self, mock_store_class):
+        """Test generate creates consistent signatures for same data."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {
+            'module1': 5,
+            'module2': 10
+        }
+        mock_store_class.return_value = mock_store
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path1 = Path(tmpdir) / 'rarity1.yaml'
+            out_path2 = Path(tmpdir) / 'rarity2.yaml'
+
+            rarity_generate.generate(Path(tmpdir) / 'test.db', out_path1)
+            rarity_generate.generate(Path(tmpdir) / 'test.db', out_path2)
+
+            content1 = yaml.safe_load(out_path1.read_text())
+            content2 = yaml.safe_load(out_path2.read_text())
+
+            # Same input should produce same signature
+            assert content1['signature'] == content2['signature']
+
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_generate_default_paths(self, mock_store_class):
+        """Test generate uses default paths when not specified."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {}
+        mock_store_class.return_value = mock_store
+
+        # This would try to create files in current directory
+        # We'll just verify the store was created with default path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import os
+            original_dir = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = rarity_generate.generate()
+                assert result == Path('rarity.yaml')
+            finally:
+                os.chdir(original_dir)
+
+
+class TestIntegration:
+    """Integration tests for rarity_generate module."""
+
+    @patch('sys_scan_agent.rarity_generate.baseline.BaselineStore')
+    def test_full_workflow(self, mock_store_class):
+        """Test complete workflow from frequencies to YAML output."""
+        mock_store = MagicMock()
+        mock_store.aggregate_module_frequencies.return_value = {
+            'very_rare_module': 1,
+            'uncommon_module': 5,
+            'common_module': 10,
+            'very_common_module': 20
+        }
+        mock_store_class.return_value = mock_store
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / 'baseline.db'
+            out_path = Path(tmpdir) / 'rarity.yaml'
+
+            result = rarity_generate.generate(db_path, out_path)
+
+            assert result.exists()
+            content = yaml.safe_load(result.read_text())
+
+            # Verify structure
+            assert 'modules' in content
+            assert 'signature' in content
+
+            # Find specific module and verify rarity score calculation
+            modules_dict = {m['module']: m for m in content['modules']}
+
+            # very_rare should have high rarity score
+            assert modules_dict['very_rare_module']['rarity_score'] > 1.0
+
+            # very_common should have low rarity score
+            assert modules_dict['very_common_module']['rarity_score'] == 0.0
+
+            # Verify all required fields present
+            for module in content['modules']:
+                assert 'module' in module
+                assert 'hosts' in module
+                assert 'rarity_score' in module
+                assert 0.0 <= module['rarity_score'] <= 2.0
