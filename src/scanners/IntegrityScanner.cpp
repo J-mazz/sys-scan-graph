@@ -333,10 +333,12 @@ void IntegrityScanner::scan(ScanContext& context) {
     auto& cfg = context.config;
     if (!cfg.integrity) return; // gated entirely
 
+    context.report.start_scanner(name());
+
     PackageVerificationResult pkg_result;
 
     // Package verification
-    if (cfg.integrity_pkg_verify) {
+    if (cfg.integrity_pkg_verify && !cfg.test_mode) {
         if (fs::exists("/usr/bin/dpkg")) {
             pkg_result = verify_packages_dpkg(cfg);
         } else if (fs::exists("/usr/bin/rpm")) {
@@ -345,7 +347,7 @@ void IntegrityScanner::scan(ScanContext& context) {
     }
 
     // IMA measurement stats
-    auto [ima_entries, ima_failures] = check_ima_measurements();
+    auto [ima_entries, ima_failures] = cfg.test_mode ? std::pair<size_t, size_t>{0, 0} : check_ima_measurements();
 
     // Rehash mismatched files
     if (cfg.integrity_pkg_rehash && !pkg_result.files_to_rehash.empty()) {

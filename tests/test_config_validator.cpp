@@ -245,4 +245,292 @@ TEST_F(ConfigValidatorTest, ValidatePrivilegeSettings) {
     EXPECT_TRUE(validator.validate(cfg));  // Should still pass basic validation
 }
 
+// Test ioc_exec_trace default duration normalization
+TEST_F(ConfigValidatorTest, NormalizeIOCExecTraceDuration) {
+    Config cfg;
+    cfg.ioc_exec_trace = true;
+    cfg.ioc_exec_trace_seconds = 0;
+
+    EXPECT_TRUE(validator.validate(cfg));
+    EXPECT_EQ(cfg.ioc_exec_trace_seconds, 3); // Should be normalized to 3
+}
+
+// Test ioc_exec_trace with non-zero duration
+TEST_F(ConfigValidatorTest, IOCExecTraceWithNonZeroDuration) {
+    Config cfg;
+    cfg.ioc_exec_trace = true;
+    cfg.ioc_exec_trace_seconds = 10;
+
+    EXPECT_TRUE(validator.validate(cfg));
+    EXPECT_EQ(cfg.ioc_exec_trace_seconds, 10); // Should remain unchanged
+}
+
+// Test pretty/compact conflict resolution
+TEST_F(ConfigValidatorTest, PrettyCompactConflict) {
+    Config cfg;
+    cfg.pretty = true;
+    cfg.compact = true;
+
+    EXPECT_TRUE(validator.validate(cfg));
+    EXPECT_FALSE(cfg.pretty); // pretty should be disabled when compact is set
+    EXPECT_TRUE(cfg.compact);
+}
+
+// Test sign_gpg requires output_file
+TEST_F(ConfigValidatorTest, SignGPGRequiresOutputFile) {
+    Config cfg;
+    cfg.sign_gpg = true;
+    cfg.output_file = "";
+
+    EXPECT_FALSE(validator.validate(cfg)); // Should fail
+}
+
+// Test sign_gpg with output_file
+TEST_F(ConfigValidatorTest, SignGPGWithOutputFile) {
+    Config cfg;
+    cfg.sign_gpg = true;
+    cfg.output_file = "test.json";
+
+    EXPECT_TRUE(validator.validate(cfg)); // Should pass
+}
+
+// Test container_id_filter requires containers flag
+TEST_F(ConfigValidatorTest, ContainerIdRequiresContainers) {
+    Config cfg;
+    cfg.container_id_filter = "abc123";
+    cfg.containers = false;
+
+    EXPECT_FALSE(validator.validate(cfg)); // Should fail
+}
+
+// Test container_id_filter with containers enabled
+TEST_F(ConfigValidatorTest, ContainerIdWithContainersEnabled) {
+    Config cfg;
+    cfg.container_id_filter = "abc123";
+    cfg.containers = true;
+
+    EXPECT_TRUE(validator.validate(cfg)); // Should pass
+}
+
+// Test severity validation with whitespace
+TEST_F(ConfigValidatorTest, SeverityValidationWithWhitespace) {
+    Config cfg;
+    cfg.min_severity = "  low  \n";
+    cfg.fail_on_severity = "\thigh\t";
+
+    EXPECT_TRUE(validator.validate(cfg)); // Should trim and validate
+}
+
+// Test severity validation with empty string
+TEST_F(ConfigValidatorTest, SeverityValidationEmptyString) {
+    Config cfg;
+    cfg.min_severity = "";
+    cfg.fail_on_severity = "";
+
+    EXPECT_TRUE(validator.validate(cfg)); // Empty severities should be allowed
+}
+
+// Test severity validation with all whitespace
+TEST_F(ConfigValidatorTest, SeverityValidationAllWhitespace) {
+    Config cfg;
+    cfg.min_severity = "   \t\n   ";
+    cfg.fail_on_severity = "   ";
+
+    EXPECT_TRUE(validator.validate(cfg)); // All whitespace treated as empty
+}
+
+// Test severity validation case insensitive
+TEST_F(ConfigValidatorTest, SeverityValidationCaseInsensitive) {
+    Config cfg;
+    cfg.min_severity = "HIGH";
+    cfg.fail_on_severity = "CRITICAL";
+
+    EXPECT_TRUE(validator.validate(cfg)); // Should accept uppercase
+}
+
+// Test severity validation mixed case
+TEST_F(ConfigValidatorTest, SeverityValidationMixedCase) {
+    Config cfg;
+    cfg.min_severity = "MeDiUm";
+    cfg.fail_on_severity = "HiGh";
+
+    EXPECT_TRUE(validator.validate(cfg)); // Should accept mixed case
+}
+
+// Test severity rank function
+TEST_F(ConfigValidatorTest, SeverityRankFunction) {
+    EXPECT_EQ(validator.severity_rank("info"), 0);
+    EXPECT_EQ(validator.severity_rank("low"), 1);
+    EXPECT_EQ(validator.severity_rank("medium"), 2);
+    EXPECT_EQ(validator.severity_rank("high"), 3);
+    EXPECT_EQ(validator.severity_rank("critical"), 4);
+    EXPECT_EQ(validator.severity_rank("error"), 5);
+    EXPECT_EQ(validator.severity_rank("invalid"), -1);
+}
+
+// Test severity rank case insensitive
+TEST_F(ConfigValidatorTest, SeverityRankCaseInsensitive) {
+    EXPECT_EQ(validator.severity_rank("INFO"), 0);
+    EXPECT_EQ(validator.severity_rank("LOW"), 1);
+    EXPECT_EQ(validator.severity_rank("HIGH"), 3);
+}
+
+// Test scanner name validation - too long
+TEST_F(ConfigValidatorTest, ScannerNameTooLong) {
+    Config cfg;
+    cfg.enable_scanners = {std::string(1001, 'a')}; // Too long
+
+    EXPECT_THROW(validator.validate(cfg), std::runtime_error);
+}
+
+// Test scanner name validation - invalid characters
+TEST_F(ConfigValidatorTest, ScannerNameInvalidCharacters) {
+    Config cfg;
+    cfg.enable_scanners = {"scanner\x01name"}; // Control character
+
+    EXPECT_THROW(validator.validate(cfg), std::runtime_error);
+}
+
+// Test scanner name validation - empty name skipped
+TEST_F(ConfigValidatorTest, ScannerNameEmpty) {
+    Config cfg;
+    cfg.enable_scanners = {"", "valid_scanner", ""};
+    cfg.disable_scanners = {"other_scanner"};
+
+    EXPECT_TRUE(validator.validate(cfg)); // Empty names should be skipped
+}
+
+// Test fast scan optimization with explicitly enabled scanners
+TEST_F(ConfigValidatorTest, FastScanWithExplicitlyEnabledScanners) {
+    Config cfg;
+    cfg.fast_scan = true;
+    cfg.enable_scanners = {"modules"}; // Explicitly enabled
+
+    validator.apply_fast_scan_optimizations(cfg);
+
+    // Should not disable explicitly enabled scanners
+    auto it = std::find(cfg.disable_scanners.begin(), cfg.disable_scanners.end(), "modules");
+    EXPECT_EQ(it, cfg.disable_scanners.end());
+}
+
+// Test fast scan optimization without explicitly enabled scanners
+TEST_F(ConfigValidatorTest, FastScanWithoutExplicitlyEnabledScanners) {
+    Config cfg;
+    cfg.fast_scan = true;
+
+    validator.apply_fast_scan_optimizations(cfg);
+
+    // Should disable resource-intensive scanners
+    EXPECT_TRUE(std::find(cfg.disable_scanners.begin(), cfg.disable_scanners.end(), "modules") != cfg.disable_scanners.end());
+    EXPECT_TRUE(std::find(cfg.disable_scanners.begin(), cfg.disable_scanners.end(), "integrity") != cfg.disable_scanners.end());
+    EXPECT_TRUE(std::find(cfg.disable_scanners.begin(), cfg.disable_scanners.end(), "ebpf") != cfg.disable_scanners.end());
+    EXPECT_TRUE(cfg.modules_summary_only);
+}
+
+// Test IOC allowlist with leading/trailing whitespace
+TEST_F(ConfigValidatorTest, IOCAllowlistWithWhitespace) {
+    auto ioc_file = temp_dir / "ioc_whitespace.txt";
+    std::ofstream file(ioc_file);
+    file << "  ioc_with_leading_space\n";
+    file << "\tioc_with_tab\n";
+    file << "ioc_with_trailing_space  \n";
+    file << "   ioc_with_both   \n";
+    file.close();
+
+    Config cfg;
+    cfg.ioc_allow_file = ioc_file.string();
+
+    EXPECT_TRUE(validator.load_external_files(cfg));
+    // Leading whitespace should be trimmed
+    EXPECT_EQ(cfg.ioc_allow.size(), 4);
+}
+
+// Test IOC allowlist with empty lines
+TEST_F(ConfigValidatorTest, IOCAllowlistWithEmptyLines) {
+    auto ioc_file = temp_dir / "ioc_empty_lines.txt";
+    std::ofstream file(ioc_file);
+    file << "ioc1\n";
+    file << "\n";
+    file << "   \n"; // Line with only whitespace
+    file << "ioc2\n";
+    file.close();
+
+    Config cfg;
+    cfg.ioc_allow_file = ioc_file.string();
+
+    EXPECT_TRUE(validator.load_external_files(cfg));
+    EXPECT_EQ(cfg.ioc_allow.size(), 2);
+}
+
+// Test SUID expected file with empty lines
+TEST_F(ConfigValidatorTest, SUIDExpectedWithEmptyLines) {
+    auto suid_file = temp_dir / "suid_empty.txt";
+    std::ofstream file(suid_file);
+    file << "/bin/su\n";
+    file << "\n";
+    file << "/usr/bin/sudo\n";
+    file.close();
+
+    Config cfg;
+    cfg.suid_expected_file = suid_file.string();
+
+    EXPECT_TRUE(validator.load_external_files(cfg));
+    EXPECT_EQ(cfg.suid_expected_add.size(), 2);
+}
+
+// Test loading both IOC and SUID files
+TEST_F(ConfigValidatorTest, LoadBothExternalFiles) {
+    auto ioc_file = temp_dir / "ioc.txt";
+    std::ofstream ioc(ioc_file);
+    ioc << "ioc1\n";
+    ioc.close();
+
+    auto suid_file = temp_dir / "suid.txt";
+    std::ofstream suid(suid_file);
+    suid << "/bin/su\n";
+    suid.close();
+
+    Config cfg;
+    cfg.ioc_allow_file = ioc_file.string();
+    cfg.suid_expected_file = suid_file.string();
+
+    EXPECT_TRUE(validator.load_external_files(cfg));
+    EXPECT_EQ(cfg.ioc_allow.size(), 1);
+    EXPECT_EQ(cfg.suid_expected_add.size(), 1);
+}
+
+// Test loading with one file failing
+TEST_F(ConfigValidatorTest, LoadExternalFilesOneFails) {
+    auto ioc_file = temp_dir / "ioc.txt";
+    std::ofstream ioc(ioc_file);
+    ioc << "ioc1\n";
+    ioc.close();
+
+    Config cfg;
+    cfg.ioc_allow_file = ioc_file.string();
+    cfg.suid_expected_file = "/nonexistent/file.txt";
+
+    EXPECT_FALSE(validator.load_external_files(cfg)); // Should fail if any fails
+}
+
+// Test additional severity combinations
+TEST_F(ConfigValidatorTest, SeverityRelationshipValidation) {
+    Config cfg;
+
+    // Test medium vs high (should pass)
+    cfg.min_severity = "medium";
+    cfg.fail_on_severity = "high";
+    EXPECT_TRUE(validator.validate(cfg));
+
+    // Test info vs medium (should pass)
+    cfg.min_severity = "info";
+    cfg.fail_on_severity = "medium";
+    EXPECT_TRUE(validator.validate(cfg));
+
+    // Test critical vs critical (should pass - equal)
+    cfg.min_severity = "critical";
+    cfg.fail_on_severity = "critical";
+    EXPECT_TRUE(validator.validate(cfg));
+}
+
 } // namespace sys_scan

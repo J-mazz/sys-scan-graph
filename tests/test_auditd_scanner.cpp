@@ -276,3 +276,15 @@ TEST_F(AuditdScannerTest, ScanMultipleRulesFiles) {
     ASSERT_NE(setuid, findings.end());
     ASSERT_NE(chmod, findings.end());
 }
+
+// Test name method
+TEST_F(AuditdScannerTest, NameReturnsCorrectValue) {
+    sys_scan::AuditdScanner scanner;
+    EXPECT_EQ(scanner.name(), "auditd");
+}
+
+// Test description method
+TEST_F(AuditdScannerTest, DescriptionReturnsCorrectValue) {
+    sys_scan::AuditdScanner scanner;
+    EXPECT_EQ(scanner.description(), "Checks auditd rules coverage for execve and privilege-escalation events");
+}
