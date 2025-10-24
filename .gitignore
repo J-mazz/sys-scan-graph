@@ -249,14 +249,7 @@ fuzz-*.profdata
 *_debug
 *_test
 
-# Assets (tracked - contains documentation images)
-# assets/  # <- Intentionally NOT ignored - contains docs images
-
-# Large model files (download separately)
-*.safetensors
-
-# Legacy directory (deprecated - no longer used)
-/legacy
+# output files
  enriched_*.json
  enriched_*.html 
 
