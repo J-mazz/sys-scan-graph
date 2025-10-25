@@ -270,8 +270,9 @@ class TestGenerate:
             try:
                 if original_dir:
                     os.chdir(tmpdir)
-                result = rarity_generate.generate()
-                assert result == Path('rarity.yaml')
+                with patch.object(Path, 'write_text'):
+                    result = rarity_generate.generate()
+                    assert result == Path('rarity.yaml')
             finally:
                 if original_dir:
                     os.chdir(original_dir)
