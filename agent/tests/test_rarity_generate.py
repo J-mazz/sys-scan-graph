@@ -1,4 +1,5 @@
 """Tests for rarity_generate module."""
+import os
 import pytest
 import yaml
 import tempfile
@@ -261,7 +262,6 @@ class TestGenerate:
         # This would try to create files in current directory
         # We'll just verify the store was created with default path
         with tempfile.TemporaryDirectory() as tmpdir:
-            import os
             original_dir = os.getcwd()
             try:
                 os.chdir(tmpdir)

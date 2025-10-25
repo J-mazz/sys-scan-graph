@@ -73,32 +73,50 @@ class TestLoadPersistentWeights:
     def test_load_from_file(self):
         """Test load_persistent_weights reads from JSON file."""
         custom_weights = {'impact': 10.0, 'exposure': 5.0, 'anomaly': 3.0}
-        risk.WEIGHTS_FILE.write_text(json.dumps(custom_weights))
-
-        weights = risk.load_persistent_weights()
-
-        assert weights['impact'] == 10.0
-        assert weights['exposure'] == 5.0
-        assert weights['anomaly'] == 3.0
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write(json.dumps(custom_weights))
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            weights = risk.load_persistent_weights()
+            assert weights['impact'] == 10.0
+            assert weights['exposure'] == 5.0
+            assert weights['anomaly'] == 3.0
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
     def test_load_from_file_partial(self):
         """Test load_persistent_weights uses defaults for missing keys."""
         partial_weights = {'impact': 8.0}
-        risk.WEIGHTS_FILE.write_text(json.dumps(partial_weights))
-
-        weights = risk.load_persistent_weights()
-
-        assert weights['impact'] == 8.0
-        assert weights['exposure'] == risk.DEFAULT_WEIGHTS['exposure']
-        assert weights['anomaly'] == risk.DEFAULT_WEIGHTS['anomaly']
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write(json.dumps(partial_weights))
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            weights = risk.load_persistent_weights()
+            assert weights['impact'] == 8.0
+            assert weights['exposure'] == risk.DEFAULT_WEIGHTS['exposure']
+            assert weights['anomaly'] == risk.DEFAULT_WEIGHTS['anomaly']
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
     def test_load_from_file_invalid_json(self):
         """Test load_persistent_weights returns defaults on invalid JSON."""
-        risk.WEIGHTS_FILE.write_text('invalid json {]')
-
-        weights = risk.load_persistent_weights()
-
-        assert weights == risk.DEFAULT_WEIGHTS
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write('invalid json {]')
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            weights = risk.load_persistent_weights()
+            assert weights == risk.DEFAULT_WEIGHTS
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
     def test_load_from_env_vars(self):
         """Test load_persistent_weights reads from environment variables."""
@@ -133,13 +151,20 @@ class TestLoadPersistentWeights:
         assert weights['exposure'] == 6.0
 
     def test_file_takes_precedence_over_env(self):
-        """Test file weights take precedence over env vars."""
-        os.environ['RISK_W_IMPACT'] = '10.0'
-        risk.WEIGHTS_FILE.write_text(json.dumps({'impact': 15.0}))
-
-        weights = risk.load_persistent_weights()
-
-        assert weights['impact'] == 15.0  # From file, not env
+        """Test file takes precedence over environment variables."""
+        custom_weights = {'impact': 15.0}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write(json.dumps(custom_weights))
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            with patch.dict(os.environ, {'SYS_SCAN_RISK_WEIGHTS': json.dumps({'impact': 20.0})}):
+                weights = risk.load_persistent_weights()
+                assert weights['impact'] == 15.0  # File should win
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
 
 class TestSavePersistentWeights:
