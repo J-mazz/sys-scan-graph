@@ -262,13 +262,19 @@ class TestGenerate:
         # This would try to create files in current directory
         # We'll just verify the store was created with default path
         with tempfile.TemporaryDirectory() as tmpdir:
-            original_dir = os.getcwd()
+            original_dir = None
             try:
-                os.chdir(tmpdir)
+                original_dir = os.getcwd()
+            except FileNotFoundError:
+                pass
+            try:
+                if original_dir:
+                    os.chdir(tmpdir)
                 result = rarity_generate.generate()
                 assert result == Path('rarity.yaml')
             finally:
-                os.chdir(original_dir)
+                if original_dir:
+                    os.chdir(original_dir)
 
 
 class TestIntegration:
