@@ -1139,7 +1139,8 @@ TEST_F(IntegrityScannerTest, RunCmdCaptureInvalidCommand) {
 
     auto results = report->results();
     EXPECT_GE(results.size(), 0); // Should handle invalid commands gracefully
-}
+}\
+
 
 // Test run_cmd_capture with commands that produce no output
 TEST_F(IntegrityScannerTest, RunCmdCaptureNoOutput) {
@@ -4539,5 +4540,3 @@ TEST_F(IntegrityScannerTest, AllFeaturesDisabled2) {
 }
 
 } // namespace sys_scan
-
-```
