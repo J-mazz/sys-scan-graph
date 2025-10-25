@@ -386,13 +386,19 @@ class TestDescribe:
     def test_describe_loads_persistent_if_none(self):
         """Test describe loads persistent weights when weights=None."""
         custom_weights = {'impact': 8.0, 'exposure': 4.0, 'anomaly': 2.5}
-        risk.save_persistent_weights(custom_weights)
-
-        result = risk.describe(weights=None)
-
-        assert result['impact'] == 8.0
-        assert result['exposure'] == 4.0
-        assert result['anomaly'] == 2.5
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            risk.save_persistent_weights(custom_weights)
+            result = risk.describe(weights=None)
+            assert result['impact'] == 8.0
+            assert result['exposure'] == 4.0
+            assert result['anomaly'] == 2.5
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
 
 class TestIntegration:
@@ -401,23 +407,35 @@ class TestIntegration:
     def test_save_load_roundtrip(self):
         """Test saving and loading weights maintains values."""
         original = {'impact': 7.5, 'exposure': 4.5, 'anomaly': 2.5}
-
-        risk.save_persistent_weights(original)
-        loaded = risk.load_persistent_weights()
-
-        assert loaded == original
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = Path(f.name)
+        orig = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            risk.save_persistent_weights(original)
+            loaded = risk.load_persistent_weights()
+            assert loaded == original
+        finally:
+            risk.WEIGHTS_FILE = orig
+            temp_path.unlink(missing_ok=True)
 
     def test_compute_with_persisted_weights(self):
         """Test compute_risk uses persisted weights."""
         # Save custom weights
-        risk.save_persistent_weights({'impact': 1.0, 'exposure': 1.0, 'anomaly': 1.0})
-
-        subscores = {'impact': 5.0, 'exposure': 2.0, 'anomaly': 1.0, 'confidence': 1.0}
-        score, raw = risk.compute_risk(subscores, weights=None)
-
-        # With equal weights of 1.0
-        expected_raw = 5.0 + 2.0 + 1.0
-        assert raw == expected_raw
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = Path(f.name)
+        orig = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            risk.save_persistent_weights({'impact': 1.0, 'exposure': 1.0, 'anomaly': 1.0})
+            subscores = {'impact': 5.0, 'exposure': 2.0, 'anomaly': 1.0, 'confidence': 1.0}
+            score, raw = risk.compute_risk(subscores, weights=None)
+            # With equal weights of 1.0
+            expected_raw = 5.0 + 2.0 + 1.0
+            assert raw == expected_raw
+        finally:
+            risk.WEIGHTS_FILE = orig
+            temp_path.unlink(missing_ok=True)
 
     def test_describe_matches_compute(self):
         """Test describe and compute_risk use same weights."""
