@@ -136,7 +136,7 @@ class FollowupResult(BaseModel):
     notes: Optional[str] = None
 
 class EnrichedOutput(BaseModel):
-    version: str = "agent_mvp_1"
+    version: str = "1.0"
     correlations: List[Correlation]
     reductions: dict
     summaries: Summaries

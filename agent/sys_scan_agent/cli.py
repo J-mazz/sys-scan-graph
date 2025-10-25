@@ -142,7 +142,7 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
         print(f"[red]Scaffold workflow failed: {e}[/red]")
         raise
 
-app = typer.Typer(help="sys-scan intelligence layer (agent MVP)")
+app = typer.Typer(help="sys-scan intelligence layer")
 
 @app.command()
 def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="Path to sys-scan JSON report"),
