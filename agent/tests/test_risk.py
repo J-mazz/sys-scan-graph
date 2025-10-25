@@ -173,31 +173,50 @@ class TestSavePersistentWeights:
     def test_save_weights_creates_file(self):
         """Test save_persistent_weights creates JSON file."""
         custom_weights = {'impact': 12.0, 'exposure': 8.0, 'anomaly': 4.0}
-
-        risk.save_persistent_weights(custom_weights)
-
-        assert risk.WEIGHTS_FILE.exists()
-        saved_data = json.loads(risk.WEIGHTS_FILE.read_text())
-        assert saved_data == custom_weights
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            risk.save_persistent_weights(custom_weights)
+            assert temp_path.exists()
+            saved_data = json.loads(temp_path.read_text())
+            assert saved_data == custom_weights
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
     def test_save_weights_overwrites_existing(self):
         """Test save_persistent_weights overwrites existing file."""
-        risk.WEIGHTS_FILE.write_text(json.dumps({'impact': 1.0}))
-
-        new_weights = {'impact': 20.0, 'exposure': 15.0, 'anomaly': 10.0}
-        risk.save_persistent_weights(new_weights)
-
-        saved_data = json.loads(risk.WEIGHTS_FILE.read_text())
-        assert saved_data == new_weights
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write(json.dumps({'impact': 1.0}))
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            new_weights = {'impact': 20.0, 'exposure': 15.0, 'anomaly': 10.0}
+            risk.save_persistent_weights(new_weights)
+            saved_data = json.loads(temp_path.read_text())
+            assert saved_data == new_weights
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
     def test_save_weights_formatted(self):
         """Test save_persistent_weights creates formatted JSON."""
         weights = {'impact': 5.0, 'exposure': 3.0, 'anomaly': 2.0}
-        risk.save_persistent_weights(weights)
-
-        content = risk.WEIGHTS_FILE.read_text()
-        # Should have indentation (formatted)
-        assert '\n' in content
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            risk.save_persistent_weights(weights)
+            content = temp_path.read_text()
+            # Should have indentation (formatted)
+            assert '\n' in content
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
 
 class TestComputeRisk:
@@ -279,15 +298,20 @@ class TestComputeRisk:
     def test_compute_risk_loads_weights_if_none(self):
         """Test compute_risk loads persistent weights when weights=None."""
         custom_weights = {'impact': 10.0, 'exposure': 5.0, 'anomaly': 3.0}
-        risk.save_persistent_weights(custom_weights)
-
-        subscores = {'impact': 5.0, 'exposure': 2.0, 'anomaly': 1.0, 'confidence': 1.0}
-
-        score, raw = risk.compute_risk(subscores, weights=None)
-
-        # Should use custom weights
-        expected_raw = 5.0*10.0 + 2.0*5.0 + 1.0*3.0
-        assert raw == expected_raw
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = Path(f.name)
+        original = risk.WEIGHTS_FILE
+        risk.WEIGHTS_FILE = temp_path
+        try:
+            risk.save_persistent_weights(custom_weights)
+            subscores = {'impact': 5.0, 'exposure': 2.0, 'anomaly': 1.0, 'confidence': 1.0}
+            score, raw = risk.compute_risk(subscores, weights=None)
+            # Should use custom weights
+            expected_raw = 5.0*10.0 + 2.0*5.0 + 1.0*3.0
+            assert raw == expected_raw
+        finally:
+            risk.WEIGHTS_FILE = original
+            temp_path.unlink(missing_ok=True)
 
     def test_compute_risk_caps_at_100(self):
         """Test compute_risk caps score at 100."""
