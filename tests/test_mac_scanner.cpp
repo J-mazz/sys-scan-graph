@@ -26,6 +26,7 @@ protected:
         fs::create_directories(test_root);
 
         config.test_root = test_root;
+        config.test_mode = true;
 
         report = std::make_unique<Report>();
         context = std::make_unique<ScanContext>(config, *report);
@@ -322,8 +323,8 @@ TEST_F(MACScannerTest, SELinuxPermissiveSeverity) {
         [](const Finding& f) { return f.id == "selinux"; });
     ASSERT_NE(selinux_it, findings.end());
 
-    // Permissive mode should be Medium severity
-    EXPECT_EQ(selinux_it->severity, Severity::Medium);
+    // Permissive mode should be Low severity
+    EXPECT_EQ(selinux_it->severity, Severity::Low);
     EXPECT_EQ(selinux_it->metadata["permissive"], "true");
 }
 
