@@ -10,7 +10,7 @@ struct ScanContext;
 class MACScanner : public Scanner {
 public:
     std::string name() const override { return "mac"; }
-    std::string description() const override { return "Mandatory Access Control (SELinux/AppArmor) status"; }
+    std::string description() const override { return "Mandatory Access Control (SELinux/AppArmor) detection and analysis"; }
     void scan(ScanContext& context) override;
 };
 }

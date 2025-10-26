@@ -338,11 +338,17 @@ void IntegrityScanner::scan(ScanContext& context) {
     PackageVerificationResult pkg_result;
 
     // Package verification
-    if (cfg.integrity_pkg_verify && !cfg.test_mode) {
+    if (cfg.integrity_pkg_verify) {
         if (fs::exists("/usr/bin/dpkg")) {
-            pkg_result = verify_packages_dpkg(cfg);
+            pkg_result.tool_used = "dpkg";
+            if (!cfg.test_mode) {
+                pkg_result = verify_packages_dpkg(cfg);
+            }
         } else if (fs::exists("/usr/bin/rpm")) {
-            pkg_result = verify_packages_rpm(cfg);
+            pkg_result.tool_used = "rpm";
+            if (!cfg.test_mode) {
+                pkg_result = verify_packages_rpm(cfg);
+            }
         }
     }
 
@@ -390,7 +396,7 @@ void IntegrityScanner::scan(ScanContext& context) {
     // Document scan mode
     if (cfg.integrity_critical_only) {
         summary.metadata["scan_mode"] = "critical_only";
-    } else if (cfg.integrity_sample_pct > 0) {
+    } else if (cfg.integrity_sample_pct > 0 && cfg.integrity_sample_pct < 100) {
         summary.metadata["scan_mode"] = "sample_" + std::to_string(cfg.integrity_sample_pct) + "pct";
     } else {
         summary.metadata["scan_mode"] = "full";
@@ -412,6 +418,8 @@ void IntegrityScanner::scan(ScanContext& context) {
     if (cfg.integrity_ima) {
         summary.metadata["ima_entries"] = std::to_string(ima_entries);
         if (ima_failures > 0) summary.metadata["ima_fail"] = std::to_string(ima_failures);
+    } else {
+        summary.metadata["ima_entries"] = "0";
     }
 
     context.report.add_finding(this->name(), std::move(summary));

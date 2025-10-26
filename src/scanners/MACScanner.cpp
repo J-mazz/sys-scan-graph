@@ -68,8 +68,9 @@ static void trim_string_lean(char* str) {
 
 // Ultra-fast process scanning for MAC labels
 static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_profiles_complain,
-                                   size_t* apparmor_unconfined_critical) {
-    DIR* dir = opendir("/proc");
+                                   size_t* apparmor_unconfined_critical, const char* test_root = nullptr) {
+    std::string proc_path = test_root ? std::string(test_root) + "/proc" : "/proc";
+    DIR* dir = opendir(proc_path.c_str());
     if (!dir) return;
 
     struct dirent* entry;
@@ -93,9 +94,15 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
         char attr_path[MAX_PATH_LEN_LEAN];
         char exe_path[MAX_PATH_LEN_LEAN];
 
-        snprintf(comm_path, sizeof(comm_path), "/proc/%s/comm", entry->d_name);
-        snprintf(attr_path, sizeof(attr_path), "/proc/%s/attr/current", entry->d_name);
-        snprintf(exe_path, sizeof(exe_path), "/proc/%s/exe", entry->d_name);
+        if (test_root) {
+            snprintf(comm_path, sizeof(comm_path), "%s/proc/%s/comm", test_root, entry->d_name);
+            snprintf(attr_path, sizeof(attr_path), "%s/proc/%s/attr/current", test_root, entry->d_name);
+            snprintf(exe_path, sizeof(exe_path), "%s/proc/%s/exe", test_root, entry->d_name);
+        } else {
+            snprintf(comm_path, sizeof(comm_path), "/proc/%s/comm", entry->d_name);
+            snprintf(attr_path, sizeof(attr_path), "/proc/%s/attr/current", entry->d_name);
+            snprintf(exe_path, sizeof(exe_path), "/proc/%s/exe", entry->d_name);
+        }
 
         // Read comm
         ssize_t comm_len = read_file_to_buffer_lean(comm_path, buffer, sizeof(buffer) - 1);
@@ -124,6 +131,15 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
             if (exe_link_len > 0) {
                 exe_buf[exe_link_len] = '\0';
 
+                // Adjust path for test_root
+                std::string exe_path_str(exe_buf);
+                if (test_root) {
+                    std::string test_root_str(test_root);
+                    if (exe_path_str.find(test_root_str) == 0) {
+                        exe_path_str = exe_path_str.substr(test_root_str.length());
+                    }
+                }
+
                 // Critical binaries to check
                 const char* critical_bins[] = {
                     "/usr/sbin/sshd", "/usr/bin/dbus-daemon", "/usr/sbin/nginx",
@@ -132,7 +148,7 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
                 const size_t critical_count = sizeof(critical_bins) / sizeof(critical_bins[0]);
 
                 for (size_t i = 0; i < critical_count; ++i) {
-                    if (strcmp(exe_buf, critical_bins[i]) == 0) {
+                    if (strcmp(exe_path_str.c_str(), critical_bins[i]) == 0) {
                         ++(*apparmor_unconfined_critical);
                         break;
                     }
@@ -147,6 +163,8 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
 }
 
 void MACScanner::scan(ScanContext& context) {
+    context.report.start_scanner(this->name());
+
     const char* test_root = context.config.test_root.empty() ? nullptr : context.config.test_root.c_str();
 
     // Detect container (simple heuristics) to potentially downgrade severity
@@ -219,7 +237,7 @@ void MACScanner::scan(ScanContext& context) {
     size_t apparmor_profiles_complain = 0;
     size_t apparmor_unconfined_critical = 0;
 
-    scan_processes_mac_lean(&apparmor_profiles, &apparmor_profiles_complain, &apparmor_unconfined_critical);
+    scan_processes_mac_lean(&apparmor_profiles, &apparmor_profiles_complain, &apparmor_unconfined_critical, test_root);
 
     // SELinux Finding
     {
@@ -242,7 +260,7 @@ void MACScanner::scan(ScanContext& context) {
             f.metadata["enforcing"] = selinux_enforcing ? "true" : "false";
             f.metadata["permissive"] = selinux_permissive ? "true" : "false";
             if (selinux_cfg_mode[0]) f.metadata["config_mode"] = selinux_cfg_mode;
-            if (selinux_permissive) f.severity = Severity::Medium;
+            if (selinux_permissive) f.severity = Severity::Low;
             if (selinux_enforcing) f.severity = Severity::Info;
         }
         context.report.add_finding(this->name(), std::move(f));
