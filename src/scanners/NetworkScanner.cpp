@@ -144,12 +144,48 @@ static bool should_filter_socket(bool is_tcp, const char* state_str, const Confi
     return false;
 }
 
-// Create finding from parsed socket information
-static void create_socket_finding(Report& report, const char* proto, bool is_tcp, const char* state_str,
-                                unsigned lport, unsigned rport, const char* lip, const char* rip,
-                                const char* inode_s, const char* pid_str, const char* exe_str,
-                                const char* container_id, const Config& config) {
-    Finding f;
+// Lookup inode information from maps
+struct InodeLookupResult {
+    const char* pid_str;
+    const char* exe_str;
+    const char* container_id;
+    size_t inode_idx;
+};
+
+static InodeLookupResult lookup_inode_info(
+    const char* inode_token,
+    const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
+    const char pid_map[MAX_SOCKETS_LEAN][16],
+    const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN],
+    const char container_map[MAX_SOCKETS_LEAN][13],
+    size_t inode_count) {
+
+    size_t inode_idx = find_inode_lean(inode_map, inode_count, inode_token);
+    bool is_valid = (inode_idx != SIZE_MAX && inode_idx < inode_count);
+
+    return {
+        is_valid ? pid_map[inode_idx] : "",
+        is_valid ? exe_map[inode_idx] : "",
+        is_valid ? container_map[inode_idx] : "",
+        inode_idx
+    };
+}
+
+// Update fanout aggregation for established TCP connections
+static void update_fanout_aggregation(
+    std::unordered_map<std::string, FanoutAgg>* fanout,
+    const char* pid_str,
+    const char* remote_ip) {
+
+    if (!fanout || !pid_str || !remote_ip) return;
+
+    (*fanout)[pid_str].total++;
+    (*fanout)[pid_str].remote_ips.insert(remote_ip);
+}
+
+// Build finding identification
+static void build_finding_id_and_title(Finding& f, const char* proto, bool is_tcp,
+                                      const char* state_str, unsigned lport, const char* inode_s) {
     char id_buf[64];
     snprintf(id_buf, sizeof(id_buf), "%s:%u:%s", proto, lport, inode_s);
     f.id = id_buf;
@@ -161,13 +197,16 @@ static void create_socket_finding(Report& report, const char* proto, bool is_tcp
         snprintf(title_buf, sizeof(title_buf), "%s port %u", proto, lport);
     }
     f.title = title_buf;
+}
 
-    f.severity = Severity::Info;
-    f.description = is_tcp ? "TCP socket" : "UDP socket";
-
+// Populate finding metadata
+static void populate_finding_metadata(Finding& f, bool is_tcp, const char* state_str,
+                                     unsigned lport, unsigned rport, const char* lip, const char* rip,
+                                     const char* inode_s, const char* pid_str, const char* exe_str,
+                                     const char* container_id, const Config& config) {
     f.metadata["protocol"] = is_tcp ? "tcp" : "udp";
     if (is_tcp) f.metadata["state"] = state_str;
-    if (!config.no_user_meta) f.metadata["uid"] = "";  // Will be set from tokens if available
+    if (!config.no_user_meta) f.metadata["uid"] = "";
     f.metadata["lport"] = std::to_string(lport);
     if (is_tcp) f.metadata["rport"] = std::to_string(rport);
     f.metadata["inode"] = inode_s;
@@ -177,28 +216,59 @@ static void create_socket_finding(Report& report, const char* proto, bool is_tcp
     if (pid_str && *pid_str) f.metadata["pid"] = pid_str;
     if (exe_str && *exe_str) f.metadata["exe"] = exe_str;
     if (container_id && *container_id) f.metadata["container_id"] = container_id;
+}
 
-    // Severity classification
-    Severity sev;
+// Determine finding severity
+static Severity determine_finding_severity(bool is_tcp, const char* state_str,
+                                          unsigned lport, const char* lip, const char* exe_str) {
     if (is_tcp) {
-        sev = classify_tcp_severity_lean(state_str, lport, exe_str ? exe_str : "");
-        f.severity = escalate_exposed_lean(sev, state_str, lip);
+        Severity sev = classify_tcp_severity_lean(state_str, lport, exe_str ? exe_str : "");
+        return escalate_exposed_lean(sev, state_str, lip);
     } else {
-        sev = classify_udp_severity_lean(lport, exe_str ? exe_str : "");
-        f.severity = sev;
+        return classify_udp_severity_lean(lport, exe_str ? exe_str : "");
     }
+}
 
-    // Wildcard/privileged annotations for TCP
-    if (is_tcp && strcmp(state_str, "LISTEN") == 0) {
-        bool wildcard = false;
-        if (strstr(proto, "6")) {  // IPv6
-            wildcard = (strcmp(lip, "0000:0000:0000:0000:0000:0000:0000:0000") == 0);
-        } else {  // IPv4
-            wildcard = (strcmp(lip, "0.0.0.0") == 0);
-        }
-        if (wildcard) f.metadata["wildcard_listen"] = "true";
-        if (lport < 1024) f.metadata["privileged_port"] = "true";
+// Check if IP is a wildcard address
+static bool is_wildcard_address(const char* ip, const char* proto) {
+    if (strstr(proto, "6")) {  // IPv6
+        return strcmp(ip, "0000:0000:0000:0000:0000:0000:0000:0000") == 0;
+    } else {  // IPv4
+        return strcmp(ip, "0.0.0.0") == 0;
     }
+}
+
+// Add special annotations for listening sockets
+static void annotate_listen_socket(Finding& f, bool is_tcp, const char* state_str,
+                                  const char* lip, unsigned lport, const char* proto) {
+    if (!is_tcp || strcmp(state_str, "LISTEN") != 0) return;
+
+    if (is_wildcard_address(lip, proto)) {
+        f.metadata["wildcard_listen"] = "true";
+    }
+    if (lport < 1024) {
+        f.metadata["privileged_port"] = "true";
+    }
+}
+
+// Create finding from parsed socket information
+static void create_socket_finding(Report& report, const char* proto, bool is_tcp, const char* state_str,
+                                unsigned lport, unsigned rport, const char* lip, const char* rip,
+                                const char* inode_s, const char* pid_str, const char* exe_str,
+                                const char* container_id, const Config& config) {
+    Finding f;
+
+    build_finding_id_and_title(f, proto, is_tcp, state_str, lport, inode_s);
+
+    f.severity = Severity::Info;
+    f.description = is_tcp ? "TCP socket" : "UDP socket";
+
+    populate_finding_metadata(f, is_tcp, state_str, lport, rport, lip, rip,
+                            inode_s, pid_str, exe_str, container_id, config);
+
+    f.severity = determine_finding_severity(is_tcp, state_str, lport, lip, exe_str);
+
+    annotate_listen_socket(f, is_tcp, state_str, lip, lport, proto);
 
     report.add_finding(proto, std::move(f));
 }
@@ -243,24 +313,21 @@ static void parse_proc_net_file(const char* path, Report& report, const char* pr
         convert_ip_addresses(local, rem, is_ipv6, is_tcp, lip, sizeof(lip), rip, sizeof(rip));
 
         // Lookup inode in lean arrays
-        size_t inode_idx = find_inode_lean(inode_map, inode_count, tokens[is_tcp ? 9 : 8]);
         const char* inode_s = tokens[is_tcp ? 9 : 8];
-        const char* pid_str = (inode_idx != SIZE_MAX && inode_idx < inode_count) ? pid_map[inode_idx] : "";
-        const char* exe_str = (inode_idx != SIZE_MAX && inode_idx < inode_count) ? exe_map[inode_idx] : "";
-        const char* container_id = (inode_idx != SIZE_MAX && inode_idx < inode_count) ? container_map[inode_idx] : "";
+        InodeLookupResult inode_result = lookup_inode_info(
+            inode_s, inode_map, pid_map, exe_map, container_map, inode_count);
 
         // Check if socket should be filtered
-        if (should_filter_socket(is_tcp, state_str, config, lip, container_id)) continue;
+        if (should_filter_socket(is_tcp, state_str, config, lip, inode_result.container_id)) continue;
 
         // Create and add finding
         create_socket_finding(report, proto, is_tcp, state_str, lport, rport, lip, rip,
-                            inode_s, pid_str, exe_str, container_id, config);
+                            inode_s, inode_result.pid_str, inode_result.exe_str, inode_result.container_id, config);
 
         // Fanout aggregation for TCP
-        if (is_tcp && config.network_advanced && fanout && strcmp(state_str, "ESTABLISHED") == 0 && inode_idx != SIZE_MAX && inode_idx < inode_count) {
-            const char* remote_ip = is_ipv6 ? rip : rip;
-            (*fanout)[pid_str].total++;
-            (*fanout)[pid_str].remote_ips.insert(remote_ip);
+        if (is_tcp && config.network_advanced && strcmp(state_str, "ESTABLISHED") == 0 &&
+            inode_result.inode_idx != SIZE_MAX && inode_result.inode_idx < inode_count) {
+            update_fanout_aggregation(fanout, inode_result.pid_str, rip);
         }
 
         emitted.fetch_add(1, std::memory_order_relaxed);
@@ -426,6 +493,64 @@ static bool read_exe_path(int pid, char* exe_buf, size_t exe_size) {
     return false;
 }
 
+// Extract inode from socket symlink target
+static bool extract_socket_inode(const char* target, char* inode_buf, size_t inode_size) {
+    const char* socket_prefix = "socket:[";
+    if (strncmp(target, socket_prefix, strlen(socket_prefix)) != 0) {
+        return false;
+    }
+
+    const char* bracket_start = strchr(target, '[');
+    const char* bracket_end = strchr(target, ']');
+    if (!bracket_start || !bracket_end || bracket_start >= bracket_end) {
+        return false;
+    }
+
+    size_t inode_len = bracket_end - bracket_start - 1;
+    if (inode_len >= inode_size) {
+        return false;
+    }
+
+    memcpy(inode_buf, bracket_start + 1, inode_len);
+    inode_buf[inode_len] = '\0';
+    return true;
+}
+
+// Store socket metadata in maps
+static void store_socket_metadata(
+    size_t index,
+    const char* inode,
+    int pid,
+    const char* exe_buf,
+    const char* container_id,
+    char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
+    char pid_map[MAX_SOCKETS_LEAN][16],
+    char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN],
+    char container_map[MAX_SOCKETS_LEAN][13]) {
+
+    // Store inode
+    size_t inode_len = strlen(inode);
+    memcpy(inode_map[index], inode, inode_len);
+    inode_map[index][inode_len] = '\0';
+
+    // Store PID
+    snprintf(pid_map[index], sizeof(pid_map[0]), "%d", pid);
+
+    // Store exe path if available
+    if (exe_buf && *exe_buf && strlen(exe_buf) < sizeof(exe_map[0])) {
+        memcpy(exe_map[index], exe_buf, strlen(exe_buf) + 1);
+    } else {
+        exe_map[index][0] = '\0';
+    }
+
+    // Store container ID if available
+    if (container_id && *container_id && strlen(container_id) < sizeof(container_map[0])) {
+        memcpy(container_map[index], container_id, strlen(container_id) + 1);
+    } else {
+        container_map[index][0] = '\0';
+    }
+}
+
 // Process socket file descriptors for a given PID
 static size_t process_socket_fds(int pid, const char* exe_buf, const char* container_id,
                                 char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
@@ -454,34 +579,15 @@ static size_t process_socket_fds(int pid, const char* exe_buf, const char* conta
 
         target[target_len] = '\0';
 
-        // Check if it's a socket and extract inode
-        const char* socket_prefix = "socket:[";
-        if (strncmp(target, socket_prefix, strlen(socket_prefix)) != 0) continue;
-
-        const char* bracket_start = strchr(target, '[');
-        const char* bracket_end = strchr(target, ']');
-        if (!bracket_start || !bracket_end || bracket_start >= bracket_end) continue;
-
-        size_t inode_len = bracket_end - bracket_start - 1;
-        if (inode_len >= sizeof(inode_map[0]) - 1) continue;
-
-        // Store inode and associated data
-        memcpy(inode_map[count], bracket_start + 1, inode_len);
-        inode_map[count][inode_len] = '\0';
-
-        snprintf(pid_map[count], sizeof(pid_map[0]), "%d", pid);
-
-        if (exe_buf && *exe_buf && strlen(exe_buf) < sizeof(exe_map[0])) {
-            memcpy(exe_map[count], exe_buf, strlen(exe_buf) + 1);
-        } else {
-            exe_map[count][0] = '\0';
+        // Extract inode from socket symlink
+        char inode_buf[MAX_INODE_LEN_LEAN];
+        if (!extract_socket_inode(target, inode_buf, sizeof(inode_buf))) {
+            continue;
         }
 
-        if (container_id && *container_id && strlen(container_id) < sizeof(container_map[0])) {
-            memcpy(container_map[count], container_id, strlen(container_id) + 1);
-        } else {
-            container_map[count][0] = '\0';
-        }
+        // Store socket metadata
+        store_socket_metadata(count, inode_buf, pid, exe_buf, container_id,
+                            inode_map, pid_map, exe_map, container_map);
 
         count++;
     }
@@ -691,6 +797,75 @@ static void parse_udp_lean(const char* path, Report& report, const char* proto,
     parse_proc_net_file(path, report, proto, inode_map, pid_map, exe_map, container_map, inode_count, emitted, fanout, config, false);
 }
 
+// Spawn TCP parsing threads for parallel scanning
+static void spawn_tcp_threads(std::vector<std::thread>& threads, Report& report,
+                             const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
+                             const char pid_map[MAX_SOCKETS_LEAN][16],
+                             const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN],
+                             const char container_map[MAX_SOCKETS_LEAN][13],
+                             size_t inode_count, std::atomic<size_t>& emitted, const Config& config) {
+    threads.emplace_back([&]() {
+        parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    });
+    threads.emplace_back([&]() {
+        parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    });
+}
+
+// Spawn UDP parsing threads for parallel scanning
+static void spawn_udp_threads(std::vector<std::thread>& threads, Report& report,
+                             const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
+                             const char pid_map[MAX_SOCKETS_LEAN][16],
+                             const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN],
+                             const char container_map[MAX_SOCKETS_LEAN][13],
+                             size_t inode_count, std::atomic<size_t>& emitted, const Config& config) {
+    threads.emplace_back([&]() {
+        parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    });
+    threads.emplace_back([&]() {
+        parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    });
+}
+
+// Add truncation warning if max sockets limit reached
+static void add_truncation_warning(Report& report, const char* category, size_t count,
+                                  size_t before, size_t after, const Config& config) {
+    if (count >= (size_t)config.max_sockets && before < after) {
+        char warn_msg[128];
+        snprintf(warn_msg, sizeof(warn_msg), "%s socket scan truncated at %d sockets (max_sockets limit)",
+                category, config.max_sockets);
+        report.add_warning(category, WarnCode::NetFileUnreadable, warn_msg);
+    }
+}
+
+// Scan TCP sockets in single-threaded mode
+static void scan_tcp_sequential(Report& report,
+                               const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
+                               const char pid_map[MAX_SOCKETS_LEAN][16],
+                               const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN],
+                               const char container_map[MAX_SOCKETS_LEAN][13],
+                               size_t inode_count, std::atomic<size_t>& emitted, const Config& config) {
+    size_t before = emitted.load(std::memory_order_relaxed);
+    parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    size_t after = emitted.load(std::memory_order_relaxed);
+    add_truncation_warning(report, "TCP", after, before, after, config);
+}
+
+// Scan UDP sockets in single-threaded mode
+static void scan_udp_sequential(Report& report,
+                               const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN],
+                               const char pid_map[MAX_SOCKETS_LEAN][16],
+                               const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN],
+                               const char container_map[MAX_SOCKETS_LEAN][13],
+                               size_t inode_count, std::atomic<size_t>& emitted, const Config& config) {
+    size_t before = emitted.load(std::memory_order_relaxed);
+    parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+    size_t after = emitted.load(std::memory_order_relaxed);
+    add_truncation_warning(report, "UDP", after, before, after, config);
+}
+
 void NetworkScanner::scan(ScanContext& context) {
     const Config& config = context.config;
     Report& report = context.report;
@@ -702,7 +877,6 @@ void NetworkScanner::scan(ScanContext& context) {
     char container_map[MAX_SOCKETS_LEAN][13] = {};
 
     size_t inode_count = 0;
-
     if (config.network_advanced) {
         inode_count = build_inode_map_lean(inode_map, pid_map, exe_map, container_map, MAX_SOCKETS_LEAN, config);
     }
@@ -719,21 +893,10 @@ void NetworkScanner::scan(ScanContext& context) {
         threads.reserve(4);
 
         if (scan_tcp) {
-            threads.emplace_back([&]() {
-                parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-            });
-            threads.emplace_back([&]() {
-                parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-            });
+            spawn_tcp_threads(threads, report, inode_map, pid_map, exe_map, container_map, inode_count, emitted, config);
         }
-
         if (scan_udp) {
-            threads.emplace_back([&]() {
-                parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-            });
-            threads.emplace_back([&]() {
-                parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-            });
+            spawn_udp_threads(threads, report, inode_map, pid_map, exe_map, container_map, inode_count, emitted, config);
         }
 
         for (auto& t : threads) {
@@ -742,37 +905,14 @@ void NetworkScanner::scan(ScanContext& context) {
 
         // Aggregate truncation warning across all parsers
         size_t final_count = emitted.load(std::memory_order_relaxed);
-        if (final_count >= (size_t)config.max_sockets) {
-            char warn_msg[128];
-            snprintf(warn_msg, sizeof(warn_msg), "Network socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
-            report.add_warning("network", WarnCode::NetFileUnreadable, warn_msg);
-        }
+        add_truncation_warning(report, "Network", final_count, 0, 1, config);
     } else {
         // Single-threaded path: parse files in order with per-protocol truncation warnings
         if (scan_tcp) {
-            size_t before_tcp = emitted.load(std::memory_order_relaxed);
-            parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-            parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-
-            size_t after_tcp = emitted.load(std::memory_order_relaxed);
-            if (after_tcp >= (size_t)config.max_sockets && before_tcp < after_tcp) {
-                char warn_msg[128];
-                snprintf(warn_msg, sizeof(warn_msg), "TCP socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
-                report.add_warning("tcp", WarnCode::NetFileUnreadable, warn_msg);
-            }
+            scan_tcp_sequential(report, inode_map, pid_map, exe_map, container_map, inode_count, emitted, config);
         }
-
         if (scan_udp) {
-            size_t before_udp = emitted.load(std::memory_order_relaxed);
-            parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-            parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-
-            size_t after_udp = emitted.load(std::memory_order_relaxed);
-            if (after_udp >= (size_t)config.max_sockets && before_udp < after_udp) {
-                char warn_msg[128];
-                snprintf(warn_msg, sizeof(warn_msg), "UDP socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
-                report.add_warning("udp", WarnCode::NetFileUnreadable, warn_msg);
-            }
+            scan_udp_sequential(report, inode_map, pid_map, exe_map, container_map, inode_count, emitted, config);
         }
     }
 }
