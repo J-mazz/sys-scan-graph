@@ -68,28 +68,24 @@ namespace {
         }
     }
 
+    // Helper to strip surrounding quotes from os-release values
+    static std::string parse_quoted_value(const std::string& v) {
+        if (v.size() >= 2 && v.front() == '"' && v.back() == '"') {
+            return v.substr(1, v.size() - 2);
+        }
+        return v;
+    }
+
     static void parse_os_release_file(HostMeta& h) {
         std::ifstream f("/etc/os-release");
         std::string line;
         while (std::getline(f, line)) {
             if (line.rfind("PRETTY_NAME=", 0) == 0) {
-                std::string v = line.substr(12);
-                if (v.size() && v.front() == '"' && v.back() == '"') {
-                    v = v.substr(1, v.size() - 2);
-                }
-                h.os_pretty = v;
+                h.os_pretty = parse_quoted_value(line.substr(12));
             } else if (line.rfind("ID=", 0) == 0) {
-                std::string v = line.substr(3);
-                if (v.size() && v.front() == '"' && v.back() == '"') {
-                    v = v.substr(1, v.size() - 2);
-                }
-                h.os_id = v;
+                h.os_id = parse_quoted_value(line.substr(3));
             } else if (line.rfind("VERSION_ID=", 0) == 0) {
-                std::string v = line.substr(11);
-                if (v.size() && v.front() == '"' && v.back() == '"') {
-                    v = v.substr(1, v.size() - 2);
-                }
-                h.os_version = v;
+                h.os_version = parse_quoted_value(line.substr(11));
             }
         }
     }
