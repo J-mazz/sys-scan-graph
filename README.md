@@ -6,7 +6,7 @@
 
 ## System Security Scanner & Intelligence Graph
 
-**Sys-Scan-Graph** is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
+**Sys-Scan-Graph** is a high-speed security analysis tool that transforms raw data from 16 security surfaces into a unified, actionable report.
 
 [![CI](https://github.com/J-mazz/sys-scan-graph/actions/workflows/ci.yml/badge.svg)](https://github.com/J-mazz/sys-scan-graph/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml/badge.svg)](https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml)
