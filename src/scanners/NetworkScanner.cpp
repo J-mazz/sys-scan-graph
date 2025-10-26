@@ -35,6 +35,8 @@
 #include <cstdlib>
 #include <climits>
 #include <cerrno>
+#include <atomic>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -205,7 +207,7 @@ static void create_socket_finding(Report& report, const char* proto, bool is_tcp
 static void parse_proc_net_file(const char* path, Report& report, const char* proto,
                                const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], const char pid_map[MAX_SOCKETS_LEAN][16],
                                const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN], const char container_map[MAX_SOCKETS_LEAN][13],
-                               size_t inode_count, size_t& emitted,
+                               size_t inode_count, std::atomic<size_t>& emitted,
                                std::unordered_map<std::string, FanoutAgg>* fanout, const Config& config,
                                bool is_tcp = true) {
     FILE* fp = fopen(path, "r");
@@ -218,7 +220,7 @@ static void parse_proc_net_file(const char* path, Report& report, const char* pr
     bool is_ipv6 = strstr(path, (is_tcp ? "tcp6" : "udp6")) != nullptr;
     bool header_skipped = false;
 
-    while (fgets(line, sizeof(line), fp) && emitted < (size_t)config.max_sockets) {
+    while (fgets(line, sizeof(line), fp) && emitted.load(std::memory_order_relaxed) < (size_t)config.max_sockets) {
         // Skip header line
         if (!header_skipped) {
             header_skipped = true;
@@ -261,7 +263,7 @@ static void parse_proc_net_file(const char* path, Report& report, const char* pr
             (*fanout)[pid_str].remote_ips.insert(remote_ip);
         }
 
-        ++emitted;
+        emitted.fetch_add(1, std::memory_order_relaxed);
     }
 
     fclose(fp);
@@ -517,14 +519,6 @@ static size_t build_inode_map_lean(char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LE
     return count;
 }
 
-// Helper to parse a 2-character hex byte from a string
-static inline unsigned int parse_hex_byte(const char* hex_str, size_t offset) {
-    char byte_str[3];
-    memcpy(byte_str, hex_str + offset, 2);
-    byte_str[2] = '\0';
-    return strtoul(byte_str, nullptr, 16);
-}
-
 // Ultra-fast hex IP conversion (no string allocations)
 EXPORT_FOR_TEST bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size) {
     if (!hex_ip || !out_ip || out_size < 16) return false;
@@ -537,11 +531,14 @@ EXPORT_FOR_TEST bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t 
         if (!isxdigit(hex_ip[i])) return false;
     }
 
-    // Parse each byte (2 hex chars = 1 byte, little-endian byte order)
-    unsigned int b1 = parse_hex_byte(hex_ip, 6);
-    unsigned int b2 = parse_hex_byte(hex_ip, 4);
-    unsigned int b3 = parse_hex_byte(hex_ip, 2);
-    unsigned int b4 = parse_hex_byte(hex_ip, 0);
+    unsigned int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
+    char byte_str[3] = {0};
+
+    // Parse each byte (2 hex chars = 1 byte)
+    memcpy(byte_str, hex_ip + 6, 2); byte_str[2] = '\0'; b1 = strtoul(byte_str, nullptr, 16);
+    memcpy(byte_str, hex_ip + 4, 2); byte_str[2] = '\0'; b2 = strtoul(byte_str, nullptr, 16);
+    memcpy(byte_str, hex_ip + 2, 2); byte_str[2] = '\0'; b3 = strtoul(byte_str, nullptr, 16);
+    memcpy(byte_str, hex_ip + 0, 2); byte_str[2] = '\0'; b4 = strtoul(byte_str, nullptr, 16);
 
     snprintf(out_ip, out_size, "%u.%u.%u.%u", b1, b2, b3, b4);
     return true;
@@ -680,7 +677,7 @@ EXPORT_FOR_TEST size_t find_inode_lean(const char inode_map[MAX_SOCKETS_LEAN][MA
 static void parse_tcp_lean(const char* path, Report& report, const char* proto,
                           const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], const char pid_map[MAX_SOCKETS_LEAN][16],
                           const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN], const char container_map[MAX_SOCKETS_LEAN][13],
-                          size_t inode_count, size_t& emitted,
+                          size_t inode_count, std::atomic<size_t>& emitted,
                           std::unordered_map<std::string, FanoutAgg>* fanout, const Config& config) {
     parse_proc_net_file(path, report, proto, inode_map, pid_map, exe_map, container_map, inode_count, emitted, fanout, config, true);
 }
@@ -689,7 +686,7 @@ static void parse_tcp_lean(const char* path, Report& report, const char* proto,
 static void parse_udp_lean(const char* path, Report& report, const char* proto,
                           const char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN], const char pid_map[MAX_SOCKETS_LEAN][16],
                           const char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN], const char container_map[MAX_SOCKETS_LEAN][13],
-                          size_t inode_count, size_t& emitted,
+                          size_t inode_count, std::atomic<size_t>& emitted,
                           std::unordered_map<std::string, FanoutAgg>* fanout, const Config& config) {
     parse_proc_net_file(path, report, proto, inode_map, pid_map, exe_map, container_map, inode_count, emitted, fanout, config, false);
 }
@@ -698,10 +695,7 @@ void NetworkScanner::scan(ScanContext& context) {
     const Config& config = context.config;
     Report& report = context.report;
 
-    // Lean network scanning implementation
-    size_t emitted = 0;
-
-    // Build inode-to-process mapping (lean arrays)
+    // Build inode-to-process mapping (lean arrays, shared across all parsers)
     char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LEN_LEAN] = {};
     char pid_map[MAX_SOCKETS_LEAN][16] = {};
     char exe_map[MAX_SOCKETS_LEAN][MAX_PATH_LEN_LEAN] = {};
@@ -709,38 +703,76 @@ void NetworkScanner::scan(ScanContext& context) {
 
     size_t inode_count = 0;
 
-    // Scan /proc for socket inodes
     if (config.network_advanced) {
         inode_count = build_inode_map_lean(inode_map, pid_map, exe_map, container_map, MAX_SOCKETS_LEAN, config);
     }
 
-    // Parse TCP sockets
+    // Atomic counter for max_sockets enforcement across threads
+    std::atomic<size_t> emitted(0);
+
     bool scan_tcp = config.network_proto.empty() || config.network_proto == "tcp";
-    if (scan_tcp) {
-        size_t before_tcp = emitted;
-        parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-        parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-
-        // Add truncation warning if we hit the limit
-        if (emitted >= (size_t)config.max_sockets && before_tcp < emitted) {
-            char warn_msg[128];
-            snprintf(warn_msg, sizeof(warn_msg), "TCP socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
-            report.add_warning("tcp", WarnCode::NetFileUnreadable, warn_msg);
-        }
-    }
-
-    // Parse UDP sockets
     bool scan_udp = config.network_proto.empty() || config.network_proto == "udp";
-    if (scan_udp) {
-        size_t before_udp = emitted;
-        parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
-        parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
 
-        // Add truncation warning if we hit the limit
-        if (emitted >= (size_t)config.max_sockets && before_udp < emitted) {
+    // Parallel path: spawn threads for IPv4/IPv6 TCP/UDP files (4-way concurrency)
+    if (config.parallel) {
+        std::vector<std::thread> threads;
+        threads.reserve(4);
+
+        if (scan_tcp) {
+            threads.emplace_back([&]() {
+                parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+            });
+            threads.emplace_back([&]() {
+                parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+            });
+        }
+
+        if (scan_udp) {
+            threads.emplace_back([&]() {
+                parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+            });
+            threads.emplace_back([&]() {
+                parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+            });
+        }
+
+        for (auto& t : threads) {
+            if (t.joinable()) t.join();
+        }
+
+        // Aggregate truncation warning across all parsers
+        size_t final_count = emitted.load(std::memory_order_relaxed);
+        if (final_count >= (size_t)config.max_sockets) {
             char warn_msg[128];
-            snprintf(warn_msg, sizeof(warn_msg), "UDP socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
-            report.add_warning("udp", WarnCode::NetFileUnreadable, warn_msg);
+            snprintf(warn_msg, sizeof(warn_msg), "Network socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
+            report.add_warning("network", WarnCode::NetFileUnreadable, warn_msg);
+        }
+    } else {
+        // Single-threaded path: parse files in order with per-protocol truncation warnings
+        if (scan_tcp) {
+            size_t before_tcp = emitted.load(std::memory_order_relaxed);
+            parse_tcp_lean("/proc/net/tcp", report, "tcp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+            parse_tcp_lean("/proc/net/tcp6", report, "tcp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+
+            size_t after_tcp = emitted.load(std::memory_order_relaxed);
+            if (after_tcp >= (size_t)config.max_sockets && before_tcp < after_tcp) {
+                char warn_msg[128];
+                snprintf(warn_msg, sizeof(warn_msg), "TCP socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
+                report.add_warning("tcp", WarnCode::NetFileUnreadable, warn_msg);
+            }
+        }
+
+        if (scan_udp) {
+            size_t before_udp = emitted.load(std::memory_order_relaxed);
+            parse_udp_lean("/proc/net/udp", report, "udp", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+            parse_udp_lean("/proc/net/udp6", report, "udp6", inode_map, pid_map, exe_map, container_map, inode_count, emitted, nullptr, config);
+
+            size_t after_udp = emitted.load(std::memory_order_relaxed);
+            if (after_udp >= (size_t)config.max_sockets && before_udp < after_udp) {
+                char warn_msg[128];
+                snprintf(warn_msg, sizeof(warn_msg), "UDP socket scan truncated at %d sockets (max_sockets limit)", config.max_sockets);
+                report.add_warning("udp", WarnCode::NetFileUnreadable, warn_msg);
+            }
         }
     }
 }
