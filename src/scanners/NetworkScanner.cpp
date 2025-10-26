@@ -517,10 +517,18 @@ static size_t build_inode_map_lean(char inode_map[MAX_SOCKETS_LEAN][MAX_INODE_LE
     return count;
 }
 
+// Helper to parse a 2-character hex byte from a string
+static inline unsigned int parse_hex_byte(const char* hex_str, size_t offset) {
+    char byte_str[3];
+    memcpy(byte_str, hex_str + offset, 2);
+    byte_str[2] = '\0';
+    return strtoul(byte_str, nullptr, 16);
+}
+
 // Ultra-fast hex IP conversion (no string allocations)
 EXPORT_FOR_TEST bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t out_size) {
     if (!hex_ip || !out_ip || out_size < 16) return false;
-    
+
     size_t len = strlen(hex_ip);
     if (len < 8) return false;
 
@@ -529,14 +537,11 @@ EXPORT_FOR_TEST bool hex_ip_to_v4_lean(const char* hex_ip, char* out_ip, size_t 
         if (!isxdigit(hex_ip[i])) return false;
     }
 
-    unsigned int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
-    char byte_str[3] = {0};
-
-    // Parse each byte (2 hex chars = 1 byte)
-    memcpy(byte_str, hex_ip + 6, 2); byte_str[2] = '\0'; b1 = strtoul(byte_str, nullptr, 16);
-    memcpy(byte_str, hex_ip + 4, 2); byte_str[2] = '\0'; b2 = strtoul(byte_str, nullptr, 16);
-    memcpy(byte_str, hex_ip + 2, 2); byte_str[2] = '\0'; b3 = strtoul(byte_str, nullptr, 16);
-    memcpy(byte_str, hex_ip + 0, 2); byte_str[2] = '\0'; b4 = strtoul(byte_str, nullptr, 16);
+    // Parse each byte (2 hex chars = 1 byte, little-endian byte order)
+    unsigned int b1 = parse_hex_byte(hex_ip, 6);
+    unsigned int b2 = parse_hex_byte(hex_ip, 4);
+    unsigned int b3 = parse_hex_byte(hex_ip, 2);
+    unsigned int b4 = parse_hex_byte(hex_ip, 0);
 
     snprintf(out_ip, out_size, "%u.%u.%u.%u", b1, b2, b3, b4);
     return true;
