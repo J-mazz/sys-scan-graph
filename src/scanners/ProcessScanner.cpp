@@ -353,6 +353,11 @@ void ProcessScanner::scan(ScanContext& context) {
     // Get list of PIDs
     size_t pid_count = list_proc_pids(pid_buffer, MAX_PROCESSES);
 
+    // If we hit the hard cap, emit a truncation warning into the report so callers can detect partial scans
+    if (pid_count == MAX_PROCESSES) {
+        context.report.add_warning(this->name(), WarnCode::Generic, "proc_truncated");
+    }
+
     // Build container mapping if needed
     char container_map[2000][13];
     int container_pids[2000];

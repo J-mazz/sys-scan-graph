@@ -57,11 +57,9 @@ setup(
         'pyyaml>=6.0,<7',
         'orjson>=3.9,<4',
         'jsonschema>=4.21,<5',
-        'pytest>=8.0,<9',
-        'pytest-asyncio>=0.23,<0.24',
         'PyNaCl>=1.5,<2',
     ],
-    # Optional dependencies for AI/ML features
+    # Optional dependencies for AI/ML features and development
     extras_require={
         'ai': [
             'langgraph>=0.2,<1',
@@ -72,6 +70,10 @@ setup(
             'accelerate>=0.29.0',
             'safetensors>=0.4.0',
             'huggingface_hub>=0.20.0',
+        ],
+        'dev': [
+            'pytest>=8.0,<9',
+            'pytest-asyncio>=0.23,<0.24',
         ],
     },
     # This creates the `sys-scan-graph` command

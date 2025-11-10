@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <cstring>
 #include <cctype>
+#include <cstdlib>
 
 namespace sys_scan {
 
@@ -123,8 +124,11 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
             ++(*apparmor_profiles_complain);
         }
 
-        // Check for unconfined
-        if (strstr(label, "unconfined") != nullptr) {
+        // Check for unconfined (case-insensitive)
+        char lower_label[MAX_BUF_SIZE];
+        strcpy(lower_label, label);
+        for (char* p = lower_label; *p; ++p) *p = tolower(*p);
+        if (strstr(lower_label, "unconfined") != nullptr) {
             // Read exe symlink to check if it's a critical binary
             char exe_buf[MAX_PATH_LEN_LEAN];
             ssize_t exe_link_len = readlink(exe_path, exe_buf, sizeof(exe_buf) - 1);
@@ -143,7 +147,9 @@ static void scan_processes_mac_lean(size_t* apparmor_profiles, size_t* apparmor_
                 // Critical binaries to check
                 const char* critical_bins[] = {
                     "/usr/sbin/sshd", "/usr/bin/dbus-daemon", "/usr/sbin/nginx",
-                    "/usr/bin/containerd", "/usr/bin/dockerd"
+                    "/usr/bin/containerd", "/usr/bin/dockerd",
+                    "/usr/lib/systemd/systemd", "/usr/lib/systemd/systemd-networkd",
+                    "/usr/sbin/apache2", "/usr/sbin/mysql", "/usr/lib/postgresql/bin/postgres"
                 };
                 const size_t critical_count = sizeof(critical_bins) / sizeof(critical_bins[0]);
 
@@ -168,7 +174,11 @@ void MACScanner::scan(ScanContext& context) {
     const char* test_root = context.config.test_root.empty() ? nullptr : context.config.test_root.c_str();
 
     // Detect container (simple heuristics) to potentially downgrade severity
-    bool in_container = file_exists_lean("/.dockerenv", test_root) || file_exists_lean("/run/.containerenv", test_root);
+    bool in_container = file_exists_lean("/.dockerenv", test_root) || 
+                       file_exists_lean("/run/.containerenv", test_root) ||
+                       file_exists_lean("/run/.dockerenv", test_root) ||
+                       file_exists_lean("/.lxcenv", test_root) ||
+                       file_exists_lean("/run/systemd/container", test_root);
 
     // SELinux detection (ultra-fast)
     bool selinux_present = false;

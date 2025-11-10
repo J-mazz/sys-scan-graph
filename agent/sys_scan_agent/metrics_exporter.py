@@ -52,20 +52,23 @@ def export_prometheus(state: Dict[str, Any], output_path: Optional[str] = None) 
     node_durations = metrics.get('node_durations', {})
     for node_name, durations in node_durations.items():
         if durations:
+            sorted_durations = sorted(durations)
             prometheus_lines.append(f'sys_scan_graph_node_duration_seconds_count{{node="{node_name}"}} {len(durations)}')
             prometheus_lines.append(f'sys_scan_graph_node_duration_seconds_sum{{node="{node_name}"}} {sum(durations)}')
 
-            # Calculate percentiles
-            sorted_durations = sorted(durations)
-            p50 = sorted_durations[len(sorted_durations) // 2]
-            p95 = sorted_durations[int(len(sorted_durations) * 0.95)]
-            p99 = sorted_durations[int(len(sorted_durations) * 0.99)]
+            # Calculate percentiles with proper interpolation
+            p50 = _calculate_percentile(sorted_durations, 50)
+            p95 = _calculate_percentile(sorted_durations, 95)
+            p99 = _calculate_percentile(sorted_durations, 99)
 
             prometheus_lines.extend([
                 f'sys_scan_graph_node_duration_seconds{{node="{node_name}",quantile="0.5"}} {p50}',
                 f'sys_scan_graph_node_duration_seconds{{node="{node_name}",quantile="0.95"}} {p95}',
                 f'sys_scan_graph_node_duration_seconds{{node="{node_name}",quantile="0.99"}} {p99}',
             ])
+
+            # Add histogram buckets for better analysis
+            _add_histogram_buckets(prometheus_lines, node_name, sorted_durations)
 
     # Global telemetry metrics
     global_telemetry = get_node_telemetry().get_metrics()
@@ -240,6 +243,70 @@ def export_all_formats(state: Dict[str, Any], base_path: str) -> Dict[str, str]:
     exported_files['prometheus'] = prometheus_path
 
     return exported_files
+
+
+def _calculate_percentile(sorted_data: List[float], percentile: float) -> float:
+    """
+    Calculate percentile with linear interpolation.
+
+    Args:
+        sorted_data: Sorted list of values
+        percentile: Percentile to calculate (0-100)
+
+    Returns:
+        Calculated percentile value
+    """
+    if not sorted_data:
+        return 0.0
+
+    n = len(sorted_data)
+    if n == 1:
+        return sorted_data[0]
+
+    # Calculate the index position
+    index = (percentile / 100) * (n - 1)
+
+    # Split into integer and fractional parts
+    lower_index = int(index)
+    upper_index = min(lower_index + 1, n - 1)
+    weight = index - lower_index
+
+    # Linear interpolation
+    if lower_index == upper_index:
+        return sorted_data[lower_index]
+
+    lower_value = sorted_data[lower_index]
+    upper_value = sorted_data[upper_index]
+
+    return lower_value + weight * (upper_value - lower_value)
+
+
+def _add_histogram_buckets(lines: List[str], node_name: str, sorted_durations: List[float]) -> None:
+    """
+    Add histogram bucket information for better duration analysis.
+
+    Args:
+        lines: List of Prometheus metric lines to append to
+        node_name: Name of the node
+        sorted_durations: Sorted list of duration values
+    """
+    # Define bucket boundaries (in seconds)
+    buckets = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0]
+
+    lines.append("")
+    lines.append(f"# HELP sys_scan_graph_node_duration_seconds_bucket Histogram buckets for node duration")
+    lines.append(f"# TYPE sys_scan_graph_node_duration_seconds_bucket counter")
+
+    cumulative_count = 0
+    for bucket_upper in buckets:
+        # Count values less than or equal to this bucket
+        while cumulative_count < len(sorted_durations) and sorted_durations[cumulative_count] <= bucket_upper:
+            cumulative_count += 1
+
+        lines.append(f'sys_scan_graph_node_duration_seconds_bucket{{node="{node_name}",le="{bucket_upper}"}} {cumulative_count}')
+
+    # Add +Inf bucket
+    lines.append(f'sys_scan_graph_node_duration_seconds_bucket{{node="{node_name}",le="+Inf"}} {len(sorted_durations)}')
 
 
 __all__ = [

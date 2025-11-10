@@ -298,10 +298,6 @@ class NullLLMProvider:
 # ----------------- Provider registry / injection -----------------
 _PROVIDER: ILLMProvider = NullLLMProvider()
 
-# ----------------- Provider registry / injection -----------------
-# ZERO TRUST: Only local deterministic providers allowed
-_PROVIDER: ILLMProvider = NullLLMProvider()
-
 def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     global _PROVIDER
     prov = os.environ.get('AGENT_LLM_PROVIDER','local').lower()  # Default to local for zero trust

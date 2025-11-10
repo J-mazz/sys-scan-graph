@@ -465,7 +465,7 @@ class TestAnalyzeCommand:
 
         # Mock workflow result
         mock_enriched = MagicMock()
-        mock_enriched.model_dump_json.return_value = '{"test": "data"}'
+        mock_enriched.model_dump.return_value = {"test": "data"}
         mock_enriched.enriched_findings = []
         mock_run_workflow.return_value = (mock_enriched, {'test': 'state'})
 
@@ -509,7 +509,7 @@ class TestAnalyzeCommand:
         mock_load_config.return_value = mock_config
 
         mock_enriched = MagicMock()
-        mock_enriched.model_dump_json.return_value = '{"test": "data"}'
+        mock_enriched.model_dump.return_value = {"test": "data"}
         mock_run_workflow.return_value = (mock_enriched, {})
 
         runner = CliRunner()
@@ -543,7 +543,7 @@ class TestAnalyzeCommand:
         mock_load_config.return_value = mock_config
 
         mock_enriched = MagicMock()
-        mock_enriched.model_dump_json.return_value = '{"test": "data"}'
+        mock_enriched.model_dump.return_value = {"test": "data"}
         mock_run_workflow.return_value = (mock_enriched, {'metrics': 'data'})
 
         runner = CliRunner()
@@ -580,7 +580,7 @@ class TestAnalyzeCommand:
         mock_load_config.return_value = mock_config
 
         mock_enriched = MagicMock()
-        mock_enriched.model_dump_json.return_value = '{"test": "data"}'
+        mock_enriched.model_dump.return_value = {"test": "data"}
         mock_run_workflow.return_value = (mock_enriched, {})
 
         runner = CliRunner()

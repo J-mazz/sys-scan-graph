@@ -13,8 +13,11 @@
 namespace fs = std::filesystem;
 namespace sys_scan {
 
-static RuleEngine* g_engine=nullptr;
-RuleEngine& rule_engine(){ if(!g_engine) g_engine = new RuleEngine(); return *g_engine; }
+// Thread-safe function-local static instance to avoid data-race on first use
+RuleEngine& rule_engine() {
+    static RuleEngine instance;
+    return instance;
+}
 
 // ============================================================================
 // REFACTORED HELPER FUNCTIONS

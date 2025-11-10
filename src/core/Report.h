@@ -39,6 +39,17 @@ public:
     const std::vector<std::pair<std::string,std::string>>& errors() const { return errors_; }
     // Thread-safe aggregate counts
     size_t total_findings() const;
+    // Snapshot the report state for thread-safe external consumption.
+    struct Snapshot {
+        std::vector<ScanResult> results;
+        std::vector<std::pair<std::string,std::string>> warnings;
+        std::vector<std::pair<std::string,std::string>> errors;
+        std::vector<std::pair<std::string,std::string>> partial_warnings;
+        std::map<std::string, std::map<std::string,std::string>> compliance_summary;
+    };
+
+    // Return a deep copy snapshot protected by the internal mutex.
+    Snapshot snapshot() const;
 private:
     std::vector<ScanResult> results_;
     std::vector<std::pair<std::string,std::string>> warnings_; // (scanner, jsonified structured warning)
