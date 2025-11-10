@@ -326,7 +326,7 @@ namespace {
         return ec;
     }
 
-    static CanonVal build_timings_array(const Report& report, bool zero_time) {
+    static CanonVal build_timings_array(const std::vector<ScanResult>& results, bool zero_time) {
         CanonVal timings{CanonVal::T_ARR};
         
         auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
@@ -339,7 +339,7 @@ namespace {
             o.obj[k].str = std::to_string(v);
         };
 
-        for (const auto& r : report.results()) {
+        for (const auto& r : results) {
             long long elapsed_ms = 0;
             if (r.start_time.time_since_epoch().count() && r.end_time.time_since_epoch().count() && r.end_time >= r.start_time) {
                 elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(r.end_time - r.start_time).count();
@@ -418,7 +418,7 @@ namespace {
         return summary;
     }
 
-    static CanonVal build_results_array(const Report& report, const Config& cfg, bool zero_time, size_t& emitted_total) {
+    static CanonVal build_results_array(const std::vector<ScanResult>& results, const Config& cfg, bool zero_time, size_t& emitted_total) {
         CanonVal res_arr{CanonVal::T_ARR};
         
         auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
@@ -431,7 +431,7 @@ namespace {
             o.obj[k].str = std::to_string(v);
         };
 
-        for (const auto& r : report.results()) {
+        for (const auto& r : results) {
             CanonVal rs{CanonVal::T_OBJ};
             put_str(rs, "scanner", r.scanner_name);
             put_str(rs, "start_time", zero_time ? "" : time_to_iso(r.start_time));
@@ -508,7 +508,7 @@ namespace {
         return arr;
     }
 
-    static CanonVal build_warnings_array(const Report& report) {
+    static CanonVal build_warnings_array(const std::vector<std::pair<std::string,std::string>>& warnings) {
         CanonVal warns{CanonVal::T_ARR};
 
         auto put_str = [&](CanonVal& o, const std::string& k, const std::string& v) {
@@ -516,7 +516,7 @@ namespace {
             o.obj[k].str = v;
         };
 
-        for (const auto& w : report.warnings()) {
+        for (const auto& w : warnings) {
             CanonVal wv{CanonVal::T_OBJ};
             // w.second format: code[:detail]
             auto pos = w.second.find(':');
@@ -533,12 +533,12 @@ namespace {
         return warns;
     }
 
-    static CanonVal build_partial_warnings_array(const Report& report) {
-        return build_generic_message_array(report.partial_warnings());
+    static CanonVal build_partial_warnings_array(const std::vector<std::pair<std::string,std::string>>& partial_warnings) {
+        return build_generic_message_array(partial_warnings);
     }
 
-    static CanonVal build_errors_array(const Report& report) {
-        return build_generic_message_array(report.errors());
+    static CanonVal build_errors_array(const std::vector<std::pair<std::string,std::string>>& errors) {
+        return build_generic_message_array(errors);
     }
 
     static CanonVal build_summary_extension(long long total_risk_all, long long emitted_risk) {
@@ -555,14 +555,14 @@ namespace {
         return se;
     }
 
-    static CanonVal build_compliance_summary(const Report& report) {
-        if (report.compliance_summary().empty()) {
+    static CanonVal build_compliance_summary(const std::map<std::string,std::map<std::string,std::string>>& compliance_summary) {
+        if (compliance_summary.empty()) {
             return CanonVal{CanonVal::T_OBJ}; // Return empty object if no compliance data
         }
 
         CanonVal comp{CanonVal::T_OBJ};
         
-        for (const auto& stdkv : report.compliance_summary()) {
+        for (const auto& stdkv : compliance_summary) {
             CanonVal stdobj{CanonVal::T_OBJ};
             for (const auto& mkv : stdkv.second) {
                 // Try to detect numeric vs string (simple heuristic)
@@ -587,15 +587,11 @@ namespace {
         return comp;
     }
 
-static CanonVal build_canonical(const Report& report, long long total_risk_all, long long emitted_risk, size_t finding_total_all, size_t scanners_with_findings, long long duration_ms, const std::string& slowest_name, long long slowest_ms, std::chrono::system_clock::time_point earliest, std::chrono::system_clock::time_point latest, const std::map<std::string,size_t>& severity_counts_all, const std::map<std::string,size_t>& severity_counts_emitted, const HostMeta& host, const Config& cfg){ bool zero_time=!!std::getenv("SYS_SCAN_CANON_TIME_ZERO"); if(zero_time){ earliest={}; latest={}; duration_ms=0; } CanonVal root{CanonVal::T_OBJ}; auto put_str=[&](CanonVal& o,const std::string& k,const std::string& v){ o.obj[k].type=CanonVal::T_STR; o.obj[k].str=v; }; auto put_num=[&](CanonVal& o,const std::string& k,long long v){ o.obj[k].type=CanonVal::T_NUM; o.obj[k].str=std::to_string(v); }; CanonVal meta = build_meta_object(host, cfg); CanonVal prov = build_provenance_object(); meta.obj["provenance"] = std::move(prov); CanonVal ec = build_effective_config_object(cfg); meta.obj["effective_config"] = std::move(ec); if(cfg.timings){ CanonVal timings = build_timings_array(report, zero_time); meta.obj["timings"] = std::move(timings); } apply_meta_suppression_flags(meta, cfg); root.obj["meta"]=std::move(meta); size_t emitted_total = 0; CanonVal summary = build_summary_object(duration_ms, finding_total_all, emitted_total, slowest_name, slowest_ms, earliest, latest, severity_counts_all, severity_counts_emitted, scanners_with_findings, report.results().size(), zero_time); root.obj["summary"]=std::move(summary); CanonVal res_arr = build_results_array(report, cfg, zero_time, emitted_total); root.obj["results"]=std::move(res_arr); // patch in emitted totals
+static CanonVal build_canonical(const std::vector<ScanResult>& results, long long total_risk_all, long long emitted_risk, size_t finding_total_all, size_t scanners_with_findings, long long duration_ms, const std::string& slowest_name, long long slowest_ms, std::chrono::system_clock::time_point earliest, std::chrono::system_clock::time_point latest, const std::map<std::string,size_t>& severity_counts_all, const std::map<std::string,size_t>& severity_counts_emitted, const HostMeta& host, const Config& cfg, const std::vector<std::pair<std::string,std::string>>& warnings, const std::vector<std::pair<std::string,std::string>>& partial_warnings, const std::vector<std::pair<std::string,std::string>>& errors, const std::map<std::string,std::map<std::string,std::string>>& compliance_summary){ bool zero_time=!!std::getenv("SYS_SCAN_CANON_TIME_ZERO"); if(zero_time){ earliest={}; latest={}; duration_ms=0; } CanonVal root{CanonVal::T_OBJ}; auto put_str=[&](CanonVal& o,const std::string& k,const std::string& v){ o.obj[k].type=CanonVal::T_STR; o.obj[k].str=v; }; auto put_num=[&](CanonVal& o,const std::string& k,long long v){ o.obj[k].type=CanonVal::T_NUM; o.obj[k].str=std::to_string(v); }; CanonVal meta = build_meta_object(host, cfg); CanonVal prov = build_provenance_object(); meta.obj["provenance"] = std::move(prov); CanonVal ec = build_effective_config_object(cfg); meta.obj["effective_config"] = std::move(ec); if(cfg.timings){ CanonVal timings = build_timings_array(results, zero_time); meta.obj["timings"] = std::move(timings); } apply_meta_suppression_flags(meta, cfg); root.obj["meta"]=std::move(meta); size_t emitted_total = 0; CanonVal summary = build_summary_object(duration_ms, finding_total_all, emitted_total, slowest_name, slowest_ms, earliest, latest, severity_counts_all, severity_counts_emitted, scanners_with_findings, results.size(), zero_time); root.obj["summary"]=std::move(summary); CanonVal res_arr = build_results_array(results, cfg, zero_time, emitted_total); root.obj["results"]=std::move(res_arr); // patch in emitted totals
  put_num(root.obj["summary"],"finding_count_emitted", emitted_total); if(duration_ms>0){ double fps2 = emitted_total*1000.0/duration_ms; std::ostringstream tmp; tmp.setf(std::ios::fixed); tmp<<std::setprecision(2)<<fps2; std::string s=tmp.str(); while(s.size()>1 && s.back()=='0') s.pop_back(); if(!s.empty()&&s.back()=='.') s.push_back('0'); root.obj["summary"].obj["findings_per_second"].str=s; }
- CanonVal warns = build_warnings_array(report); root.obj["collection_warnings"]=std::move(warns); CanonVal pwarns = build_partial_warnings_array(report); if(!pwarns.arr.empty()) root.obj["partial_warnings"]=std::move(pwarns); CanonVal errs = build_errors_array(report); root.obj["scanner_errors"]=std::move(errs); CanonVal se = build_summary_extension(total_risk_all, emitted_risk); root.obj["summary_extension"]=std::move(se);
- CanonVal comp = build_compliance_summary(report); if(!comp.obj.empty()) root.obj["compliance_summary"]=std::move(comp);
+ CanonVal warns = build_warnings_array(warnings); root.obj["collection_warnings"]=std::move(warns); CanonVal pwarns = build_partial_warnings_array(partial_warnings); if(!pwarns.arr.empty()) root.obj["partial_warnings"]=std::move(pwarns); CanonVal errs = build_errors_array(errors); root.obj["scanner_errors"]=std::move(errs); CanonVal se = build_summary_extension(total_risk_all, emitted_risk); root.obj["summary_extension"]=std::move(se);
+ CanonVal comp = build_compliance_summary(compliance_summary); if(!comp.obj.empty()) root.obj["compliance_summary"]=std::move(comp);
  // After meta object population, enforce suppression flags
- // (Inserted by tool)
- // Post-construction hardening: ensure suppression flags are enforced
- // This is idempotent and guards against any future code paths that might
- // insert sensitive fields before flags are evaluated.
  apply_meta_suppression_flags(meta, cfg);
  return root; }
 } // end anonymous namespace
@@ -843,23 +839,28 @@ static CanonVal build_canonical(const Report& report, long long total_risk_all, 
     }
 
 std::string JSONWriter::write(const Report& report, const Config& cfg) const {
+    // Snapshot report state to avoid races with parallel scanners
+    auto snap = report.snapshot();
+    const auto& results = snap.results;
+
     // Calculate all metrics in one clean object
-    SummaryMetrics metrics = calculate_summary_metrics(report.results(), cfg);
+    SummaryMetrics metrics = calculate_summary_metrics(results, cfg);
 
     auto host = collect_host_meta();
     apply_meta_overrides(host);
 
-    CanonVal root = build_canonical(report, metrics.total_risk_all, metrics.emitted_risk, metrics.finding_total_all,
+    CanonVal root = build_canonical(results, metrics.total_risk_all, metrics.emitted_risk, metrics.finding_total_all,
                                    metrics.scanners_with_findings, metrics.duration_ms, metrics.slowest_name,
                                    metrics.slowest_ms, metrics.earliest_start, metrics.latest_end,
-                                   metrics.severity_counts_all, metrics.severity_counts_emitted, host, cfg);
+                                   metrics.severity_counts_all, metrics.severity_counts_emitted, host, cfg,
+                                   snap.warnings, snap.partial_warnings, snap.errors, snap.compliance_summary);
 
     if (cfg.sarif) {
-        return generate_sarif_output(report.results(), cfg);
+        return generate_sarif_output(results, cfg);
     }
 
     if (cfg.ndjson) {
-        return generate_ndjson_output(report.results(), cfg, host, metrics.duration_ms, metrics.finding_total_all,
+        return generate_ndjson_output(results, cfg, host, metrics.duration_ms, metrics.finding_total_all,
                                      metrics.emitted_total, metrics.scanners_with_findings, metrics.slowest_name,
                                      metrics.slowest_ms, metrics.total_risk_all, metrics.emitted_risk);
     }

@@ -3,6 +3,7 @@
 #pragma once
 #include "../core/Scanner.h"
 #include <vector>
+#include <sstream>
 
 namespace sys_scan {
 
@@ -18,17 +19,18 @@ public:
 
     // Test helper function to check mount options
     static bool has_mount_option(const std::string& opts, const std::string& key) {
-        // crude contains match on comma boundaries
-        if(opts==key) return true;
-        size_t pos = 0; std::string needle = key;
-        while(true){
-            pos = opts.find(key, pos);
-            if(pos == std::string::npos) return false;
-            bool left_ok = (pos==0) || opts[pos-1]==',';
-            bool right_ok = (pos + key.size() == opts.size()) || opts[pos+key.size()]==',';
-            if(left_ok && right_ok) return true;
-            pos += key.size();
+        // Check for malformed options (leading/trailing commas or empty options)
+        if (opts.empty() || opts.front() == ',' || opts.back() == ',' || opts.find(",,") != std::string::npos) {
+            return false;
         }
+        
+        std::istringstream iss(opts);
+        std::string option;
+        while (std::getline(iss, option, ',')) {
+            if (option.empty()) return false; // Empty option is malformed
+            if (option == key) return true;
+        }
+        return false;
     }
 };
 

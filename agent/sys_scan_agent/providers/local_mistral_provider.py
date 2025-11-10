@@ -188,7 +188,7 @@ class LocalMistralLLMProvider:
         except Exception as e:
             raise RuntimeError(f"Failed to load zero-trust analyst model: {e}")
 
-    def _generate_response(self, prompt: str, max_new_tokens: int = 512, temperature: float = 0.1) -> str:
+    def _generate_response(self, prompt: str, max_new_tokens: int = 512, temperature: float = 0.0) -> str:
         """Generate deterministic response from the local analyst model."""
         try:
             inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)

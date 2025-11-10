@@ -238,6 +238,7 @@ else()
   target_link_libraries(sys_scan_core PUBLIC nlohmann_json::nlohmann_json)
 endif()
 
+find_package(OpenSSL QUIET)
 if(OpenSSL_FOUND)
   target_compile_definitions(sys_scan_core PUBLIC SYS_SCAN_HAVE_OPENSSL=1)
   target_link_libraries(sys_scan_core PUBLIC OpenSSL::SSL OpenSSL::Crypto)
@@ -479,6 +480,10 @@ if(BUILD_TESTS)
   target_link_libraries(test_integrity_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME integrity_scanner COMMAND test_integrity_scanner)
   
+  add_executable(test_integrity_scanner_extra tests/test_integrity_scanner_extra.cpp)
+  target_link_libraries(test_integrity_scanner_extra PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
+  add_test(NAME integrity_scanner_extra COMMAND test_integrity_scanner_extra)
+  
   add_executable(test_yara_scanner tests/test_yara_scanner.cpp)
   target_link_libraries(test_yara_scanner PRIVATE sys_scan_core GTest::gtest_main GTest::gmock)
   add_test(NAME yara_scanner COMMAND test_yara_scanner)
@@ -580,6 +585,7 @@ if(ENABLE_COVERAGE AND BUILD_TESTS)
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_rules_warn.profraw $<TARGET_FILE:test_rules_engine_warnings_structured>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_rules_init.profraw $<TARGET_FILE:test_rule_engine_initializer_extended>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_integrity.profraw $<TARGET_FILE:test_integrity_scanner>
+      COMMAND LLVM_PROFILE_FILE=coverage/coverage_integrity_extra.profraw $<TARGET_FILE:test_integrity_scanner_extra>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_gpg.profraw $<TARGET_FILE:test_gpg_signer>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_yara.profraw $<TARGET_FILE:test_yara_scanner>
       COMMAND LLVM_PROFILE_FILE=coverage/coverage_module.profraw $<TARGET_FILE:test_module_utils>
@@ -611,6 +617,7 @@ if(ENABLE_COVERAGE AND BUILD_TESTS)
       COMMAND $<TARGET_FILE:test_scanner_registry>
       COMMAND $<TARGET_FILE:test_integration>
       COMMAND $<TARGET_FILE:test_integrity_scanner>
+      COMMAND $<TARGET_FILE:test_integrity_scanner_extra>
       COMMAND $<TARGET_FILE:test_kernel_hardening_scanner>
       COMMAND $<TARGET_FILE:test_yara_scanner>
       COMMAND $<TARGET_FILE:test_container_scanner>

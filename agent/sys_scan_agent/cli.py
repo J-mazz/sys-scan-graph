@@ -32,6 +32,7 @@ from . import graph
 from . import graph_state
 from . import models
 from . import metrics_exporter
+from . import canonicalize
 from .audit import tail_since
 from .rule_gap_miner import mine_gap_candidates, refine_with_llm
 from .rules import load_rules_dir, dry_run_apply
@@ -87,10 +88,46 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     # Normalize initial state
     state = graph_state.normalize_graph_state(initial_state)
     
+    # Check for missing optional components and set degraded mode
+    missing_components = []
+    try:
+        from .metrics_node import time_node
+    except ImportError:
+        missing_components.append("metrics_node")
+    
+    # Check if key graph functions are available
+    if not hasattr(graph, 'enrich_findings') or graph.enrich_findings is None:
+        missing_components.append("enrich_findings")
+    if not hasattr(graph, 'correlate_findings') or graph.correlate_findings is None:
+        missing_components.append("correlate_findings")
+    if not hasattr(graph, 'risk_analyzer') or graph.risk_analyzer is None:
+        missing_components.append("risk_analyzer")
+    if not hasattr(graph, 'compliance_checker') or graph.compliance_checker is None:
+        missing_components.append("compliance_checker")
+    if not hasattr(graph, 'metrics_collector') or graph.metrics_collector is None:
+        missing_components.append("metrics_collector")
+    
+    if missing_components:
+        state['degraded_mode'] = True
+        state['warnings'].append({
+            'type': 'degraded_mode',
+            'message': f'Workflow running in degraded mode due to missing components: {", ".join(missing_components)}',
+            'missing_components': missing_components
+        })
+        print(f"[yellow]Warning: Running in degraded mode - missing: {', '.join(missing_components)}[/yellow]")
+    
     # Run intelligence workflow
     try:
-        # Import telemetry for node timing
-        from .metrics_node import time_node
+        # Import telemetry for node timing (optional)
+        try:
+            from .metrics_node import time_node
+        except ImportError:
+            # Graceful fallback: no-op context manager
+            from contextlib import contextmanager
+            @contextmanager
+            def time_node(state, node_name):
+                yield state
+            print("[yellow]Warning: metrics_node not available, running without telemetry[/yellow]")
         
         # Run synchronous nodes with telemetry
         with time_node(state, 'enrich_findings') as timed_state:
@@ -157,7 +194,12 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
     if dry_run:
         sandbox.configure(dry_run=True)
     enriched, final_state = run_intelligence_workflow(report)
-    out.write_text(enriched.model_dump_json(indent=2))
+    
+    # Apply canonicalization for deterministic output ordering
+    enriched_dict = enriched.model_dump()
+    canonicalized = canonicalize.canonicalize_enriched_output_dict(enriched_dict)
+    
+    out.write_text(json.dumps(canonicalized, indent=2))
     print(f"[green]Wrote enriched output -> {out}")
 
     # Export metrics if requested
@@ -536,4 +578,18 @@ def _notify(cfg, message: str):
     return
 
 if __name__ == "__main__":
+    # Bootstrap check for core binary at CLI runtime
+    import subprocess
+    import sys
+    try:
+        subprocess.run(["which", "sys-scan-graph"], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(
+            "Error: 'sys-scan-graph' core not found.\n"
+            "Please install the core package first by running:\n"
+            "sudo apt install sys-scan-graph",
+            file=sys.stderr
+        )
+        sys.exit(1)
+    
     app()

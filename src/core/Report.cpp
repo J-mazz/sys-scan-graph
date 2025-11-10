@@ -77,4 +77,15 @@ size_t Report::total_findings() const {
     return total;
 }
 
+Report::Snapshot Report::snapshot() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Snapshot s;
+    s.results = results_;
+    s.warnings = warnings_;
+    s.errors = errors_;
+    s.partial_warnings = partial_warnings_;
+    s.compliance_summary = compliance_summary_;
+    return s;
+}
+
 }

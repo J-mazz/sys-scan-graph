@@ -66,17 +66,30 @@ try:  # Optional dependency guard
     from langgraph.prebuilt import ToolNode  # type: ignore
 
     # Import scaffold nodes (required for current workflow)
-    from .graph import (
+    from .graph.enrichment import (
         enrich_findings,
+    )
+    from .graph.enrichment import (
+        correlate_findings,
+    )
+    from .graph.summarization import (
         enhanced_summarize_host_state,
+    )
+    from .graph.rules import (
         enhanced_suggest_rules,
+    )
+    from .graph.routing import (
         tool_coordinator,
+    )
+    from .graph.baseline import (
         plan_baseline_queries,
         integrate_baseline_results,
+    )
+    from .graph.analysis import (
         risk_analyzer,
         compliance_checker,
         metrics_collector,
-    )  # type: ignore
+    )
 
     from .tools import query_baseline
 except Exception:  # pragma: no cover - graph optional

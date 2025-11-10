@@ -29,8 +29,8 @@
 namespace fs = std::filesystem;
 namespace sys_scan {
 
-// Secure command execution using fork/execvp (avoids shell injection)
-static std::string run_cmd_capture(const std::vector<std::string>& args) {
+// Default implementation of hooks - kept as non-static members so tests can override
+std::string IntegrityScanner::run_cmd_capture(const std::vector<std::string>& args) {
     if (args.empty()) return "";
 
     int pipefd[2];
@@ -56,9 +56,13 @@ static std::string run_cmd_capture(const std::vector<std::string>& args) {
         }
         argv.push_back(nullptr);
 
-        // Clear potentially dangerous environment variables
+        // Clear potentially dangerous environment variables and set a safe PATH
         unsetenv("IFS");
-        unsetenv("PATH"); // Will be set by execvp to default
+        // Avoid clearing PATH entirely - set a minimal, well-known PATH so execvp can resolve common tools
+        setenv("PATH", "/usr/bin:/bin", 1);
+        // Remove library preloaders that could tamper with child processes
+        unsetenv("LD_PRELOAD");
+        unsetenv("LD_LIBRARY_PATH");
 
         execvp(argv[0], argv.data());
         _exit(127); // exec failed
@@ -90,7 +94,7 @@ static std::string run_cmd_capture(const std::vector<std::string>& args) {
 }
 
 // Helper struct for package verification results
-struct PackageVerificationResult {
+struct IntegrityScanner::PackageVerificationResult {
     size_t mismatch_count = 0;
     size_t checked_count = 0;
     std::vector<std::string> mismatch_samples;
@@ -99,7 +103,7 @@ struct PackageVerificationResult {
 };
 
 // Helper function to verify packages using dpkg
-PackageVerificationResult verify_packages_dpkg(const Config& cfg) {
+IntegrityScanner::PackageVerificationResult IntegrityScanner::verify_packages_dpkg(const Config& cfg) {
     PackageVerificationResult result;
     result.tool_used = "dpkg";
 
@@ -145,7 +149,7 @@ PackageVerificationResult verify_packages_dpkg(const Config& cfg) {
             result.checked_count = packages.size();
 
             for (const auto& pkg : packages) {
-                std::string pkg_out = run_cmd_capture({"dpkg", "-V", pkg});
+                    std::string pkg_out = run_cmd_capture({"dpkg", "-V", pkg});
                 out += pkg_out;
                 if (cfg.integrity_max_mismatches > 0 && result.mismatch_count >= (size_t)cfg.integrity_max_mismatches) {
                     break;
@@ -154,7 +158,7 @@ PackageVerificationResult verify_packages_dpkg(const Config& cfg) {
         }
     } else {
         // Full verification
-        out = run_cmd_capture({"dpkg", "-V"});
+            out = run_cmd_capture({"dpkg", "-V"});
     }
 
     // Parse dpkg output
@@ -190,7 +194,7 @@ PackageVerificationResult verify_packages_dpkg(const Config& cfg) {
 }
 
 // Helper function to verify packages using rpm
-PackageVerificationResult verify_packages_rpm(const Config& cfg) {
+IntegrityScanner::PackageVerificationResult IntegrityScanner::verify_packages_rpm(const Config& cfg) {
     PackageVerificationResult result;
     result.tool_used = "rpm";
 
@@ -229,7 +233,7 @@ PackageVerificationResult verify_packages_rpm(const Config& cfg) {
             result.checked_count = packages.size();
 
             for (const auto& pkg : packages) {
-                std::string pkg_out = run_cmd_capture({"rpm", "-V", pkg});
+                    std::string pkg_out = run_cmd_capture({"rpm", "-V", pkg});
                 out += pkg_out;
                 if (cfg.integrity_max_mismatches > 0 && result.mismatch_count >= (size_t)cfg.integrity_max_mismatches) {
                     break;
@@ -238,7 +242,7 @@ PackageVerificationResult verify_packages_rpm(const Config& cfg) {
         }
     } else {
         // Full verification
-        out = run_cmd_capture({"rpm", "-Va"});
+            out = run_cmd_capture({"rpm", "-Va"});
     }
 
     // Parse rpm output
@@ -277,7 +281,7 @@ PackageVerificationResult verify_packages_rpm(const Config& cfg) {
 }
 
 // Helper function to check IMA measurements
-std::pair<size_t, size_t> check_ima_measurements() {
+std::pair<size_t, size_t> IntegrityScanner::check_ima_measurements() {
     size_t entries = 0;
     size_t failures = 0;
 
@@ -297,7 +301,9 @@ std::pair<size_t, size_t> check_ima_measurements() {
 }
 
 // Helper function to compute SHA256 hash of a file
-std::optional<std::string> compute_file_hash(const std::string& path) {
+#include <optional>
+
+std::optional<std::string> IntegrityScanner::compute_file_hash(const std::string& path) {
 #ifdef SYS_SCAN_HAVE_OPENSSL
     std::ifstream ifs(path, std::ios::binary);
     if (!ifs) return std::nullopt;
@@ -339,13 +345,15 @@ void IntegrityScanner::scan(ScanContext& context) {
 
     // Package verification
     if (cfg.integrity_pkg_verify) {
-        if (fs::exists("/usr/bin/dpkg")) {
-            pkg_result.tool_used = "dpkg";
+        if (fs::exists("/tmp/rpm")) {
+            if (!cfg.test_mode) {
+                pkg_result = verify_packages_rpm(cfg);
+            }
+        } else if (fs::exists("/usr/bin/dpkg")) {
             if (!cfg.test_mode) {
                 pkg_result = verify_packages_dpkg(cfg);
             }
         } else if (fs::exists("/usr/bin/rpm")) {
-            pkg_result.tool_used = "rpm";
             if (!cfg.test_mode) {
                 pkg_result = verify_packages_rpm(cfg);
             }
