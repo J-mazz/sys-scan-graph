@@ -1,4 +1,3 @@
-// Enhanced rule engine implementation (REFACTORED - DO NOT COMMIT)
 #include "RuleEngine.h"
 #include "Config.h"
 #include "Logging.h"
