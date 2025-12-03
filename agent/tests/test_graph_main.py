@@ -6,19 +6,8 @@ from unittest.mock import Mock, patch, MagicMock
 import asyncio
 from typing import Dict, Any, List
 
-# Import from main graph.py file directly to ensure coverage tracking
-import sys
-import os
-import importlib.util
-
-# Load the main graph.py module directly
-graph_py_path = os.path.join(os.path.dirname(__file__), '..', 'sys_scan_agent', 'graph.py')
-graph_spec = importlib.util.spec_from_file_location("graph_main", graph_py_path)
-if graph_spec is None or graph_spec.loader is None:
-    raise ImportError("Could not load graph.py module")
-graph_main = importlib.util.module_from_spec(graph_spec)
-sys.modules["graph_main"] = graph_main
-graph_spec.loader.exec_module(graph_main)
+# Import from main graph.py as a package module (correct approach for relative imports)
+import sys_scan_agent.graph as graph_main
 
 # Import functions from the loaded module
 GraphState = graph_main.GraphState
@@ -588,21 +577,30 @@ class TestSyncWrapperFunctions:
 
     def test_summarize_host_state_with_function(self):
         """Test summarize_host_state when function is available."""
-        # In the test environment, enhanced_summarize_host_state is None (import failed)
-        # So the function returns the original state
-        state: GraphState = {'raw_findings': []}
-        result = summarize_host_state(state)
-
-        # Should return unchanged state when function is not available
-        assert result == state
+        # Test with a mock function that returns a specific value
+        original_value = getattr(graph_main, 'enhanced_summarize_host_state', None)
+        async def mock_func(state):
+            return {'summary': 'test summary'}
+        setattr(graph_main, 'enhanced_summarize_host_state', mock_func)
+        
+        try:
+            state: GraphState = {'raw_findings': []}
+            result = summarize_host_state(state)
+            assert result == {'summary': 'test summary'}
+        finally:
+            setattr(graph_main, 'enhanced_summarize_host_state', original_value)
 
     def test_summarize_host_state_without_function(self):
         """Test summarize_host_state when function is None."""
-        with patch('graph_main.enhanced_summarize_host_state', None):
+        original_value = getattr(graph_main, 'enhanced_summarize_host_state', None)
+        setattr(graph_main, 'enhanced_summarize_host_state', None)
+        
+        try:
             state: GraphState = {'raw_findings': []}
             result = summarize_host_state(state)
-
             assert result == state  # Should return unchanged state
+        finally:
+            setattr(graph_main, 'enhanced_summarize_host_state', original_value)
 
     def test_suggest_rules_with_function(self):
         """Test suggest_rules when function is available."""
@@ -623,11 +621,15 @@ class TestSyncWrapperFunctions:
 
     def test_suggest_rules_without_function(self):
         """Test suggest_rules when function is None."""
-        # Already None in test environment
-        state: GraphState = {'enriched_findings': []}
-        result = suggest_rules(state)
-
-        assert result == state  # Should return unchanged state
+        original_value = getattr(graph_main, 'enhanced_suggest_rules', None)
+        setattr(graph_main, 'enhanced_suggest_rules', None)
+        
+        try:
+            state: GraphState = {'enriched_findings': []}
+            result = suggest_rules(state)
+            assert result == state  # Should return unchanged state
+        finally:
+            setattr(graph_main, 'enhanced_suggest_rules', original_value)
 
     def test_tool_coordinator_sync_with_function(self):
         """Test tool_coordinator_sync when function is available."""
@@ -646,11 +648,15 @@ class TestSyncWrapperFunctions:
 
     def test_tool_coordinator_sync_without_function(self):
         """Test tool_coordinator_sync when function is None."""
-        # Already None in test environment
-        state: GraphState = {'pending_tool_calls': []}
-        result = tool_coordinator_sync(state)
-
-        assert result == state  # Should return unchanged state
+        original_value = getattr(graph_main, 'tool_coordinator', None)
+        setattr(graph_main, 'tool_coordinator', None)
+        
+        try:
+            state: GraphState = {'pending_tool_calls': []}
+            result = tool_coordinator_sync(state)
+            assert result == state  # Should return unchanged state
+        finally:
+            setattr(graph_main, 'tool_coordinator', original_value)
 
     def test_risk_analyzer_sync_with_function(self):
         """Test risk_analyzer_sync when function is available."""
@@ -734,7 +740,7 @@ class TestSyncWrapperFunctions:
     def test_summarize_host_state_exception_handling(self):
         """Test summarize_host_state exception handling."""
         # Patch the actual function to raise an exception
-        with patch('graph_main.enhanced_summarize_host_state') as mock_func:
+        with patch('sys_scan_agent.graph.enhanced_summarize_host_state') as mock_func:
             mock_func.side_effect = Exception("Test exception")
             # Temporarily set it to not None so the if check passes
             original_value = graph_main.enhanced_summarize_host_state
@@ -752,7 +758,7 @@ class TestSyncWrapperFunctions:
     def test_suggest_rules_exception_handling(self):
         """Test suggest_rules exception handling."""
         # Patch the actual function to raise an exception
-        with patch('graph_main.enhanced_suggest_rules') as mock_func:
+        with patch('sys_scan_agent.graph.enhanced_suggest_rules') as mock_func:
             mock_func.side_effect = Exception("Test exception")
             # Temporarily set it to not None so the if check passes
             original_value = graph_main.enhanced_suggest_rules
@@ -770,7 +776,7 @@ class TestSyncWrapperFunctions:
     def test_tool_coordinator_sync_exception_handling(self):
         """Test tool_coordinator_sync exception handling."""
         # Patch the actual function to raise an exception
-        with patch('graph_main.tool_coordinator') as mock_func:
+        with patch('sys_scan_agent.graph.tool_coordinator') as mock_func:
             mock_func.side_effect = Exception("Test exception")
             # Temporarily set it to not None so the if check passes
             original_value = graph_main.tool_coordinator
@@ -788,7 +794,7 @@ class TestSyncWrapperFunctions:
     def test_risk_analyzer_sync_exception_handling(self):
         """Test risk_analyzer_sync exception handling."""
         # Patch the actual function to raise an exception
-        with patch('graph_main.risk_analyzer') as mock_func:
+        with patch('sys_scan_agent.graph.risk_analyzer') as mock_func:
             mock_func.side_effect = Exception("Test exception")
             # Temporarily set it to not None so the if check passes
             original_value = graph_main.risk_analyzer
@@ -806,7 +812,7 @@ class TestSyncWrapperFunctions:
     def test_compliance_checker_sync_exception_handling(self):
         """Test compliance_checker_sync exception handling."""
         # Patch the actual function to raise an exception
-        with patch('graph_main.compliance_checker') as mock_func:
+        with patch('sys_scan_agent.graph.compliance_checker') as mock_func:
             mock_func.side_effect = Exception("Test exception")
             # Temporarily set it to not None so the if check passes
             original_value = graph_main.compliance_checker
@@ -824,7 +830,7 @@ class TestSyncWrapperFunctions:
     def test_metrics_collector_sync_exception_handling(self):
         """Test metrics_collector_sync exception handling."""
         # Patch the actual function to raise an exception
-        with patch('graph_main.metrics_collector') as mock_func:
+        with patch('sys_scan_agent.graph.metrics_collector') as mock_func:
             mock_func.side_effect = Exception("Test exception")
             # Temporarily set it to not None so the if check passes
             original_value = graph_main.metrics_collector
@@ -880,10 +886,10 @@ class TestBuildWorkflow:
 
     def test_build_workflow_with_dependencies(self):
         """Test build_workflow when all dependencies are available."""
-        with patch('graph_main.StateGraph') as mock_state_graph, \
-             patch('graph_main.END', 'END'), \
-             patch('graph_main.START', 'START'), \
-             patch('graph_main.ToolNode', 'ToolNode'):
+        with patch('sys_scan_agent.graph.StateGraph') as mock_state_graph, \
+             patch('sys_scan_agent.graph.END', 'END'), \
+             patch('sys_scan_agent.graph.START', 'START'), \
+             patch('sys_scan_agent.graph.ToolNode', 'ToolNode'):
             
             # Mock the required components
             mock_wf = Mock()
@@ -895,7 +901,7 @@ class TestBuildWorkflow:
             mock_state_graph.return_value = mock_wf
 
             # Mock the imported functions
-            with patch.multiple('graph_main',
+            with patch.multiple('sys_scan_agent.graph',
                               enrich_findings=Mock(),
                               enhanced_summarize_host_state=Mock(),
                               enhanced_suggest_rules=Mock(),
@@ -916,7 +922,7 @@ class TestBuildWorkflow:
     def test_build_workflow_without_dependencies(self):
         """Test build_workflow when dependencies are not available."""
         # Mock imports to return None
-        with patch.multiple('graph_main',
+        with patch.multiple('sys_scan_agent.graph',
                           StateGraph=None,
                           END=None,
                           START=None,
@@ -938,7 +944,7 @@ class TestBuildWorkflow:
 
     def test_build_workflow_partial_dependencies(self):
         """Test build_workflow with some dependencies missing."""
-        with patch.multiple('graph_main',
+        with patch.multiple('sys_scan_agent.graph',
                           StateGraph=Mock(),
                           END='END',
                           START='START',
@@ -954,10 +960,10 @@ class TestBuildWorkflow:
 
     def test_build_workflow_compilation_failure(self):
         """Test build_workflow when compilation fails (lines 385, 431-432)."""
-        with patch('graph_main.StateGraph') as mock_state_graph, \
-             patch('graph_main.END', 'END'), \
-             patch('graph_main.START', 'START'), \
-             patch('graph_main.ToolNode', 'ToolNode'):
+        with patch('sys_scan_agent.graph.StateGraph') as mock_state_graph, \
+             patch('sys_scan_agent.graph.END', 'END'), \
+             patch('sys_scan_agent.graph.START', 'START'), \
+             patch('sys_scan_agent.graph.ToolNode', 'ToolNode'):
             
             # Mock the required components
             mock_wf = Mock()
@@ -969,7 +975,7 @@ class TestBuildWorkflow:
             mock_state_graph.return_value = mock_wf
 
             # Mock the imported functions
-            with patch.multiple('graph_main',
+            with patch.multiple('sys_scan_agent.graph',
                               enrich_findings=Mock(),
                               enhanced_summarize_host_state=Mock(),
                               enhanced_suggest_rules=Mock(),
@@ -996,7 +1002,7 @@ class TestErrorHandling:
         async def failing_func(state):
             raise Exception("Test exception")
 
-        with patch('graph_main.enhanced_summarize_host_state', failing_func):
+        with patch('sys_scan_agent.graph.enhanced_summarize_host_state', failing_func):
             state: GraphState = {}  # Empty state
             result = summarize_host_state(state)
 
@@ -1007,7 +1013,7 @@ class TestErrorHandling:
         """Test that global workflow variables handle missing dependencies."""
         # The workflow and app variables should be set appropriately
         # when dependencies are missing
-        with patch.multiple('graph_main',
+        with patch.multiple('sys_scan_agent.graph',
                           StateGraph=None,
                           enrich_findings=None):
             # Re-import to trigger the build_workflow call
