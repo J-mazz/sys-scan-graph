@@ -29,6 +29,19 @@ public:
     Generator<Finding> scan() override {
         if (!config_.integrity) co_return;
 
+        // This scanner relies on invoking the host package manager (dpkg/rpm) via IProcessRunner.
+        // That does not reliably support offline snapshot roots without chroot/containerization.
+        if (!config_.test_root.empty() && config_.test_root != "/") {
+            Finding f;
+            f.id = "integrity:offline_unsupported";
+            f.title = "Offline integrity check not supported";
+            f.severity = Severity::Info;
+            f.description = "IntegrityScanner requires executing the system package manager and does not support --test-root snapshots.";
+            f.metadata["test_root"] = config_.test_root;
+            co_yield f;
+            co_return;
+        }
+
         std::string output;
         bool used_dpkg = false;
 

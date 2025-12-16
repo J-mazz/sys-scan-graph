@@ -28,12 +28,14 @@ public:
     Generator<Finding> scan() override {
         if (!config_.containers) co_return;
 
+        const std::string root = config_.test_root;
+
         bool found_container = false;
         std::string container_type = "Unknown";
         std::string evidence;
 
         // Check 1: .dockerenv
-        if (fs_.exists("/.dockerenv")) {
+        if (fs_.exists(sys_scan::utils::in_root(root, "/.dockerenv"))) {
             found_container = true;
             container_type = "Docker";
             evidence = "Found /.dockerenv";
@@ -41,7 +43,7 @@ public:
 
         // Check 2: /proc/1/cgroup
         if (!found_container) {
-            std::string cgroup = fs_.read_file("/proc/1/cgroup");
+            std::string cgroup = fs_.read_file(sys_scan::utils::in_root(root, "/proc/1/cgroup"));
             if (cgroup.find("docker") != std::string::npos) {
                 found_container = true;
                 container_type = "Docker";
@@ -58,8 +60,8 @@ public:
         }
 
         // Check 3: Environment Variables (via PID 1)
-        if (!found_container && fs_.exists("/proc/1/environ")) {
-            std::string env = fs_.read_file("/proc/1/environ");
+        if (!found_container && fs_.exists(sys_scan::utils::in_root(root, "/proc/1/environ"))) {
+            std::string env = fs_.read_file(sys_scan::utils::in_root(root, "/proc/1/environ"));
             if (env.find("KUBERNETES_SERVICE_HOST") != std::string::npos) {
                 found_container = true;
                 container_type = "Kubernetes";

@@ -4,8 +4,11 @@ module;
 #include <filesystem>
 #include <vector>
 #include <system_error>
+#include <chrono>
+#include <thread>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/utsname.h>
 #include <array>
 #include <cstdlib>
 
@@ -43,6 +46,7 @@ public:
 
         for (const auto& entry : fs::directory_iterator(path, ec)) {
              FileEntry fe;
+             fe.path = entry.path().string();
              fe.name = entry.path().filename().string();
              fe.is_directory = entry.is_directory(ec);
              fe.is_symlink = entry.is_symlink(ec);
@@ -112,6 +116,22 @@ public:
             int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
             return {exit_code, output};
         }
+    }
+};
+
+class RealSystemInfo : public ISystemInfo {
+public:
+    std::string kernel_release() const override {
+        struct utsname un;
+        if (uname(&un) != 0) return "";
+        return std::string{un.release};
+    }
+};
+
+class RealSleeper : public ISleeper {
+public:
+    void sleep_for(std::chrono::milliseconds duration) const override {
+        std::this_thread::sleep_for(duration);
     }
 };
 

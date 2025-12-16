@@ -66,8 +66,15 @@ struct Generator {
         handle_type coro;
         bool done;
 
+        void rethrow_if_exception() const {
+            if (coro && coro.promise().exception) {
+                std::rethrow_exception(coro.promise().exception);
+            }
+        }
+
         Iterator& operator++() {
             coro.resume();
+            rethrow_if_exception();
             done = coro.done();
             return *this;
         }
@@ -82,6 +89,9 @@ struct Generator {
     Iterator begin() {
         if (coro) {
             coro.resume();
+            if (coro.promise().exception) {
+                std::rethrow_exception(coro.promise().exception);
+            }
             if (coro.done()) return {coro, true};
         }
         return {coro, false};

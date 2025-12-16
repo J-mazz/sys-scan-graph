@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
+include(CTest)
+
+option(SYS_SCAN_ENABLE_COVERAGE "Enable coverage flags (for tests)" OFF)
+
 # External Dependencies
 find_package(Threads REQUIRED)
 find_package(nlohmann_json QUIET)
@@ -65,4 +69,27 @@ endif()
 # Executable
 add_executable(sys-scan src/main.cpp)
 target_link_libraries(sys-scan PRIVATE sys_scan_core)
+
+if(SYS_SCAN_ENABLE_COVERAGE)
+  # Clang supports --coverage (gcov-compatible) and works with lcov/genhtml.
+  foreach(tgt sys_scan_modules sys-scan)
+    target_compile_options(${tgt} PRIVATE --coverage -O0 -g)
+    target_link_options(${tgt} PRIVATE --coverage)
+  endforeach()
+endif()
+
+if(BUILD_TESTING)
+  add_executable(sys-scan-tests
+    tests/test_main.cpp
+    tests/test_core.cpp
+  )
+  target_link_libraries(sys-scan-tests PRIVATE sys_scan_core)
+
+  if(SYS_SCAN_ENABLE_COVERAGE)
+    target_compile_options(sys-scan-tests PRIVATE --coverage -O0 -g)
+    target_link_options(sys-scan-tests PRIVATE --coverage)
+  endif()
+
+  add_test(NAME sys-scan-tests COMMAND sys-scan-tests)
+endif()
 
