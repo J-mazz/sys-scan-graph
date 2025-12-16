@@ -4,6 +4,7 @@ module;
 #include <optional>
 #include <cstdint>
 #include <filesystem>
+#include <chrono>
 #include <utility>
 
 export module sys_scan.interfaces;
@@ -11,10 +12,23 @@ export module sys_scan.interfaces;
 export namespace sys_scan {
 
 struct FileEntry {
+    // Full path to this entry (best-effort; may be empty for synthetic/mock file systems).
+    std::string path;
     std::string name;
     bool is_directory;
     bool is_symlink;
     bool is_regular;
+};
+
+// System information and time primitives for testability.
+struct ISystemInfo {
+    virtual ~ISystemInfo() = default;
+    virtual std::string kernel_release() const = 0;
+};
+
+struct ISleeper {
+    virtual ~ISleeper() = default;
+    virtual void sleep_for(std::chrono::milliseconds duration) const = 0;
 };
 
 struct IFileSystem {

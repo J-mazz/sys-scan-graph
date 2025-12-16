@@ -32,6 +32,8 @@ int main(int argc, char** argv) {
     // 1. Composition Root: Instantiate Services
     RealFileSystem fs;
     RealProcessRunner runner;
+    RealSystemInfo sysinfo;
+    RealSleeper sleeper;
     
     // 2. Instantiate Config
     Config cfg;
@@ -50,10 +52,10 @@ int main(int argc, char** argv) {
     registry.register_scanner(std::make_unique<MACScanner>(cfg, fs));
     registry.register_scanner(std::make_unique<IntegrityScanner>(cfg, fs, runner));
     registry.register_scanner(std::make_unique<IOCScanner>(cfg, fs));
-    registry.register_scanner(std::make_unique<ModuleScanner>(cfg, fs));
+    registry.register_scanner(std::make_unique<ModuleScanner>(cfg, fs, sysinfo));
         registry.register_scanner(std::make_unique<ContainerScanner>(cfg, fs));
         registry.register_scanner(std::make_unique<YaraScanner>(cfg, fs));
-    registry.register_scanner(std::make_unique<EbpfScanner>(cfg, fs));
+    registry.register_scanner(std::make_unique<EbpfScanner>(cfg, fs, sleeper));
 
     // 4. Run Scanners
     Report report;

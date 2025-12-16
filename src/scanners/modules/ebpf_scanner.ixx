@@ -54,10 +54,11 @@ struct ConnEvent {
 class EbpfScanner : public Scanner {
     const IFileSystem& fs_;
     const Config& config_;
+    const ISleeper& sleeper_;
 
 public:
-    explicit EbpfScanner(const Config& cfg, const IFileSystem& fs)
-        : config_(cfg), fs_(fs) {}
+    explicit EbpfScanner(const Config& cfg, const IFileSystem& fs, const ISleeper& sleeper)
+        : config_(cfg), fs_(fs), sleeper_(sleeper) {}
 
     std::string name() const override { return "ebpf_trace"; }
     std::string description() const override { return "Trace execve/connect via eBPF (with /proc fallback)"; }
@@ -93,10 +94,12 @@ private:
     // --- /proc Fallback Implementation ---
     std::vector<Finding> run_proc_fallback() {
         std::vector<Finding> findings;
+
+        const std::string proc_root = sys_scan::utils::in_root(config_.test_root, "/proc");
         // Simple snapshot difference logic
         auto get_pids = [&]() {
             std::vector<std::string> pids;
-            auto entries = fs_.list_directory("/proc");
+            auto entries = fs_.list_directory(proc_root);
             for (const auto& e : entries) {
                 if (e.is_directory && std::all_of(e.name.begin(), e.name.end(), ::isdigit))
                     pids.push_back(e.name);
@@ -107,7 +110,7 @@ private:
 
         auto pids_start = get_pids();
         // Sleep to catch short lived processes (imperfect, hence fallback)
-        std::this_thread::sleep_for(std::chrono::seconds(config_.ioc_exec_trace_seconds > 0 ? config_.ioc_exec_trace_seconds : 2));
+        sleeper_.sleep_for(std::chrono::milliseconds(1000LL * (config_.ioc_exec_trace_seconds > 0 ? config_.ioc_exec_trace_seconds : 2)));
         auto pids_end = get_pids();
 
         std::vector<std::string> new_pids;
@@ -116,7 +119,7 @@ private:
                             std::back_inserter(new_pids));
 
         for (const auto& pid : new_pids) {
-            std::string comm = fs_.read_file("/proc/" + pid + "/comm");
+            std::string comm = fs_.read_file(proc_root + "/" + pid + "/comm");
             if (!comm.empty() && comm.back() == '\n') comm.pop_back();
 
             Finding f;

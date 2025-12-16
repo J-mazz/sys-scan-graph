@@ -3,7 +3,6 @@ module;
 #include <string>
 #include <vector>
 #include <sstream>
-#include <sys/utsname.h>
 
 export module sys_scan.scanners.modules;
 import sys_scan.types;
@@ -19,10 +18,11 @@ export namespace sys_scan {
 class ModuleScanner : public Scanner {
     const IFileSystem& fs_;
     const Config& config_;
+    const ISystemInfo& sysinfo_;
 
 public:
-    explicit ModuleScanner(const Config& cfg, const IFileSystem& fs)
-        : config_(cfg), fs_(fs) {}
+    explicit ModuleScanner(const Config& cfg, const IFileSystem& fs, const ISystemInfo& sysinfo)
+        : config_(cfg), fs_(fs), sysinfo_(sysinfo) {}
 
     std::string name() const override { return "modules"; }
     std::string description() const override { return "Scans kernel modules for signatures and taint"; }
@@ -30,12 +30,20 @@ public:
     Generator<Finding> scan() override {
         if (!config_.modules_summary_only && !config_.hardening) co_return;
 
-        struct utsname un;
-        uname(&un);
-        std::string kernel_release = un.release;
-        std::string lib_base = "/lib/modules/" + kernel_release + "/";
+        std::string kernel_release;
+        {
+            const std::string osrelease_path = sys_scan::utils::in_root(config_.test_root, "/proc/sys/kernel/osrelease");
+            if (fs_.exists(osrelease_path)) {
+                kernel_release = sys_scan::utils::trim(fs_.read_file(osrelease_path));
+            }
+        }
+        if (kernel_release.empty()) {
+            kernel_release = sysinfo_.kernel_release();
+        }
 
-        std::string modules = fs_.read_file("/proc/modules");
+        std::string lib_base = sys_scan::utils::in_root(config_.test_root, "/lib/modules/" + kernel_release + "/");
+
+        std::string modules = fs_.read_file(sys_scan::utils::in_root(config_.test_root, "/proc/modules"));
         auto lines = sys_scan::utils::read_lines_from_string(modules);
         
         size_t unsigned_count = 0;

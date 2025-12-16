@@ -26,7 +26,7 @@ public:
     std::string description() const override { return "Checks mount points for security options (nodev, noexec, nosuid)"; }
 
     Generator<Finding> scan() override {
-        std::string mounts = fs_.read_file("/proc/mounts");
+        std::string mounts = fs_.read_file(sys_scan::utils::in_root(config_.test_root, "/proc/mounts"));
         if (mounts.empty()) co_return;
 
         auto lines = sys_scan::utils::read_lines_from_string(mounts);

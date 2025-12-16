@@ -29,7 +29,7 @@ public:
     Generator<Finding> scan() override {
         if(!config_.process_inventory && !config_.all_processes) co_return;
 
-        std::string proc_root = "/proc";
+        std::string proc_root = sys_scan::utils::in_root(config_.test_root, "/proc");
         auto entries = fs_.list_directory(proc_root);
         
         for(const auto& entry : entries) {

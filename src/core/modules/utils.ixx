@@ -15,11 +15,19 @@ export namespace sys_scan::utils {
     
     inline std::string trim(const std::string& s) {
         auto start = s.begin();
-        while (start != s.end() && std::isspace(*start)) start++;
+        while (start != s.end() && std::isspace(static_cast<unsigned char>(*start))) {
+            ++start;
+        }
+
+        if (start == s.end()) {
+            return "";
+        }
+
         auto end = s.end();
         do {
-            end--;
-        } while (std::distance(start, end) > 0 && std::isspace(*end));
+            --end;
+        } while (end != start && std::isspace(static_cast<unsigned char>(*end)));
+
         return std::string(start, end + 1);
     }
 

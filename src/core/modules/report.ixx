@@ -22,7 +22,7 @@ struct ScanResult {
 class Report {
 public:
     // Thread-safe consumption of a scanner's generator
-    void consume(const std::string& scanner_name, Generator<Finding>& generator) {
+    void consume(const std::string& scanner_name, Generator<Finding> generator) {
         ScanResult result;
         result.scanner_name = scanner_name;
         result.start_time = std::chrono::system_clock::now();

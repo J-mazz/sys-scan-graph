@@ -33,7 +33,7 @@ public:
         const std::vector<std::string> net_files = {"/proc/net/tcp", "/proc/net/tcp6", "/proc/net/udp", "/proc/net/udp6"};
         
         for (const auto& path : net_files) {
-            std::string content = fs_.read_file(path);
+            std::string content = fs_.read_file(sys_scan::utils::in_root(config_.test_root, path));
             if (content.empty()) continue;
 
             auto lines = sys_scan::utils::read_lines_from_string(content);

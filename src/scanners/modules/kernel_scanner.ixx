@@ -48,7 +48,7 @@ public:
                  if (path[i] == '.') path[i] = '/';
              }
 
-             std::string value = sys_scan::utils::trim(fs_.read_file(path));
+             std::string value = sys_scan::utils::trim(fs_.read_file(sys_scan::utils::in_root(config_.test_root, path)));
              
              // If missing, arguably a finding, but maybe module not loaded
              if (value.empty()) continue;

@@ -28,13 +28,14 @@ public:
 
     Generator<Finding> scan() override {
         std::vector<std::string> suspicious = {"cryptominer", "xmrig", "minerd", "malware"};
-        
-        auto entries = fs_.list_directory("/proc");
+
+        const std::string proc_root = sys_scan::utils::in_root(config_.test_root, "/proc");
+        auto entries = fs_.list_directory(proc_root);
         for (const auto& entry : entries) {
             if (!entry.is_directory || !std::all_of(entry.name.begin(), entry.name.end(), ::isdigit)) continue;
 
-            std::string cmdline = fs_.read_file("/proc/" + entry.name + "/cmdline");
-            std::string environ = fs_.read_file("/proc/" + entry.name + "/environ");
+            std::string cmdline = fs_.read_file(proc_root + "/" + entry.name + "/cmdline");
+            std::string environ = fs_.read_file(proc_root + "/" + entry.name + "/environ");
 
             // Check Command Lines
             for (const auto& s : suspicious) {
@@ -61,7 +62,7 @@ public:
             }
             
             // Check deleted executable
-            std::string exe = fs_.read_symlink("/proc/" + entry.name + "/exe");
+              std::string exe = fs_.read_symlink(proc_root + "/" + entry.name + "/exe");
             if (exe.find("(deleted)") != std::string::npos) {
                  Finding f;
                  f.id = "ioc:deleted_exe:" + entry.name;
