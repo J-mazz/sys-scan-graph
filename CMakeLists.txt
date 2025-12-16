@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(sys-scan VERSION 6.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
@@ -9,6 +9,7 @@ set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 include(CTest)
 
 option(SYS_SCAN_ENABLE_COVERAGE "Enable coverage flags (for tests)" OFF)
+set(SYS_SCAN_COVERAGE_MIN 85 CACHE STRING "Minimum coverage percentage for line/function/branch")
 
 # External Dependencies
 find_package(Threads REQUIRED)
@@ -91,5 +92,35 @@ if(BUILD_TESTING)
   endif()
 
   add_test(NAME sys-scan-tests COMMAND sys-scan-tests)
+
+  if(SYS_SCAN_ENABLE_COVERAGE)
+    find_program(GCOVR_EXECUTABLE gcovr)
+    if(GCOVR_EXECUTABLE)
+      add_custom_target(coverage
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        COMMAND ${GCOVR_EXECUTABLE}
+          -r ${CMAKE_SOURCE_DIR}
+          --filter ${CMAKE_SOURCE_DIR}/src
+          --exclude ${CMAKE_BINARY_DIR}
+          --exclude ${CMAKE_SOURCE_DIR}/build
+          --exclude ${CMAKE_SOURCE_DIR}/build-coverage
+          --exclude ${CMAKE_SOURCE_DIR}/build-modules
+          --exclude ${CMAKE_SOURCE_DIR}/build-modules-clang
+          --exclude ${CMAKE_SOURCE_DIR}/cmake-build-default
+          --exclude ${CMAKE_SOURCE_DIR}/tests
+          --gcov-executable "llvm-cov gcov"
+          --gcov-ignore-errors no_working_dir_found
+          --gcov-ignore-errors source_not_found
+          --print-summary
+          --xml-pretty -o coverage.xml
+          --html-details -o coverage.html
+          --fail-under-line ${SYS_SCAN_COVERAGE_MIN}
+          --fail-under-function ${SYS_SCAN_COVERAGE_MIN}
+          --fail-under-branch ${SYS_SCAN_COVERAGE_MIN}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        VERBATIM
+      )
+    endif()
+  endif()
 endif()
 

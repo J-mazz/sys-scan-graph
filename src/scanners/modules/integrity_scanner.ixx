@@ -46,12 +46,11 @@ public:
         bool used_dpkg = false;
 
         if (fs_.exists("/usr/bin/dpkg")) {
-            auto res = runner_.exec("dpkg", {"-V"});
-            output = res.second;
+            // C++23: value_or() for clean fallback handling from std::expected
+            output = runner_.exec("dpkg", {"-V"}).value_or("");
             used_dpkg = true;
         } else if (fs_.exists("/usr/bin/rpm")) {
-            auto res = runner_.exec("rpm", {"-Va"});
-            output = res.second;
+            output = runner_.exec("rpm", {"-Va"}).value_or("");
         }
 
         if (output.empty()) co_return;
