@@ -117,6 +117,7 @@ logs/
 *.backup
 *.orig
 *.rej
+tmp_delete_test.txt
 
 # Environment / secrets
 .env
