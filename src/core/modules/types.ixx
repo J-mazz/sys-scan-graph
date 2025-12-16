@@ -5,6 +5,7 @@ module;
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <utility>
 export module sys_scan.types;
 
 export namespace sys_scan {
@@ -79,6 +80,31 @@ enum class WarnCode {
     WalkError,
     MountsUnreadable,
     Generic
+};
+
+// C++23: Explicit Object Parameter (Deducing This)
+struct FindingBuilder {
+    Finding f;
+
+    template <typename Self>
+    Self&& set_id(this Self&& self, std::string id) {
+        self.f.id = std::move(id);
+        return std::forward<Self>(self);
+    }
+
+    template <typename Self>
+    Self&& set_title(this Self&& self, std::string title) {
+        self.f.title = std::move(title);
+        return std::forward<Self>(self);
+    }
+
+    template <typename Self>
+    Self&& set_severity(this Self&& self, Severity sev) {
+        self.f.severity = sev;
+        return std::forward<Self>(self);
+    }
+
+    Finding build() { return std::move(f); }
 };
 
 }

@@ -5,6 +5,13 @@ module;
 #include <map>
 #include <chrono>
 #include <utility>
+#if __has_include(<mdspan>)
+#include <mdspan>
+#define SYS_SCAN_HAS_MDSPAN 1
+#elif __has_include(<experimental/mdspan>)
+#include <experimental/mdspan>
+#define SYS_SCAN_HAS_EXPERIMENTAL_MDSPAN 1
+#endif
 
 export module sys_scan.report;
 import sys_scan.types;
@@ -58,6 +65,34 @@ private:
     std::vector<std::pair<std::string,std::string>> warnings_;
     std::vector<std::pair<std::string,std::string>> errors_;
     mutable std::mutex mutex_;
+};
+
+// C++23: std::mdspan and multidimensional subscript
+class RiskHeatmap {
+    std::vector<int> counts;
+    size_t rows; // Scanners
+    size_t cols; // Severities (0-5)
+
+public:
+    RiskHeatmap(size_t num_scanners) : rows(num_scanners), cols(6) {
+        counts.resize(rows * cols, 0);
+    }
+
+    // Multidimensional subscript operator (C++23)
+    int& operator[](size_t scanner_idx, size_t severity_rank) {
+        // Create a 2D view over the flat vector on demand
+    #if defined(SYS_SCAN_HAS_MDSPAN)
+        auto ms = std::mdspan(counts.data(), rows, cols);
+        return ms[scanner_idx, severity_rank];
+    #elif defined(SYS_SCAN_HAS_EXPERIMENTAL_MDSPAN)
+        using extents2d = std::experimental::dextents<size_t, 2>;
+        std::experimental::mdspan<int, extents2d> ms(counts.data(), rows, cols);
+        return ms(scanner_idx, severity_rank);
+    #else
+        // Fallback: manual indexing when mdspan is unavailable
+        return counts[scanner_idx * cols + severity_rank];
+    #endif
+    }
 };
 
 }
