@@ -3,9 +3,6 @@ module;
 #include <memory>
 #include <algorithm>
 #include <string>
-#include <future>
-#include <thread>
-#include <semaphore>
 
 export module sys_scan.registry;
 import sys_scan.scanner;
@@ -21,6 +18,15 @@ public:
         scanners_.push_back(std::move(scanner));
     }
 
+    [[nodiscard]] std::vector<std::string> registered_names() const {
+        std::vector<std::string> names;
+        names.reserve(scanners_.size());
+        for (const auto& s : scanners_) {
+            if (s) names.push_back(s->name());
+        }
+        return names;
+    }
+
     void run_all(Report& report, const Config& cfg) {
         auto is_enabled = [&](const std::string& name){
             if(!cfg.enable_scanners.empty()) {
@@ -33,63 +39,15 @@ public:
             return true;
         };
 
-        if (!cfg.parallel) {
-            for(auto& s : scanners_) {
-                if(!s) continue;
-                if(!is_enabled(s->name())) continue;
-                try {
-                    report.consume(s->name(), s->scan());
-                } catch(const std::exception& ex) {
-                    report.add_error(s->name(), ex.what());
-                } catch(...) {
-                    report.add_error(s->name(), "unknown error");
-                }
-            }
-            return;
-        }
-
-        unsigned int max_threads = cfg.parallel_max_threads > 0
-            ? static_cast<unsigned int>(cfg.parallel_max_threads)
-            : std::thread::hardware_concurrency();
-        if (max_threads == 0) max_threads = 1;
-        // Keep an upper bound so we don't create a silly number of threads.
-        if (max_threads > 64) max_threads = 64;
-
-        // counting_semaphore requires a compile-time max; we clamp max_threads to <= 64.
-        std::counting_semaphore<64> sem(static_cast<std::ptrdiff_t>(max_threads));
-        std::vector<std::future<void>> futures;
-        futures.reserve(scanners_.size());
-
-        for (auto& s : scanners_) {
-            if (!s) continue;
-            const std::string scanner_name = s->name();
-            if (!is_enabled(scanner_name)) continue;
-
-            sem.acquire();
-            futures.emplace_back(std::async(std::launch::async, [&report, &sem, scanner = s.get(), scanner_name]() {
-                struct Releaser {
-                    std::counting_semaphore<64>& sem;
-                    ~Releaser() { sem.release(); }
-                } releaser{sem};
-
-                try {
-                    report.consume(scanner_name, scanner->scan());
-                } catch (const std::exception& ex) {
-                    report.add_error(scanner_name, ex.what());
-                } catch (...) {
-                    report.add_error(scanner_name, "unknown error");
-                }
-            }));
-        }
-
-        for (auto& f : futures) {
-            // Future exceptions should already be handled inside the task, but keep this as a safety net.
+        for(auto& s : scanners_) {
+            if(!s) continue;
+            if(!is_enabled(s->name())) continue;
             try {
-                f.get();
-            } catch (const std::exception& ex) {
-                report.add_error("registry", ex.what());
-            } catch (...) {
-                report.add_error("registry", "unknown error");
+                report.consume(s->name(), s->scan());
+            } catch(const std::exception& ex) {
+                report.add_error(s->name(), ex.what());
+            } catch(...) {
+                report.add_error(s->name(), "unknown error");
             }
         }
     }

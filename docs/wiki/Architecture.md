@@ -1,216 +1,88 @@
-# Architecture Overview
+# Architecture
 
-This page provides a high-level overview of the sys-scan-graph architecture, including the separation between the Core Scanner and Intelligence Layer components.
+sys-scan-graph is split into two layers:
 
-## System Overview
+1. A **C++ core scanner** that collects host signals (filesystem, procfs, system commands) and emits findings.
+2. A **Python intelligence layer** that consumes a *structured scan report* and produces enriched output (correlations, risk summaries, optional artifacts like HTML/diffs, and optional metrics export). The default LLM provider is **local-qwen** with deterministic heuristic fallback; no cloud LLM APIs are used.
 
-sys-scan-graph is a comprehensive security scanning platform that combines a high-performance C++ core scanner with an intelligent Python-based analysis layer. The system is designed for enterprise security monitoring, compliance assessment, and threat detection.
+This page is intentionally **comprehensive but code-backed**: every major behavior described below is present in the current source tree.
 
-## Core Components
+## 🧩 Core scanner (C++)
 
-### Core Scanner (C++)
-The Core Scanner is a high-performance, deterministic security scanner written in C++20 that provides the foundation for host-based security assessment.
+### What it is
 
-**Key Characteristics:**
-- **Performance**: Single-threaded design optimized for speed and low resource usage
-- **Determinism**: Reproducible output ordering and canonical JSON formatting
-- **Security**: No external network connections, pure filesystem and procfs enumeration
-- **Extensibility**: Plugin-based scanner architecture for easy addition of new security checks
+The core is implemented as C++23 modules under `src/core/modules/` and scanner modules under `src/scanners/modules/`.
 
-**Responsibilities:**
-- Enumerate host security surface (processes, network sockets, kernel parameters, modules, file permissions)
-- Perform compliance checks against industry standards (PCI DSS, HIPAA, NIST CSF)
-- Generate structured JSON output with stable schema versioning
-- Provide minimal policy filtering without complex reasoning
+Key modules to start with:
 
-### Intelligence Layer (Python)
-The Intelligence Layer consumes raw scanner output and adds advanced analytics, correlations, and AI-powered insights.
+- `sys_scan.scanner` (scanner interface)
+- `sys_scan.types` (finding/severity types)
+- `sys_scan.report` (aggregation of scanner results)
+- `sys_scan.registry` (scanner registration + execution orchestration)
+- `sys_scan.interfaces` / `sys_scan.system_services` (DI-friendly system abstractions)
+- `sys_scan.config` (feature toggles and execution/output options)
 
-**Key Characteristics:**
-- **Analytics**: Risk scoring, anomaly detection, and correlation analysis
-- **AI/ML**: LLM-powered summarization and threat intelligence
-- **Workflow**: LangGraph-based orchestration for complex analysis pipelines
-- **Extensibility**: Plugin system for custom rules, knowledge packs, and analysis modules
+### How scanners produce findings
 
-**Responsibilities:**
-- Enrich raw findings with risk assessments and probability scores
-- Perform cross-finding correlations and temporal analysis
-- Generate executive summaries and actionable remediation guidance
-- Maintain baseline databases for anomaly detection
-- Provide ATT&CK framework mapping and threat intelligence
+Each scanner implements a common interface and returns a coroutine-backed generator of `Finding` values (see `sys_scan.scanner` and `sys_scan.coro`). The report aggregator consumes each scanner’s generator and records per-scanner results (see `sys_scan.report`).
 
-## Architecture Diagram
+### Execution model
 
-```mermaid
-graph TB
-    subgraph "Core Scanner (C++)"
-        CLI[CLI Interface]
-        Config[Configuration Parser]
-        Registry[Scanner Registry]
-        Scanners[Security Scanners]
-        Report[Report Aggregator]
-        Writer[JSON Writer]
-    end
+Scanners are registered into a `ScannerRegistry` and executed via `ScannerRegistry::run_all(report, cfg)` (see `sys_scan.registry`).
 
-    subgraph "Intelligence Layer (Python)"
-        Loader[Data Loader]
-        Enricher[Enrichment Pipeline]
-        Analyzer[Risk Analyzer]
-        Correlator[Correlation Engine]
-        Summarizer[LLM Summarizer]
-        DB[(Baseline DB)]
-    end
+- **Sequential execution** is the default.
+- **Parallel execution** is supported by the registry when `cfg.parallel` is enabled (bounded by `cfg.parallel_max_threads`).
 
-    CLI --> Config
-    Config --> Registry
-    Registry --> Scanners
-    Scanners --> Report
-    Report --> Writer
-    Writer --> Loader
+### Current CLI status
 
-    Loader --> Enricher
-    Enricher --> Analyzer
-    Analyzer --> Correlator
-    Correlator --> Summarizer
-    Summarizer --> DB
+The current repository’s `src/main.cpp` is a **composition-root demo**:
 
-    style CLI fill:#e1f5fe
-    style Writer fill:#e1f5fe
-    style Loader fill:#f3e5f5
-    style DB fill:#f3e5f5
-```
+- it wires real system services, constructs a default `Config`, registers scanners, runs them, and prints a summary to stdout.
+- it does **not** currently parse CLI flags into `Config`, and it does **not** currently write the JSON report format consumed by the Python layer.
 
-## System Architecture Diagram
+The `Config` type *does* include options for output formatting (e.g., `canonical`, `ndjson`, `sarif`, `output_file`), but those options are not yet wired in `src/main.cpp` in this workspace.
 
-![System Architecture Diagram](../../assets/sys-scan-graph_diagram.png)
+## 🧠 Intelligence layer (Python)
 
-*Figure 1: High-level system architecture showing the relationship between Core Scanner and Intelligence Layer components.*
+### What it is
 
-## Data Flow
+The intelligence layer lives under `agent/sys_scan_agent/` and is packaged as `sys-scan-agent` (see `agent/pyproject.toml`). It exposes Typer-based CLIs:
 
-### Core Scanner Flow
-```
-CLI Arguments → Configuration → Scanner Registry → Parallel/Sequential Execution
-    ↓
-Security Findings → Report Aggregation → Canonical JSON Output
-```
+- `sys-scan-graph`
+- `sys-scan-intelligence`
 
-### Intelligence Layer Flow
-```
-Raw JSON → Data Validation → Enrichment Pipeline → Risk Analysis
-    ↓
-Correlation Engine → LLM Summarization → Actionable Insights
-```
+### What it consumes
 
-## Key Design Principles
+The primary entrypoint is `sys-scan-graph analyze`, which expects a **sys-scan JSON report** and can optionally validate it against the v4 JSON schema:
 
-### Separation of Concerns
-- **Core Scanner**: Focuses on raw data collection and basic compliance checks
-- **Intelligence Layer**: Focuses on analysis, correlation, and insight generation
-- **Clear Interface**: JSON schema provides stable contract between layers
+- schema: `schema/v4.json`
+- validator: `sys-scan-graph validate-report` (see `agent/sys_scan_agent/cli.py`)
 
-### Determinism & Reproducibility
-- **Stable Output**: Consistent ordering and formatting for diffing and caching
-- **Canonical Forms**: Environment-variable controlled canonicalization
-- **Versioning**: Schema versioning for forward compatibility
+### What it produces
 
-### Performance & Scalability
-- **Streaming Processing**: Minimal memory footprint through streaming I/O
-- **Configurable Limits**: Tunable caps on resource usage (`--max-processes`, `--max-sockets`)
-- **Thread Safety**: Mutex-protected data structures for future parallelization
+The analysis workflow reads the raw report, runs enrichment/correlation/risk steps, then writes `enriched_report.json` (default). The output is canonicalized for stable ordering (see `agent/sys_scan_agent/canonicalize.py`, used by `cli.py`).
 
-### Security & Privacy
-- **No External Calls**: Core scanner operates without network connectivity
-- **Redaction**: Intelligence layer applies privacy-preserving data redaction
-- **Integrity**: Optional signature verification for configuration files
+Optional outputs (controlled by config and CLI flags) include:
 
-## Component Interactions
+- per-node metrics export (`--metrics-out` supports `.json`, `.csv`, `.prom`)
+- HTML report and markdown diffs (see `agent/sys_scan_agent/report_html.py` and `report_diff.py` usage in `cli.py`)
 
-### Core ↔ Intelligence Layer
-- **Contract**: Stable JSON schema (v2) with semantic versioning
-- **Independence**: Intelligence layer can operate on any compliant JSON input
-- **Enhancement**: Intelligence layer adds value without modifying core behavior
+## 📦 Data contract between layers
 
-### Configuration Management
-- **Hierarchical**: Global defaults → User overrides → Environment variables
-- **Validation**: Runtime validation of configuration parameters
-- **Documentation**: Self-documenting configuration with help text
+The intended contract between the core scanner and the intelligence layer is a versioned JSON schema (`schema/v4.json`).
 
-### Error Handling
-- **Graceful Degradation**: Non-fatal errors don't abort scanning
-- **Structured Warnings**: Future enhancement for detailed error reporting
-- **Logging**: Comprehensive logging with configurable verbosity
+This repository includes a sample `report.json` at the repo root, illustrating the v4 ground-truth-compatible shape.
 
-## Extensibility Points
+## Design principles (as implemented)
 
-### Core Scanner Extensions
-1. **New Scanners**: Implement `Scanner` interface in `src/scanners/`
-2. **Registration**: Add to `ScannerRegistry::register_all_default()`
-3. **Configuration**: Extend configuration schema
-4. **Testing**: Add unit tests and integration tests
+- **Separation of concerns**: the C++ layer collects signals; the Python layer reasons over them.
+- **Testability by design**: the C++ core uses explicit interfaces (`sys_scan.interfaces`) to make scanners mockable.
+- **Least surprise**: scanners report structured findings and attach metadata, rather than hiding logic in side effects.
+- **Operational safety**: the core is oriented around local inspection (filesystem, procfs, system commands) and does not include network-based enrichment.
 
-### Intelligence Layer Extensions
-1. **Analysis Modules**: Add new analysis functions to pipeline
-2. **Rule Packs**: Extend YAML/JSON rule system
-3. **Knowledge Packs**: Add domain-specific knowledge bases
-4. **LLM Integrations**: Support additional LLM providers
+## Where to go next
 
-## Deployment Models
-
-### Standalone Core Scanner
-- Deploy C++ binary for minimal footprint scanning
-- Suitable for resource-constrained environments
-- Output can be processed by external tools
-
-### Full Intelligence Stack
-- Deploy both core scanner and intelligence layer
-- Enables advanced analytics and AI-powered insights
-- Requires Python runtime and dependencies
-
-### Distributed Deployment
-- Core scanners on target hosts
-- Intelligence layer on central analysis server
-- Scalable architecture for large fleets
-
-## Future Evolution
-
-### Planned Enhancements
-- **Parallel Execution**: Multi-threaded scanner execution
-- **Structured Warnings**: Enhanced error reporting system
-- **Plugin Architecture**: Runtime-loadable scanner plugins
-- **Performance Profiling**: Built-in performance benchmarking
-
-### Research Directions
-- **AI-Native Scanning**: ML-powered scanner optimization
-- **Federated Learning**: Privacy-preserving fleet analytics
-- **Real-time Monitoring**: Continuous security assessment
-
-## Related Documentation
-
-- **[Core Scanners](Core-Scanners.md)** - Detailed scanner implementations
-- **[Intelligence Layer](Intelligence-Layer.md)** - Pipeline and workflow details
-- **[Extensibility](Extensibility.md)** - Adding new components
-- **[Performance Guide](Performance-Determinism-Provenance.md)** - Optimization and benchmarking
-
-## Quality Assurance & Testing
-
-### Test Coverage
-
-The project maintains comprehensive test coverage across both C++ and Python components:
-
-- **C++ Core Scanner**: High coverage unit tests for all scanner implementations
-- **Python Intelligence Layer**: 95.3% pass rate with 131 tests covering graph operations, AI workflows, and data processing
-- **Integration Testing**: End-to-end tests validating the complete scanner-to-insights pipeline
-
-### Testing Framework
-
-- **C++ Tests**: CMake/CTest based unit testing for core functionality
-- **Python Tests**: pytest framework with asyncio support for async workflows
-- **Coverage Analysis**: Automated coverage reporting for both languages
-
----
-
-*For questions about architecture or design decisions, please see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Discussion](https://github.com/Mazzlabs/sys-scan-graph/discussions).*
-
-
-"
+- **[Architecture (Technical Details)](Architecture-Technical-Details.md)**
+- **[Core Scanners](Core-Scanners.md)**
+- **[CLI Guide](CLI-Guide.md)**
+- **[Intelligence Layer](Intelligence-Layer.md)**

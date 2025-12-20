@@ -30,12 +30,12 @@ public:
     Generator<Finding> scan() override {
         bool selinux_present = false;
         bool apparmor_enabled = false;
-        std::string test_root = config_.test_root;
+        std::string test_root = sys_scan::utils::in_root(config_.test_root, "");
 
         // SELinux
-        if (fs_.exists(test_root + "/sys/fs/selinux")) {
+        if (fs_.exists(sys_scan::utils::in_root(test_root, "/sys/fs/selinux"))) {
             selinux_present = true;
-            std::string enforce = sys_scan::utils::trim(fs_.read_file(test_root + "/sys/fs/selinux/enforce"));
+            std::string enforce = sys_scan::utils::trim(fs_.read_file(sys_scan::utils::in_root(test_root, "/sys/fs/selinux/enforce")));
             bool enforcing = (enforce == "1");
 
             Finding f;
@@ -56,8 +56,8 @@ public:
         }
 
         // AppArmor
-        if (fs_.exists(test_root + "/sys/module/apparmor/parameters/enabled")) {
-            std::string val = sys_scan::utils::trim(fs_.read_file(test_root + "/sys/module/apparmor/parameters/enabled"));
+        if (fs_.exists(sys_scan::utils::in_root(test_root, "/sys/module/apparmor/parameters/enabled"))) {
+            std::string val = sys_scan::utils::trim(fs_.read_file(sys_scan::utils::in_root(test_root, "/sys/module/apparmor/parameters/enabled")));
             if (val == "Y") {
                 apparmor_enabled = true;
                 Finding f;
@@ -71,12 +71,12 @@ public:
 
         // Unconfined critical processes (heuristic)
         size_t unconfined = 0;
-        auto procs = fs_.list_directory(test_root + "/proc");
+        auto procs = fs_.list_directory(sys_scan::utils::in_root(test_root, "/proc"));
         for (const auto& p : procs) {
             if (!p.is_directory || !std::all_of(p.name.begin(), p.name.end(), ::isdigit)) continue;
-            std::string attr = fs_.read_file(test_root + "/proc/" + p.name + "/attr/current");
+            std::string attr = fs_.read_file(sys_scan::utils::in_root(test_root, "/proc/" + p.name + "/attr/current"));
             if (attr.find("unconfined") != std::string::npos) {
-                std::string exe = fs_.read_symlink(test_root + "/proc/" + p.name + "/exe");
+                std::string exe = fs_.read_symlink(sys_scan::utils::in_root(test_root, "/proc/" + p.name + "/exe"));
                 if (exe == "/usr/sbin/sshd" || exe == "/usr/bin/dockerd") unconfined++;
             }
         }

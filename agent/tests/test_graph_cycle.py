@@ -11,15 +11,30 @@ except Exception:  # pragma: no cover
 # Remove the global skip - let individual tests handle availability
 # pytestmark = pytest.mark.skipif(app is None, reason="LangGraph not available")
 
+_APP_CACHE = None
+
+
+def _get_local_app():
+    """Build the baseline graph app once per module to avoid repeated compiles."""
+    global _APP_CACHE
+    if _APP_CACHE is not None:
+        return _APP_CACHE
+    from sys_scan_agent.graph import build_workflow
+    _, local_app = build_workflow(enhanced=False)
+    _APP_CACHE = local_app
+    return _APP_CACHE
+
 def run_graph(raw_findings):
     # Force baseline mode to use synchronous functions
     import os
-    old_mode = os.environ.get('AGENT_GRAPH_MODE')
+    previous_graph_mode = os.environ.get('AGENT_GRAPH_MODE')
+    previous_llm_provider = os.environ.get('AGENT_LLM_PROVIDER')
+    # Keep test runs efficient while still exercising agent logic
     os.environ['AGENT_GRAPH_MODE'] = 'baseline'
+    os.environ.setdefault('AGENT_LLM_PROVIDER', 'local')
     try:
-        # Build a local workflow with baseline mode - don't modify global state
-        from sys_scan_agent.graph import build_workflow
-        local_workflow, local_app = build_workflow(enhanced=False)
+        # Build once per module to avoid repeated compile overhead
+        local_app = _get_local_app()
 
         state = {"raw_findings": raw_findings}
         assert local_app is not None
@@ -27,10 +42,14 @@ def run_graph(raw_findings):
         return out
     finally:
         # Restore original mode
-        if old_mode is not None:
-            os.environ['AGENT_GRAPH_MODE'] = old_mode
+        if previous_graph_mode is not None:
+            os.environ['AGENT_GRAPH_MODE'] = previous_graph_mode
         else:
             os.environ.pop('AGENT_GRAPH_MODE', None)
+        if previous_llm_provider is not None:
+            os.environ['AGENT_LLM_PROVIDER'] = previous_llm_provider
+        else:
+            os.environ.pop('AGENT_LLM_PROVIDER', None)
 
 def test_baseline_cycle_and_iteration_guard(monkeypatch):
     # Ensure low iteration limit for test

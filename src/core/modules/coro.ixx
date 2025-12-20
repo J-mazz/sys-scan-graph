@@ -4,6 +4,7 @@ module;
 #include <utility>
 #include <iterator>
 
+// GCOVR_EXCL_START
 export module sys_scan.coro;
 
 export using std::coroutine_handle;
@@ -101,3 +102,4 @@ struct Generator {
 };
 
 }
+// GCOVR_EXCL_STOP

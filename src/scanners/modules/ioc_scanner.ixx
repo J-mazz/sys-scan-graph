@@ -1,9 +1,10 @@
 module;
 #include <coroutine>
 #include <string>
+#include <string_view>
 #include <vector>
+#include <array>
 #include <algorithm>
-#include <cctype>
 
 export module sys_scan.scanners.ioc;
 import sys_scan.types;
@@ -27,7 +28,11 @@ public:
     std::string description() const override { return "Scans for Indicators of Compromise"; }
 
     Generator<Finding> scan() override {
-        std::vector<std::string> suspicious = {"cryptominer", "xmrig", "minerd", "malware"};
+        if (!config_.ioc_exec_trace && config_.fast_scan) co_return;
+
+        constexpr std::array<std::string_view, 4> suspicious = {
+            "cryptominer", "xmrig", "minerd", "malware"
+        };
 
         const std::string proc_root = sys_scan::utils::in_root(config_.test_root, "/proc");
         auto entries = fs_.list_directory(proc_root);
@@ -38,13 +43,13 @@ public:
             std::string environ = fs_.read_file(proc_root + "/" + entry.name + "/environ");
 
             // Check Command Lines
-            for (const auto& s : suspicious) {
+            for (auto s : suspicious) {
                 if (cmdline.find(s) != std::string::npos) {
                     Finding f;
                     f.id = "ioc:suspicious:" + entry.name;
                     f.title = "Suspicious Process";
                     f.severity = Severity::Critical;
-                    f.description = "Process matches suspicious pattern: " + s;
+                    f.description = "Process matches suspicious pattern: " + std::string(s);
                     f.metadata["pid"] = entry.name;
                     co_yield f;
                 }
@@ -62,15 +67,15 @@ public:
             }
             
             // Check deleted executable
-              std::string exe = fs_.read_symlink(proc_root + "/" + entry.name + "/exe");
+            std::string exe = fs_.read_symlink(proc_root + "/" + entry.name + "/exe");
             if (exe.find("(deleted)") != std::string::npos) {
-                 Finding f;
-                 f.id = "ioc:deleted_exe:" + entry.name;
-                 f.title = "Deleted Executable Running";
-                 f.severity = Severity::High;
-                 f.description = "Process running from deleted file: " + exe;
-                 f.metadata["pid"] = entry.name;
-                 co_yield f;
+                Finding f;
+                f.id = "ioc:deleted_exe:" + entry.name;
+                f.title = "Deleted Executable Running";
+                f.severity = Severity::High;
+                f.description = "Process running from deleted file: " + exe;
+                f.metadata["pid"] = entry.name;
+                co_yield f;
             }
         }
     }

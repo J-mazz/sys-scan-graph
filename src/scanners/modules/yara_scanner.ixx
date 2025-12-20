@@ -1,15 +1,8 @@
 module;
 #include <coroutine>
 #include <string>
+#include <string_view>
 #include <vector>
-#include <iostream>
-
-// Include YARA headers if available, otherwise mock for compilation
-// Ideally this is handled by CMake find_package, but for module purity we guard it.
-#if __has_include(<yara.h>)
-#include <yara.h>
-#define HAVE_YARA_LIB
-#endif
 
 export module sys_scan.scanners.yara;
 import sys_scan.types;
@@ -46,6 +39,9 @@ public:
         f.severity = Severity::Info;
         f.description = "YARA scanning enabled (module ported)";
         f.metadata["scan_roots_count"] = std::to_string(config_.yara_scan_roots.size());
+        if (!config_.yara_scan_roots.empty()) {
+            f.metadata["scan_roots_first"] = config_.yara_scan_roots.front();
+        }
         co_yield f;
         
         // Actual file walking and scanning would happen here, utilizing fs_ to read files

@@ -8,6 +8,7 @@ module;
 #include <utility>
 #include <type_traits>
 #include <variant>
+// GCOVR_EXCL_START
 
 #if __has_include(<expected>)
 #include <expected>
@@ -32,6 +33,7 @@ namespace std {
     class unexpected {
     public:
         constexpr explicit unexpected(E e) : value_(std::move(e)) {}
+        constexpr E& error() & { return value_; }
         constexpr const E& error() const & { return value_; }
     private:
         E value_;
@@ -54,6 +56,12 @@ namespace std {
 
         constexpr T& value() & { return std::get<T>(storage_); }
         constexpr const T& value() const & { return std::get<T>(storage_); }
+        constexpr T&& value() && { return std::move(std::get<T>(storage_)); }
+        constexpr const T&& value() const && { return std::move(std::get<T>(storage_)); }
+        constexpr T& operator*() & { return value(); }
+        constexpr const T& operator*() const & { return value(); }
+        constexpr T&& operator*() && { return std::move(value()); }
+        constexpr const T&& operator*() const && { return std::move(value()); }
         constexpr E& error() & { return std::get<unexpected<E>>(storage_).error(); }
         constexpr const E& error() const & { return std::get<unexpected<E>>(storage_).error(); }
 
@@ -115,3 +123,4 @@ struct IProcessRunner {
 };
 
 }
+// GCOVR_EXCL_STOP

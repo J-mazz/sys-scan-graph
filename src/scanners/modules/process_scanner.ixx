@@ -2,8 +2,11 @@ module;
 #include <coroutine>
 #include <string>
 #include <vector>
+#include <string_view>
 #include <charconv>
 #include <system_error>
+#include <cctype>
+#include <algorithm>
 
 export module sys_scan.scanners.process;
 import sys_scan.types;
@@ -47,18 +50,48 @@ public:
 
             if(cmdline.empty() && !config_.all_processes) continue;
 
+            // Parse status for uid/gid and process name (lightweight, non-allocating)
+            std::string status = fs_.read_file(pid_dir + "/status");
+            std::string_view status_view{status};
+            auto parse_first_int = [](std::string_view line) -> std::string {
+                // after the key, fields are whitespace separated integers
+                size_t pos = line.find_first_not_of("\t ");
+                if (pos == std::string_view::npos) return {};
+                line.remove_prefix(pos);
+                // read until next space
+                size_t end = line.find_first_of(" \t");
+                std::string_view token = line.substr(0, end == std::string_view::npos ? line.size() : end);
+                return std::string(token);
+            };
+
+            auto find_line = [&](std::string_view key)->std::string {
+                size_t start = 0;
+                while (start < status_view.size()) {
+                    size_t nl = status_view.find('\n', start);
+                    std::string_view line = status_view.substr(start, nl == std::string_view::npos ? status_view.size() - start : nl - start);
+                    if (line.compare(0, key.size(), key) == 0) {
+                        line.remove_prefix(key.size());
+                        return parse_first_int(line);
+                    }
+                    if (nl == std::string_view::npos) break;
+                    start = nl + 1;
+                }
+                return {};
+            };
+
+            std::string uid = config_.no_user_meta ? std::string{} : find_line("Uid:");
+            std::string gid = config_.no_user_meta ? std::string{} : find_line("Gid:");
+            std::string name_line = find_line("Name:");
+
             Finding f;
             f.id = entry.name;
             f.title = "Process " + entry.name;
             f.severity = Severity::Info;
             f.description = cmdline.empty() ? "(kernel thread or hidden)" : cmdline;
-            
-            // Read status for UID/GID if needed
-            if(!config_.no_user_meta) {
-                std::string status = fs_.read_file(pid_dir + "/status");
-                // Simple parsing logic would go here, simplified for this example
-                // f.metadata["uid"] = parse_uid(status);
-            }
+            f.metadata["pid"] = entry.name;
+            if(!uid.empty()) f.metadata["uid"] = uid;
+            if(!gid.empty()) f.metadata["gid"] = gid;
+            if(!name_line.empty()) f.metadata["comm"] = name_line;
             
             co_yield f;
         }

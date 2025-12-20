@@ -1,7 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "FleetReport",
+  "title": "Fleet Report",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "generated_ts",
     "host_count",
@@ -12,49 +13,51 @@
     "risk_distribution"
   ],
   "properties": {
-    "generated_ts": {"type": "integer"},
-    "host_count": {"type": "integer", "minimum": 0},
-    "metric_mean": {"type": "number"},
-    "metric_std": {"type": "number", "minimum": 0},
+    "generated_ts": { "type": "integer", "description": "Unix epoch seconds when report was generated" },
+    "host_count": { "type": "integer", "minimum": 0 },
+    "metric_mean": { "type": "number" },
+    "metric_std": { "type": "number", "minimum": 0 },
     "top_outlier_hosts": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["host_id", "value", "z", "ts"],
         "properties": {
-          "host_id": {"type": "string"},
-          "value": {"type": "number"},
-          "z": {"type": "number"},
-            "ts": {"type": "integer"}
-        },
-        "additionalProperties": true
+          "host_id": { "type": "string" },
+          "value": { "type": "number" },
+          "z": { "type": "number" },
+          "ts": { "type": "integer" }
+        }
       }
     },
     "newly_common_modules": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["module", "host_count", "hosts"],
         "properties": {
-          "module": {"type": "string"},
-          "host_count": {"type": "integer", "minimum": 1},
-          "hosts": {"type": "array", "items": {"type": "string"}}
-        },
-        "additionalProperties": true
+          "module": { "type": "string" },
+          "host_count": { "type": "integer", "minimum": 0 },
+          "hosts": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
       }
     },
     "risk_distribution": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["range", "count"],
         "properties": {
-          "range": {"type": "string"},
-          "count": {"type": "integer", "minimum": 0}
-        },
-        "additionalProperties": true
+          "range": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        }
       }
     }
-  },
-  "additionalProperties": true
+  }
 }
