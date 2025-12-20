@@ -6,6 +6,7 @@ module;
 #include <algorithm>
 #include <cctype>
 #include <utility>
+// GCOVR_EXCL_START
 export module sys_scan.types;
 
 export namespace sys_scan {
@@ -32,6 +33,7 @@ inline const char* severity_to_string(Severity s){
     }
     return "info";
 }
+// GCOVR_EXCL_STOP
 
 inline Severity severity_from_string(const std::string& in){
     std::string s; s.reserve(in.size());

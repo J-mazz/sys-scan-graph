@@ -1,8 +1,7 @@
 module;
 #include <coroutine>
 #include <string>
-#include <vector>
-#include <sstream>
+#include <string_view>
 
 export module sys_scan.scanners.integrity;
 import sys_scan.types;
@@ -44,24 +43,52 @@ public:
 
         std::string output;
         bool used_dpkg = false;
+        bool command_failed = false;
+        int exit_code = 0;
+        bool found_pm = false;
 
         if (fs_.exists("/usr/bin/dpkg")) {
-            // C++23: value_or() for clean fallback handling from std::expected
-            output = runner_.exec("dpkg", {"-V"}).value_or("");
-            used_dpkg = true;
+            found_pm = true;
+            if (auto res = runner_.exec("dpkg", {"-V"}); res) {
+                output = *res;
+                used_dpkg = true;
+            } else {
+                command_failed = true;
+                exit_code = res.error();
+            }
         } else if (fs_.exists("/usr/bin/rpm")) {
-            output = runner_.exec("rpm", {"-Va"}).value_or("");
+            found_pm = true;
+            if (auto res = runner_.exec("rpm", {"-Va"}); res) {
+                output = *res;
+            } else {
+                command_failed = true;
+                exit_code = res.error();
+            }
+        }
+
+        if (!found_pm) co_return;
+
+        if (command_failed) {
+            Finding f;
+            f.id = "integrity:command_failed";
+            f.title = "Integrity check command failed";
+            f.severity = Severity::Info;
+            f.description = "Package manager integrity command did not complete successfully";
+            f.metadata["tool"] = used_dpkg ? "dpkg" : "rpm";
+            f.metadata["exit_code"] = std::to_string(exit_code);
+            co_yield f;
+            co_return;
         }
 
         if (output.empty()) co_return;
 
-        auto lines = sys_scan::utils::read_lines_from_string(output);
+        auto lines = sys_scan::utils::split_lines_sv(output);
         int mismatches = 0;
 
-        for (const auto& line : lines) {
+        for (auto line : lines) {
             if (line.empty()) continue;
             // Ignore config files (c) or missing (?)
-            if (line.find(" c ") != std::string::npos || line[0] == '?') continue;
+            if (line.find(" c ") != std::string_view::npos || line.front() == '?') continue;
 
             mismatches++;
             if (mismatches <= 10) {
@@ -69,7 +96,7 @@ public:
                 f.id = "pkg_mismatch_" + std::to_string(mismatches);
                 f.title = "Package Integrity Mismatch";
                 f.severity = Severity::Medium;
-                f.description = line;
+                f.description = std::string(line);
                 f.metadata["tool"] = used_dpkg ? "dpkg" : "rpm";
                 co_yield f;
             }

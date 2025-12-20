@@ -300,30 +300,46 @@ _PROVIDER: ILLMProvider = NullLLMProvider()
 
 def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     global _PROVIDER
-    prov = os.environ.get('AGENT_LLM_PROVIDER','local').lower()  # Default to local for zero trust
+    # Prefer Qwen local by default; fall back to deterministic heuristic
+    prov = os.environ.get('AGENT_LLM_PROVIDER', 'local-qwen').lower()
 
-    # ONLY allow local or null providers - NO external APIs for security
-    if prov in {'local', 'mistral', 'local-mistral'}:
+    # ONLY allow local or null providers - NO external APIs
+    qwen_aliases = {'local-qwen', 'qwen', 'localagent', 'local_agent', 'local-llm', 'local_llm'}
+    heuristic_aliases = {'local', 'heuristic', 'null-heuristic'}
+
+    if prov in qwen_aliases:
         try:
-            from .providers.local_mistral_provider import LocalMistralLLMProvider
-            _PROVIDER = LocalMistralLLMProvider()
-            print("✓ Zero-trust: Using local LoRA model for deterministic analysis")
+            from .providers.local_qwen_provider import LocalQwenLLMProvider
+            _PROVIDER = LocalQwenLLMProvider()
+            print("✓ Zero-trust: Using local Qwen provider (local_agent)")
         except Exception as e:
-            print(f"⚠️  Local LoRA model failed to load: {e}")
+            print(f"⚠️  Local Qwen provider failed to load: {e}")
+            print("✓ Fallback: Using deterministic local provider")
+            try:
+                from .providers.local_llm_provider import LocalLLMProvider
+                _PROVIDER = LocalLLMProvider()
+            except Exception as inner:
+                print(f"⚠️  Local heuristic provider failed: {inner}. Using null provider.")
+                _PROVIDER = NullLLMProvider()
+    elif prov in heuristic_aliases:
+        try:
+            from .providers.local_llm_provider import LocalLLMProvider
+            _PROVIDER = LocalLLMProvider()
+            print("✓ Zero-trust: Using local deterministic provider")
+        except Exception as e:
+            print(f"⚠️  Local provider failed to load: {e}")
             print("✓ Fallback: Using deterministic null provider")
             _PROVIDER = NullLLMProvider()
     elif prov == 'null':
-        # Explicit null provider for testing/debugging
         _PROVIDER = NullLLMProvider()
         print("✓ Using deterministic null provider (no LLM)")
     else:
-        # Any other provider request defaults to local for zero trust
-        print(f"⚠️  External LLM providers not allowed in zero-trust mode. Defaulting to local LoRA model.")
+        print("⚠️  External LLM providers are not allowed. Defaulting to local Qwen provider.")
         try:
-            from .providers.local_mistral_provider import LocalMistralLLMProvider
-            _PROVIDER = LocalMistralLLMProvider()
+            from .providers.local_qwen_provider import LocalQwenLLMProvider
+            _PROVIDER = LocalQwenLLMProvider()
         except Exception as e:
-            print(f"⚠️  Local LoRA model failed: {e}. Using null provider.")
+            print(f"⚠️  Local Qwen provider failed: {e}. Using deterministic null provider.")
             _PROVIDER = NullLLMProvider()
 
 

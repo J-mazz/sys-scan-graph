@@ -29,6 +29,13 @@ public:
         return path.size() > 3 && (path.ends_with(".ko.xz") || path.ends_with(".ko.gz"));
     }
 
+    // Return decompressed buffer when bounded, else empty
+    static std::string decompress_bounded(const std::string& full) {
+        if (full.ends_with(".xz")) return decompress_xz_bounded(full);
+        if (full.ends_with(".gz")) return decompress_gz_bounded(full);
+        return {};
+    }
+
     static std::string decompress_xz_bounded(const std::string& full) {
 #ifdef SYS_SCAN_HAVE_LZMA
         std::ifstream f(full, std::ios::binary); if(!f) return {};

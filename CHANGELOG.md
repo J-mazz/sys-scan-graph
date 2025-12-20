@@ -4,6 +4,14 @@ All notable changes will be documented in this file.
 
 ## [Unreleased]
 
+## [7.0.0] - 2025-12-19
+
+### Added
+- Replaced Mistral agent with a fine-tuned local Unsloth/Qwen3-4B-instruct-2507 agent, trained on the synthetic data produced via https://github.com/J-mazz/sys-scan-agent_MLops/synthetic_data.
+- Local performance helpers (`performance.py`) with batching, LRU+TTL cache, bounded parallelism, and FindingBatch container.
+- Modernized C++ implementation to C++20/23 standards.
+
+
 ### Added
 - Enhanced LangGraph workflow (Python agent) with async enrichment, summarization, and rule suggestion nodes (`enhanced_*` functions) plus pre-summary `risk_analyzer` & `compliance_checker`.
 - Operational tail nodes: `error_handler`, `human_feedback_node`, `cache_manager`, `metrics_collector` producing deterministic `final_metrics` and cache hit rate.

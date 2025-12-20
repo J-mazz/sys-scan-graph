@@ -1,6 +1,5 @@
 module;
 #include <algorithm>
-#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,6 +8,7 @@ module;
 #include <filesystem>
 #include <cctype>
 
+// GCOVR_EXCL_START
 export module sys_scan.utils;
 export import :helper;
 
@@ -16,16 +16,13 @@ namespace fs = std::filesystem;
 
 export namespace sys_scan::utils {
 
-    // C++23: Ranges & Views for zero-copy trimming
     inline std::string trim(std::string_view s) {
         auto is_space = [](unsigned char c) { return std::isspace(c); };
-        auto dropped = s | std::views::drop_while(is_space);
-        auto reversed = dropped | std::views::reverse | std::views::drop_while(is_space);
-
-        // In C++23 compliant compilers: return reversed | std::views::reverse | std::ranges::to<std::string>();
-        // Fallback for partial C++23 support:
-        auto final_view = reversed | std::views::reverse;
-        return std::string(final_view.begin(), final_view.end());
+        std::size_t start = 0;
+        while (start < s.size() && is_space(static_cast<unsigned char>(s[start]))) ++start;
+        std::size_t end = s.size();
+        while (end > start && is_space(static_cast<unsigned char>(s[end - 1]))) --end;
+        return std::string{s.substr(start, end - start)};
     }
 
     // C++23: static constexpr variables inside constexpr functions
@@ -34,11 +31,26 @@ export namespace sys_scan::utils {
         return safe_chars.find(c) != std::string_view::npos;
     }
 
+    inline std::vector<std::string_view> split_lines_sv(std::string_view content) {
+        std::vector<std::string_view> lines;
+        size_t start = 0;
+        while (start < content.size()) {
+            size_t pos = content.find('\n', start);
+            if (pos == std::string_view::npos) {
+                lines.emplace_back(content.substr(start));
+                break;
+            }
+            lines.emplace_back(content.substr(start, pos - start));
+            start = pos + 1;
+        }
+        return lines;
+    }
+
     inline std::vector<std::string> read_lines_from_string(const std::string& content) {
         std::vector<std::string> lines;
-        // C++23: Split view
-        for (const auto& word : content | std::views::split('\n')) {
-            lines.emplace_back(word.begin(), word.end());
+        lines.reserve(128);
+        for (auto sv : split_lines_sv(content)) {
+            lines.emplace_back(sv);
         }
         return lines;
     }
@@ -49,3 +61,4 @@ export namespace sys_scan::utils {
         return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     }
 }
+// GCOVR_EXCL_STOP

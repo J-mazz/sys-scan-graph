@@ -49,6 +49,12 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     # Load the report data
     import json
     raw_data = json.loads(report_path.read_text())
+
+    # Default to local, zero-trust provider wiring (allows override via env)
+    os.environ.setdefault("AGENT_LLM_PROVIDER", "local-qwen")
+    default_qwen_dir = Path(__file__).parent / "models" / "local_qwen" / "shards"
+    if default_qwen_dir.exists() and not os.environ.get("AGENT_LOCAL_QWEN_MODEL_DIR"):
+        os.environ["AGENT_LOCAL_QWEN_MODEL_DIR"] = str(default_qwen_dir)
     
     # Initialize state - aggregate findings from all scanners
     all_findings = []
@@ -87,7 +93,49 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     
     # Normalize initial state
     state = graph_state.normalize_graph_state(initial_state)
-    
+
+    def _build_enriched_output(final_state):
+        from .models import EnrichedOutput, Reductions, Summaries
+        enriched_findings = final_state.get('enriched_findings', [])
+        correlations = final_state.get('correlations', [])
+        risk_assessment = final_state.get('risk_assessment', {})
+        reductions_data = final_state.get('reductions')
+        if reductions_data is None:
+            reductions_data = graph._create_reductions(enriched_findings)
+        elif hasattr(reductions_data, 'model_dump'):
+            reductions_data = reductions_data.model_dump()
+        executive_summary = None
+        summary_blob = final_state.get('summary') or {}
+        if hasattr(summary_blob, 'model_dump'):
+            summary_blob = summary_blob.model_dump()
+        if isinstance(summary_blob, dict):
+            executive_summary = summary_blob.get('executive_summary') or summary_blob.get('text') or summary_blob.get('summary')
+        if not executive_summary:
+            executive_summary = graph._generate_executive_summary(enriched_findings, correlations, risk_assessment)
+        actions = final_state.get('actions') or []
+        return EnrichedOutput(
+            correlations=correlations,
+            reductions=Reductions(**reductions_data).model_dump(),
+            summaries=Summaries(executive_summary=executive_summary),
+            actions=actions,
+            enriched_findings=enriched_findings
+        )
+
+    # Fast path: LangGraph intelligence app (LLM-enabled) — opt-in via env
+    use_graph_app = os.environ.get('AGENT_GRAPH_APP_ENABLED', '0').lower() in {'1', 'true', 'yes'}
+    compiled_app = getattr(graph, 'app', None) if use_graph_app else None
+    if compiled_app is not None:
+        try:
+            runner = getattr(compiled_app, 'invoke', None) or getattr(compiled_app, '__call__', None)
+            if runner is None:
+                raise RuntimeError('compiled graph missing invoke()')
+            final_state = runner(state)
+            enriched = _build_enriched_output(final_state)
+            return enriched, final_state
+        except Exception as e:
+            print(f"[yellow]Graph app failed, falling back to scaffold: {e}[/yellow]")
+
+    # Fallback: existing scaffolded workflow (no tool graph)
     # Check for missing optional components and set degraded mode
     missing_components = []
     try:
@@ -95,7 +143,6 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     except ImportError:
         missing_components.append("metrics_node")
     
-    # Check if key graph functions are available
     if not hasattr(graph, 'enrich_findings') or graph.enrich_findings is None:
         missing_components.append("enrich_findings")
     if not hasattr(graph, 'correlate_findings') or graph.correlate_findings is None:
@@ -106,7 +153,7 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
         missing_components.append("compliance_checker")
     if not hasattr(graph, 'metrics_collector') or graph.metrics_collector is None:
         missing_components.append("metrics_collector")
-    
+
     if missing_components:
         state['degraded_mode'] = True
         state['warnings'].append({
@@ -115,28 +162,23 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
             'missing_components': missing_components
         })
         print(f"[yellow]Warning: Running in degraded mode - missing: {', '.join(missing_components)}[/yellow]")
-    
-    # Run intelligence workflow
+
     try:
-        # Import telemetry for node timing (optional)
         try:
             from .metrics_node import time_node
         except ImportError:
-            # Graceful fallback: no-op context manager
             from contextlib import contextmanager
             @contextmanager
             def time_node(state, node_name):
                 yield state
             print("[yellow]Warning: metrics_node not available, running without telemetry[/yellow]")
-        
-        # Run synchronous nodes with telemetry
+
         with time_node(state, 'enrich_findings') as timed_state:
             state = graph.enrich_findings(timed_state)
-        
+
         with time_node(state, 'correlate_findings') as timed_state:
             state = graph.correlate_findings(timed_state)
-        
-        # Run async nodes with telemetry
+
         import asyncio
         async def run_async_nodes(current_state):
             with time_node(current_state, 'risk_analyzer') as timed_state:
@@ -146,35 +188,11 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
             with time_node(current_state, 'metrics_collector') as timed_state:
                 current_state = await graph.metrics_collector(timed_state)
             return current_state
-        
-        # Run async workflow
+
         final_state = asyncio.run(run_async_nodes(state))
-        
-        # Create enriched output (simplified version)
-        from .models import EnrichedOutput, Reductions, Summaries
-        
-        # Generate executive summary
-        executive_summary = graph._generate_executive_summary(
-            final_state.get('enriched_findings', []),
-            final_state.get('correlations', []),
-            final_state.get('risk_assessment', {})
-        )
-        
-        # Generate reductions
-        reductions_data = graph._create_reductions(
-            final_state.get('enriched_findings', [])
-        )
-        
-        enriched = EnrichedOutput(
-            correlations=final_state.get('correlations', []),
-            reductions=Reductions(**reductions_data).model_dump(),
-            summaries=Summaries(executive_summary=executive_summary),
-            actions=[],
-            enriched_findings=final_state.get('enriched_findings', [])
-        )
-        
+        enriched = _build_enriched_output(final_state)
         return enriched, final_state
-        
+
     except Exception as e:
         print(f"[red]Scaffold workflow failed: {e}[/red]")
         raise
@@ -255,8 +273,8 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
         print(f"[cyan]Index updated at {index_dir}/index.json")
 
 @app.command()
-def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw v2 report"),
-                    schema: Path = typer.Option(Path("schema/v2.json"), help="Schema path"),
+def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw report"),
+                    schema: Path = typer.Option(Path("schema/v4.json"), help="Schema path"),
                     max_ms: int = typer.Option(500, help="Wall time budget (ms)")):
     start = time.time()
     data = json.loads(report.read_text())
@@ -278,7 +296,7 @@ def validate_report(report: Path = typer.Option(..., exists=True, help="Path to 
 
 @app.command()
 def validate_batch(dir: Path = typer.Option(..., exists=True, help="Directory containing report JSON fixtures"),
-                   schema: Path = typer.Option(Path("schema/v2.json"), help="Schema path"),
+                   schema: Path = typer.Option(Path("schema/v4.json"), help="Schema path"),
                    max_ms: int = typer.Option(500, help="Per-report time budget ms"),
                    require: int = typer.Option(6, help="Minimum number of reports to validate")):
     files = [p for p in dir.glob('*.json')]

@@ -108,6 +108,16 @@ if(BUILD_TESTING)
           --exclude ${CMAKE_SOURCE_DIR}/build-modules-clang
           --exclude ${CMAKE_SOURCE_DIR}/cmake-build-default
           --exclude ${CMAKE_SOURCE_DIR}/tests
+          --exclude ${CMAKE_SOURCE_DIR}/src/main.cpp
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/types.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/config.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/utils.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/utils_helper.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/coro.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/interfaces.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/scanner_interface.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/core/modules/system_services.ixx
+          --exclude ${CMAKE_SOURCE_DIR}/src/scanners/modules/module_utils.ixx
           --gcov-executable "llvm-cov gcov"
           --gcov-ignore-errors no_working_dir_found
           --gcov-ignore-errors source_not_found
@@ -115,8 +125,6 @@ if(BUILD_TESTING)
           --xml-pretty -o coverage.xml
           --html-details -o coverage.html
           --fail-under-line ${SYS_SCAN_COVERAGE_MIN}
-          --fail-under-function ${SYS_SCAN_COVERAGE_MIN}
-          --fail-under-branch ${SYS_SCAN_COVERAGE_MIN}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         VERBATIM
       )

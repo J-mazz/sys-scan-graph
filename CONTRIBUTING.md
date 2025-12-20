@@ -48,7 +48,6 @@ Testing is one of the most valuable contributions you can make:
 The project uses a dual-packaging approach:
 
 - **Debian packages** are built from the separate [packaging repository](https://github.com/J-mazz/sys-scan-debian_package)
-- **Complete packages** are available at [apt.mazzlabs.works](https://apt.mazzlabs.works)
 - **Python packages** are distributed via PyPI from the `agent/` directory
 
 Packaging contributions include:

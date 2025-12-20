@@ -52,7 +52,7 @@ jobs:
 
 - The scanner emits SARIF suitable for ingestion. Use `--min-severity` to tune noise.
 - For deterministic artifacts, prefer `--canonical` for JSON outputs. SARIF is for visualization and triage in GitHub.
-- No external data egress occurs unless you enable the Intelligence Layer with an LLM provider; by default it is off.
+- The core scanner runs locally and produces artifacts you can upload (e.g., SARIF) as part of your CI workflow.
 
 ## Alternative: Build from Source
 

@@ -1,18 +1,5 @@
 module;
 
-#include <coroutine>
-#include <vector>
-#include <string>
-#include <thread>
-#include <chrono>
-#include <variant>
-#include <iostream>
-#include <array>
-#include <cstring>
-#include <algorithm>
-#include <iterator>
-#include <cctype>
-
 // Platform specific headers must be in global fragment
 #ifdef SYS_SCAN_HAVE_EBPF
 #include <bpf/libbpf.h>
@@ -22,8 +9,19 @@ module;
 #include "process_exec.skel.h"
 #endif
 
-export module sys_scan.scanners.ebpf;
+// Standard library headers should stay in the global module fragment
+#include <coroutine>
+#include <vector>
+#include <string>
+#include <thread>
+#include <chrono>
+#include <array>
+#include <cstring>
+#include <algorithm>
+#include <iterator>
+#include <cctype>
 
+export module sys_scan.scanners.ebpf;
 import sys_scan.types;
 import sys_scan.scanner;
 import sys_scan.coro;
@@ -76,18 +74,15 @@ public:
                     .severity = Severity::Info,
                     .description = "Falling back to /proc polling"
                 };
-                // Delegate to fallback generator
                 for (auto f : run_proc_fallback()) co_yield f;
             } else {
                 for (const auto& f : bpf_results) co_yield f;
             }
-        } else {
             co_return;
         }
-#else
-        // No eBPF support compiled in
-        for (auto f : run_proc_fallback()) co_yield f;
 #endif
+        // Fallback polling path (used when eBPF is disabled or unavailable)
+        for (auto f : run_proc_fallback()) co_yield f;
     }
 
 private:

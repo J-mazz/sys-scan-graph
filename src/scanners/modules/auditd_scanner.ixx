@@ -1,9 +1,11 @@
 module;
 #include <coroutine>
 #include <string>
+#include <string_view>
 #include <vector>
-#include <regex>
-#include <unordered_set>
+#include <array>
+#include <algorithm>
+#include <cctype>
 
 export module sys_scan.scanners.auditd;
 import sys_scan.types;
@@ -11,6 +13,7 @@ import sys_scan.scanner;
 import sys_scan.coro;
 import sys_scan.interfaces;
 import sys_scan.config;
+import sys_scan.utils;
 
 export namespace sys_scan {
 
@@ -26,15 +29,13 @@ public:
     std::string description() const override { return "Checks auditd rules coverage"; }
 
     Generator<Finding> scan() override {
-        if(!config_.hardening) co_return;
-
-        std::string root = config_.test_root;
+        std::string root = sys_scan::utils::in_root(config_.test_root, "");
         std::vector<std::string> paths;
         
-        std::string audit_rules = root + "/etc/audit/audit.rules";
+        std::string audit_rules = sys_scan::utils::in_root(root, "/etc/audit/audit.rules");
         if(fs_.exists(audit_rules)) paths.push_back(audit_rules);
 
-        std::string rules_dir = root + "/etc/audit/rules.d";
+        std::string rules_dir = sys_scan::utils::in_root(root, "/etc/audit/rules.d");
         if(fs_.is_directory(rules_dir)) {
             auto entries = fs_.list_directory(rules_dir);
             for(const auto& e : entries) {
@@ -60,36 +61,53 @@ public:
             co_return;
         }
 
-        struct Pattern { const char* id; const char* regex_str; const char* title; const char* desc; Severity sev; };
-        std::vector<Pattern> pats = {
-            {"execve", "-S\\s+execve", "Audit execve present", "Execve syscall auditing present", Severity::Info},
-            {"setuid", "-S\\s+setuid", "Audit setuid present", "setuid syscall auditing present", Severity::Info},
-            {"setgid", "-S\\s+setgid", "Audit setgid present", "setgid syscall auditing present", Severity::Info},
-            {"chmod", "-S\\s+chmod", "Audit chmod present", "chmod syscall auditing present", Severity::Info},
-            {"chown", "-S\\s+chown", "Audit chown present", "chown syscall auditing present", Severity::Info},
-            {"capset", "-S\\s+capset", "Audit capset present", "capset syscall auditing present", Severity::Info},
-            {"insmod", "-k\\s*modules|/s?bin/(insmod|modprobe)", "Module load auditing", "Module load operations likely audited", Severity::Info},
+        std::string lowered = combined;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+
+        auto contains = [&](std::string_view needle) {
+            return lowered.find(needle) != std::string::npos;
         };
 
-        std::unordered_set<std::string> matched;
-        for(const auto& p : pats){
-            try {
-                std::regex rgx(p.regex_str, std::regex::icase);
-                if(std::regex_search(combined, rgx)) matched.insert(p.id);
-            } catch(...) {}
+        struct Pattern {
+            std::string_view id;
+            std::string_view title;
+            std::string_view desc;
+            Severity sev;
+            std::array<std::string_view, 3> needles; // up to 3; unused entries may be empty
+        };
+
+        constexpr std::array<Pattern, 7> pats {{
+            {"execve", "Audit execve present", "Execve syscall auditing present", Severity::Info, {"-s execve", "", ""}},
+            {"setuid", "Audit setuid present", "setuid syscall auditing present", Severity::Info, {"-s setuid", "", ""}},
+            {"setgid", "Audit setgid present", "setgid syscall auditing present", Severity::Info, {"-s setgid", "", ""}},
+            {"chmod", "Audit chmod present", "chmod syscall auditing present", Severity::Info, {"-s chmod", "", ""}},
+            {"chown", "Audit chown present", "chown syscall auditing present", Severity::Info, {"-s chown", "", ""}},
+            {"capset", "Audit capset present", "capset syscall auditing present", Severity::Info, {"-s capset", "", ""}},
+            {"insmod", "Module load auditing", "Module load operations likely audited", Severity::Info, {"-k modules", "insmod", "modprobe"}},
+        }};
+
+        std::array<bool, pats.size()> matched{};
+        for (std::size_t i = 0; i < pats.size(); ++i) {
+            bool ok = false;
+            for (auto needle : pats[i].needles) {
+                if (needle.empty()) continue;
+                if (contains(needle)) { ok = true; break; }
+            }
+            matched[i] = ok;
         }
 
-        for(const auto& p : pats){
-            bool ok = matched.count(p.id);
+        for (std::size_t i = 0; i < pats.size(); ++i) {
+            const auto& p = pats[i];
+            bool ok = matched[i];
             Finding f;
-            f.id = std::string("auditd:") + p.id;
-            f.title = p.title;
-            f.description = ok ? p.desc : (std::string(p.title) + " missing");
+            f.id = std::string("auditd:") + std::string(p.id);
+            f.title = std::string(p.title);
+            f.description = ok ? std::string(p.desc) : (std::string(p.title) + " missing");
             f.severity = ok ? Severity::Info : Severity::Medium;
             co_yield f;
         }
 
-        if(!matched.count("execve")){
+        if(!matched[0]){
             Finding f;
             f.id="auditd:execve:absent";
             f.title="Execve auditing missing";

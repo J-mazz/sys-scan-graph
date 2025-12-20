@@ -6,8 +6,6 @@
 
 ## System Security Scanner & Intelligence Graph
 
-**Sys-Scan-Graph** is a high-speed security analysis tool that transforms raw data from 16 security surfaces into a unified, actionable report.
-
 [![CI](https://github.com/J-mazz/sys-scan-graph/actions/workflows/ci.yml/badge.svg)](https://github.com/J-mazz/sys-scan-graph/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml/badge.svg)](https://github.com/J-mazz/sys-scan-graph/actions/workflows/codeql.yml)
 [![CodeScene Analysis](https://codescene.io/images/analyzed-by-codescene-badge.svg)](https://codescene.io/projects/71206)
@@ -15,152 +13,137 @@
 [![CodeScene System Mastery](https://codescene.io/projects/72512/status-badges/system-mastery)](https://codescene.io/projects/72512)
 [![Coverage](https://img.shields.io/badge/coverage-%3E=85%25-brightgreen.svg)](docs/TEST_COVERAGE.md)
 
+**Sys-Scan-Graph** turns raw host signals from 16 security surfaces into a concise, actionable security report.
 
-It combines a high-performance C++20 scanning engine with a Python-based intelligence layer featuring an embedded, fine-tuned Mistral-7B LLM with LoRA adapters. The core engine uses modern dependency injection patterns and type-safe enums to gather security data across 16 specialized scanners, outputting canonical JSON, NDJSON, SARIF, or HTML. The intelligence layer uses LangGraph state machines for cyclical reasoning, baseline learning via SQLite, and 32-dimensional process embeddings for novelty detection—all running locally with zero external API calls.
+It combines a **high-performance C++ core** (built with a C++23 toolchain, using C++20 modules) with an **optional local intelligence layer** (Python) that enriches and summarizes results without sending data off-host.
 
-### Key Features
+```mermaid
+flowchart LR
+  A[Core scan (C++)] -->|report.json| B[Python intelligence]
+  B -->|enriched_report.json| C[Analysts & pipelines]
+  B -->|HTML / SARIF / metrics| D[Dashboards & CI]
+```
 
-- **Blazing-fast scanning** built in C++20 with deterministic, reproducible results
-- **Zero-trust AI intelligence** powered by embedded fine-tuned Mistral-7B with LoRA adapters (NO external APIs)
-- **16 specialized scanners** covering processes, network, kernel modules, SUID/SGID, IOC detection, and compliance
-- **Multiple output formats** including canonical JSON, NDJSON, SARIF, and self-contained HTML
-- **LangGraph-orchestrated analysis** with cyclical reasoning and baseline learning
-- **Risk scoring and compliance** with PCI DSS, HIPAA, and NIST CSF assessment
-- **Fleet-wide rarity analysis** using SQLite baseline database with process novelty detection
-- **MITRE ATT&CK integration** with native technique mapping and coverage analysis
+### Highlights
+- **Deterministic scans**: canonical JSON/NDJSON/SARIF/HTML outputs with stable ordering
+- **Local intelligence**: default `local-qwen` provider (offline), with heuristic fallback
+- **Performance-aware**: bounded parallelism, batch processing, cache primitives, and memory-safe defaults
+- **Composable**: DI-friendly scanners and pluggable rule/LLM providers
+- **Secure by design**: zero outbound LLM calls; works air-gapped after model download
 
 ---
 
 ## Quick Start
 
-### Installation
-
-#### Option 1: Install from Debian Package (Recommended)
-
-The complete Debian package is available at [apt.mazzlabs.works](https://apt.mazzlabs.works).  
-Debian packaging repository: [J-mazz/sys-scan-debian_package](https://github.com/J-mazz/sys-scan-debian_package)
+### Core scanner (C++)
 
 ```bash
-# Add the Mazzlabs repository
-echo "deb [signed-by=/etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg] https://apt.mazzlabs.works testing main" | sudo tee /etc/apt/sources.list.d/mazzlabs.list
-
-# Import the GPG key
-curl -fsSL https://apt.mazzlabs.works/mazzlabs-archive-keyring.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg > /dev/null
-
-# Verify the key fingerprint (optional but recommended)
-gpg --show-keys /etc/apt/trusted.gpg.d/mazzlabs-archive-keyring.gpg
-
-# Update package lists
-sudo apt update
-
-# Install sys-scan-graph
-sudo apt install sys-scan-graph
-
-# Install Python intelligence layer (optional, for AI analysis)
-pip install sys-scan-agent
-```
-
-#### Option 2: Build from Source
-
-```bash
-# Clone repository
 git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
-# Build C++ scanner
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
+cmake --build build -j"$(nproc)"
+```
 
-# Install Python intelligence layer
-cd agent
+### Intelligence layer (Python, optional)
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+pip install -U pip
+pip install sys-scan-agent
+
+# For local-LLM extras
+pip install 'sys-scan-agent[ai]'
 ```
 
-### Basic Usage
-
-#### Using Installed Package
+### Run (memory-safe defaults)
 
 ```bash
-# Basic scan
-sys-scan --canonical --output report.json
-
-# AI analysis
-sys-scan-graph analyze --report report.json --out enriched_report.json
-
-# HTML report
-sys-scan-graph analyze --report report.json --out enriched_report.json --prev baseline.json
-```
-
-#### Using Source Build
-
-```bash
-# Basic scan
+# 1) Core scan
 ./build/sys-scan --canonical --output report.json
 
-# AI analysis
-cd agent
-source .venv/bin/activate
+# 2) Enrich locally (offline, bounded threads)
+AGENT_LLM_PROVIDER=local-qwen \
+AGENT_GRAPH_MODE=baseline \
+OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
 sys-scan-graph analyze --report report.json --out enriched_report.json
+```
+
+Tips: use `--metrics-out metrics.json` to capture node timings, and `--html-out report.html` for a self-contained view. Set `TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1` to avoid network calls.
+
+### Common workflows
+
+1) **Scan only (fastest path):**
+
+```bash
+./build/sys-scan --canonical --output report.json
+```
+
+2) **Scan + enrich locally (recommended):**
+
+```bash
+./build/sys-scan --canonical --output report.json
+
+AGENT_LLM_PROVIDER=local-qwen \
+AGENT_GRAPH_MODE=baseline \
+TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 \
+OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+sys-scan-graph analyze --report report.json --out enriched_report.json
+```
+
+3) **CI-friendly output (SARIF):**
+
+```bash
+./build/sys-scan --sarif --output results.sarif
 ```
 
 ---
 
 ## Documentation
 
-For detailed documentation, see our [comprehensive wiki](docs/wiki/_index.md):
+Front door (you are here): a quick orientation for all audiences.
 
-- **[Architecture Overview](docs/wiki/Architecture.md)** - High-level system architecture, core vs intelligence layer responsibilities
-- **[Core Scanners](docs/wiki/Core-Scanners.md)** - Scanner implementations, signals, output formats, and schemas
-- **[Intelligence Layer](docs/wiki/Intelligence-Layer.md)** - Pipeline stages, LangGraph orchestration, LLM providers, data governance
+Deep dives live in `docs/wiki/`:
 
-### Additional Resources
-
-- **[Rules Engine](docs/wiki/Rules-Engine.md)** - Rule file formats, MITRE aggregation, severity overrides, validation
-- **[CLI Guide](docs/wiki/CLI-Guide.md)** - Complete command reference
-- **[Extensibility](docs/wiki/Extensibility.md)** - Adding custom scanners and rules
+- **[Architecture Overview](docs/wiki/Architecture.md)** — core vs. intelligence responsibilities
+- **[Core Scanners](docs/wiki/Core-Scanners.md)** — signals, outputs, schemas
+- **[Intelligence Layer](docs/wiki/Intelligence-Layer.md)** — pipeline, providers, data governance
+- **[CLI Guide](docs/wiki/CLI-Guide.md)** — full command reference
+- **[Rules Engine](docs/wiki/Rules-Engine.md)** — formats, MITRE mapping, validation
 
 ---
 
-## Repository Structure
+## Repository at a glance
 
-This repository contains:
+- **Core scanner (C++)**: `src/`, `CMakeLists.txt`
+- **Intelligence layer (Python)**: `agent/` (published as `sys-scan-agent`)
+- **Rules**: `rules/`
+- **Schemas**: `schema/`
+- **Docs (deep dives)**: `docs/wiki/`
+- **Tests**: `tests/` (C++) and `agent/tests/` (Python)
 
-- **Core Scanner** (`src/`, `CMakeLists.txt`) - High-performance C++ scanning engine
-- **Intelligence Layer** (`agent/`) - Python-based analysis and enrichment
-- **Rules** (`rules/`) - Security rules and MITRE ATT&CK mappings
-- **Documentation** (`docs/wiki/`) - Comprehensive project documentation
-- **Tests** (`tests/`, `agent/tests/`) - Test suites for both components
+### Why the split architecture?
 
----
-
-## Key Design Principles
-
-- **Type-safe architecture** with C++20 enums and dependency injection via ScanContext
-- **Deterministic, reproducible results** with canonical JSON (RFC 8785 JCS) and stable ordering
-- **Zero-trust security** with embedded LLM, capability dropping, and seccomp sandboxing
-- **Thread-safe parallelization** with mutex-protected report aggregation
-- **Extensible plugin system** supporting custom scanners, rules, and LLM providers
-- **Comprehensive testing** with 919 test cases (698 C++, 221 Python)
+- **C++ core**: maximizes speed, determinism, and operational portability (scan without Python)
+- **Python intelligence**: fast iteration for enrichment, correlation, reporting, and policy logic
 
 ---
 
-## Licensing
-
-This project is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE) for complete licensing details.
-
----
-
-## Support & Community
-
-- **Documentation**: [Wiki](docs/wiki/_index.md) | [GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)
-- **Issues**: [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
-- **Security**: See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure
+## Design ethos
+- Deterministic, reproducible outputs (canonical JSON, stable ordering)
+- Local-first, zero-trust AI (no outbound LLM APIs; heuristic fallback always available)
+- Bounded resources by default (thread caps, batch processing, caching)
+- Extensible and testable (DI-friendly scanners; pluggable providers; high coverage)
 
 ---
+
+## Licensing & Support
+
+- License: Apache License 2.0 (see [`LICENSE`](LICENSE))
+- Issues: [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
+- Discussions: [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
+- Security: see [`SECURITY.md`](SECURITY.md)
 
 <div align="center">
   <img src="assets/Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>

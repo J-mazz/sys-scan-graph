@@ -131,6 +131,9 @@ agent/venv/
 */venv/
 */.venv/
 
+# Local venv variants (e.g. .venv-1, .venv-312)
+.venv-*/
+
 # Python distribution / packaging
 .Python
 build/
@@ -171,6 +174,14 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+
+# Local ML
+base_qwen/
+sft_adapter/
+
+# Local model weights / shards (keep only lightweight docs/placeholders)
+agent/sys_scan_agent/models/local_qwen/shards/
+*.safetensors
 
 # Translations
 *.mo

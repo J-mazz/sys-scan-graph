@@ -4,6 +4,8 @@ module;
 #include <vector>
 #include <filesystem>
 #include <stack>
+#include <string_view>
+#include <charconv>
 
 export module sys_scan.scanners.fs_perms;
 import sys_scan.types;

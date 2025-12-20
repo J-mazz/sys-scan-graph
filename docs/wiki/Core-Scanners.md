@@ -1,370 +1,265 @@
-# Core Scanners
-
-This page details the core security scanners implemented in the C++ scanner engine, including their capabilities, output formats, and configuration options.
-
-## Overview
-
-The core scanner includes multiple specialized scanners that enumerate different aspects of host security. Each scanner produces structured findings with consistent metadata and severity classification.
-
-## Scanner Registry
-
-Scanners are registered in a deterministic order to ensure stable JSON output:
-
-```cpp
-ScannerRegistry::register_all_default()
-```
-
-This fixed ordering enables reliable diffing and caching of scan results.
-
-## Available Scanners
-
-### Process Scanner (`processes`)
-Enumerates running processes and their characteristics.
-
-**Capabilities:**
-- Reads `/proc/*/status` and `/proc/*/cmdline`
-- Optional SHA256 hashing of process executables (first 1MB)
-- Captures process metadata (PID, PPID, UID, GID, state)
-
-**Configuration:**
-- `--process-hash`: Enable executable hashing using OpenSSL
-- `--max-processes`: Limit number of processes to scan (default: unlimited)
-
-**Example Output:**
-```json
-{
-  "id": "process.unusual.parent",
-  "title": "Process with unusual parent",
-  "severity": "medium",
-  "description": "Process has parent that is not a standard system process",
-  "metadata": {
-    "pid": "1234",
-    "ppid": "1",
-    "cmdline": "/usr/bin/suspicious",
-    "parent_cmdline": "/bin/bash"
-  }
-}
-```
-
-### Network Scanner (`network`)
-Analyzes network socket information and listening services.
-
-**Capabilities:**
-- Parses `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, `/proc/net/udp6`
-- Identifies listening sockets and established connections
-- Applies severity heuristics for exposed services
-
-**Configuration:**
-- `--max-sockets`: Limit number of sockets to scan (default: 1000)
-- State filters: `listen`, `established`, `time_wait`
-- Protocol filters: `tcp`, `udp`, `tcp6`, `udp6`
-
-**Example Output:**
-```json
-{
-  "id": "network.exposed.service",
-  "title": "Exposed network service",
-  "severity": "high",
-  "description": "Service listening on external interface",
-  "metadata": {
-    "local_address": "0.0.0.0:8080",
-    "remote_address": "0.0.0.0:0",
-    "state": "listen",
-    "inode": "12345"
-  }
-}
-```
-
-### Kernel Parameters Scanner (`kernel_params`)
-Snapshots kernel security parameters and hardening settings.
-
-**Capabilities:**
-- Reads `/proc/sys/kernel/*` and `/proc/sys/net/*` parameters
-- Compares against security best practices
-- Identifies misconfigured kernel parameters
-
-**Configuration:**
-- Custom parameter allowlists and denylists
-- Severity mapping for different parameter categories
-
-**Example Output:**
-```json
-{
-  "id": "kernel.hardening.disabled",
-  "title": "Kernel hardening parameter disabled",
-  "severity": "medium",
-  "description": "Security-relevant kernel parameter is not set",
-  "metadata": {
-    "parameter": "kernel.kptr_restrict",
-    "expected": "1",
-    "actual": "0"
-  }
-}
-```
-
-### Module Scanner (`modules`)
-Analyzes loaded kernel modules for security and compliance.
-
-**Capabilities:**
-- Enumerates `/proc/modules` and module files
-- Detects out-of-tree and unsigned modules
-- Handles compressed module files (`.ko.gz`, `.ko.xz`)
-
-**Configuration:**
-- `--modules-summary`: Generate summary statistics instead of individual findings
-- Compression support: `gzip`, `xz` (external utilities)
-
-**Example Output:**
-```json
-{
-  "id": "module.unsigned",
-  "title": "Unsigned kernel module",
-  "severity": "low",
-  "description": "Kernel module is not signed",
-  "metadata": {
-    "module": "suspicious_module",
-    "size": "45056",
-    "used_by": "2"
-  }
-}
-```
-
-### World Writable Files Scanner (`world_writable`)
-Identifies files with overly permissive permissions.
-
-**Capabilities:**
-- Walks configured directory trees
-- Reports world-writable files and directories
-- Applies exclusion patterns for known safe paths
-
-**Configuration:**
-- Directory allowlists and denylists
-- File extension exclusions
-- Path pattern exclusions
-
-**Example Output:**
-```json
-{
-  "id": "file.world_writable",
-  "title": "World-writable file",
-  "severity": "medium",
-  "description": "File has world write permissions",
-  "metadata": {
-    "path": "/tmp/suspicious_file",
-    "permissions": "0777",
-    "owner": "root",
-    "size": "1024"
-  }
-}
-```
-
-### SUID/SGID Scanner (`suid`)
-Analyzes setuid/setgid binaries for security risks.
-
-**Capabilities:**
-- Aggregates SUID/SGID files by inode (handles hardlinks)
-- Identifies unusual or suspicious locations
-- Cross-references with known safe binaries
-
-**Configuration:**
-- Path allowlists for trusted SUID binaries
-- Severity escalation for unusual locations
-
-**Example Output:**
-```json
-{
-  "id": "suid.unusual.location",
-  "title": "SUID binary in unusual location",
-  "severity": "high",
-  "description": "SUID binary found outside standard system directories",
-  "metadata": {
-    "path": "/home/user/suid_binary",
-    "permissions": "4755",
-    "owner": "user",
-    "inode": "123456"
-  }
-}
-```
-
-### Indicators of Compromise Scanner (`ioc`)
-Heuristic detection of compromise indicators.
-
-**Capabilities:**
-- Deleted executable detection
-- Execution from temporary directories
-- Suspicious environment variable usage
-- SUID binaries in user directories
-
-**Configuration:**
-- `--ioc-allow` / `--ioc-allow-file`: Allowlist for false positives
-- Configurable severity thresholds
-
-**Example Output:**
-```json
-{
-  "id": "ioc.temp.execution",
-  "title": "Execution from temporary directory",
-  "severity": "medium",
-  "description": "Process executed from temporary directory",
-  "metadata": {
-    "pid": "1234",
-    "cmdline": "/tmp/malicious_binary",
-    "parent_pid": "5678"
-  }
-}
-```
-
-### Mandatory Access Control Scanner (`mac`)
-Assesses SELinux/AppArmor configuration and enforcement.
-
-**Capabilities:**
-- Captures MAC system status
-- Counts policy violations and complain mode entries
-- Identifies unconfined critical processes
-
-**Configuration:**
-- MAC system detection (SELinux, AppArmor, or none)
-- Violation threshold configuration
-
-**Example Output:**
-```json
-{
-  "id": "mac.unconfined.process",
-  "title": "Unconfined critical process",
-  "severity": "low",
-  "description": "Critical system process running unconfined",
-  "metadata": {
-    "pid": "1234",
-    "cmdline": "/usr/sbin/critical_service",
-    "mac_context": "unconfined"
-  }
-}
-```
-
-### Compliance Scanner (`compliance`)
-Evaluates compliance against industry standards.
-
-**Capabilities:**
-- PCI DSS 4.0 control assessment
-- HIPAA Security Rule evaluation
-- NIST CSF 2.0 framework compliance
-- Per-standard scoring and gap analysis
-
-**Configuration:**
-- `--compliance-enable`: Enable compliance scanning
-- `--compliance-standards`: Specify standards to evaluate
-- `--compliance-gap-analysis`: Enable remediation gap reporting
-
-**Example Output:**
-```json
-{
-  "id": "compliance.pci.fail",
-  "title": "PCI DSS Control Failure",
-  "severity": "high",
-  "description": "Failed PCI DSS 4.0 control requirement",
-  "metadata": {
-    "standard": "PCI DSS 4.0",
-    "control": "2.2.4",
-    "requirement": "Implement automated audit trails",
-    "status": "fail"
-  }
-}
-```
-
-## Output Schema
-
-### Finding Structure
-All scanners produce findings with a consistent structure:
-
-```json
-{
-  "id": "string",           // Unique, stable identifier
-  "title": "string",        // Human-readable title
-  "severity": "string",     // info|low|medium|high|critical
-  "description": "string",  // Detailed description
-  "metadata": {             // Sorted key-value pairs
-    "key1": "value1",
-    "key2": "value2"
-  }
-}
-```
-
-### JSON Schema Versioning
-- **Current Version**: 2
-- **Compatibility**: Backward compatible within major versions
-- **Breaking Changes**: Increment major version
-- **Additive Changes**: Increment minor version
-
-## Scanner Execution
-
-### Sequential Processing
-Scanners run in deterministic order to ensure stable output:
-
-1. `processes` - Process enumeration
-2. `network` - Network socket analysis
-3. `kernel_params` - Kernel parameter checks
-4. `modules` - Module security assessment
-5. `world_writable` - File permission analysis
-6. `suid` - Setuid binary analysis
-7. `ioc` - Compromise indicator detection
-8. `mac` - MAC system evaluation
-9. `compliance` - Standards compliance (conditional)
-
-### Performance Characteristics
-- **Memory Usage**: Streaming processing with minimal memory footprint
-- **I/O Patterns**: Sequential file reads with early termination options
-- **Threading**: Single-threaded with mutex-protected data structures
-- **Limits**: Configurable caps prevent resource exhaustion
-
-## Configuration Options
-
-### Global Options
-- `--min-severity`: Filter findings below specified severity
-- `--output-format`: json|json-pretty|sarif
-- `--canonical`: Enable canonical output ordering
-
-### Scanner-Specific Options
-- `--process-hash`: Enable process executable hashing
-- `--modules-summary`: Generate module summary statistics
-- `--ioc-allow-file`: Specify IOC allowlist file
-- `--compliance-enable`: Enable compliance scanning
-
-## Error Handling
-
-### Non-Fatal Errors
-- Permission denied on `/proc` entries: Silently skip
-- File read failures: Omit data, continue scanning
-- Module decompression failures: Skip problematic modules
-
-### Future Enhancements
-- Structured warning channel for non-fatal errors
-- Detailed error reporting with context
-- Recovery mechanisms for partial failures
-
-## Integration Examples
-
-### Basic Scan
-```bash
-sys-scan --output-format json-pretty
-```
-
-### Compliance-Focused Scan
-```bash
-sys-scan --compliance-enable --min-severity medium --canonical
-```
-
-### Development/Debug Scan
-```bash
-sys-scan --process-hash --modules-summary --ioc-allow-file allowlist.txt
-```
-
-## Related Documentation
-
-- **[Architecture](Architecture.md)** - System architecture overview
-- **[CLI Guide](CLI-Guide.md)** - Command-line usage and options
-- **[Extensibility](Extensibility.md)** - Adding new scanners
-- **[Testing](Testing-and-CI.md)** - Scanner testing and validation
-
----
-
-*For questions about specific scanners or their implementation, see the [Contributing Guide](../../CONTRIBUTING.md) or open a [GitHub Issue](https://github.com/J-mazz/sys-scan-graph/issues).*"
+# Core Scanners (C++)
+
+This page documents the scanners that exist **right now** under `src/scanners/modules/` and how they behave.
+
+The scanners are registered (in this repository snapshot) in `src/main.cpp` and executed through `ScannerRegistry` (`sys_scan.registry`).
+
+## Quick index
+
+| Scanner name | Module | What it inspects | Gated by `Config` |
+|---|---|---|---|
+| `processes` | `process_scanner.ixx` | `/proc/<pid>` inventory | `process_inventory` or `all_processes` |
+| `network` | `network_scanner.ixx` | `/proc/net/{tcp,tcp6,udp,udp6}` | disabled by `fast_scan` |
+| `kernel` | `kernel_scanner.ixx` | `/proc/sys/...` hardening params | `hardening` |
+| `mounts` | `mount_scanner.ixx` | `/proc/mounts` (tmpfs hardening) | always on |
+| `fs_perms` | `fs_perms_scanner.ixx` | targeted world-writable + SUID checks | disabled by `fast_scan` |
+| `auditd` | `auditd_scanner.ixx` | `/etc/audit/*` audit rules coverage | `hardening` |
+| `systemd_units` | `systemd_scanner.ixx` | systemd unit hardening knobs | `hardening` |
+| `integrity` | `integrity_scanner.ixx` | `dpkg -V` / `rpm -Va` verification | `integrity` |
+| `ioc` | `ioc_scanner.ixx` | /proc heuristics (patterns, LD_PRELOAD, deleted exe) | always on |
+| `modules` | `module_scanner.ixx` | `/proc/modules` + module heuristics | `hardening` or `modules_summary_only` |
+| `containers` | `container_scanner.ixx` | container environment detection | `containers` |
+| `yara` | `yara_scanner.ixx` | placeholder wiring for YARA scanning | `rules_enable` + `yara_scan_roots` |
+| `ebpf_trace` | `ebpf_scanner.ixx` | exec/connect trace (eBPF or /proc fallback) | `ioc_exec_trace` |
+
+Notes:
+
+- Many scanners honor `test_root` via `sys_scan::utils::in_root(...)` so they can be tested against a fixture directory.
+- Some `Config` fields exist but are not currently used by these scanners in this snapshot. This page only documents behavior present in the implementations.
+
+## Scanner details
+
+### `processes` (ProcessScanner)
+
+Source: `src/scanners/modules/process_scanner.ixx`
+
+Purpose: emits an informational finding per process.
+
+Signal sources:
+
+- `/proc/<pid>/cmdline` (nulls replaced with spaces)
+- `/proc/<pid>/status` is read, but parsing is currently stubbed (no UID/GID extraction yet)
+
+Gating:
+
+- Does nothing unless `Config.process_inventory` **or** `Config.all_processes` is enabled.
+- If `all_processes` is **false**, kernel threads / empty cmdlines are skipped.
+- If `no_user_meta` is **true**, `/proc/<pid>/status` is not read.
+
+Example IDs:
+
+- `<pid>` (the PID directory name)
+
+### `network` (NetworkScanner)
+
+Source: `src/scanners/modules/network_scanner.ixx`
+
+Purpose: emits an informational finding per socket table row in `/proc/net/*`.
+
+Signal sources:
+
+- `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, `/proc/net/udp6`
+
+Gating:
+
+- If `fast_scan` is enabled, the scanner returns immediately.
+- If `network_listen_only` is enabled, only TCP rows with state `0A` (LISTEN) are emitted.
+
+Notes:
+
+- Current implementation yields `Severity::Info` for all rows and does not join sockets to owning processes.
+
+### `kernel` (KernelScanner)
+
+Source: `src/scanners/modules/kernel_scanner.ixx`
+
+Purpose: checks a small, fixed set of `/proc/sys` parameters when hardening mode is enabled.
+
+Gating:
+
+- Runs only when `hardening` is enabled.
+
+Checked parameters (expected values):
+
+- `kernel.kptr_restrict=2`
+- `kernel.dmesg_restrict=1`
+- `kernel.yama.ptrace_scope=1`
+- `fs.protected_symlinks=1`
+- `fs.protected_hardlinks=1`
+- `net.ipv4.conf.all.accept_redirects=0`
+- `net.ipv4.conf.default.accept_redirects=0`
+
+### `mounts` (MountScanner)
+
+Source: `src/scanners/modules/mount_scanner.ixx`
+
+Purpose: flags insecure mount options for tmp-like paths.
+
+Signal sources:
+
+- `/proc/mounts`
+
+Behavior:
+
+- For `/tmp`, `/var/tmp`, `/dev/shm`, emits a `low` severity finding if any of `noexec`, `nosuid`, or `nodev` are missing.
+
+### `fs_perms` (FsPermsScanner)
+
+Source: `src/scanners/modules/fs_perms_scanner.ixx`
+
+Purpose: small, targeted filesystem permission checks (not a full filesystem crawl).
+
+Gating:
+
+- Skips entirely when `fast_scan` is enabled.
+
+Behavior:
+
+- Flags world-writable **critical files** (`/etc/passwd`, `/etc/shadow`, `/etc/hosts`, `/etc/fstab`, `/boot/grub/grub.cfg`) as `high` severity.
+- Scans a focused set of directories (`/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`, `/usr/local/bin`) for SUID files in a **non-recursive** directory listing and emits a `medium` severity finding per SUID binary.
+
+### `auditd` (AuditdScanner)
+
+Source: `src/scanners/modules/auditd_scanner.ixx`
+
+Purpose: heuristically checks whether common syscall audit patterns appear in audit rules.
+
+Gating:
+
+- Runs only when `hardening` is enabled.
+
+Signal sources:
+
+- `/etc/audit/audit.rules`
+- `/etc/audit/rules.d/*.rules`
+
+Behavior:
+
+- Emits `info` findings when patterns are present and `medium`/`high` findings when patterns are missing.
+
+### `systemd_units` (SystemdUnitScanner)
+
+Source: `src/scanners/modules/systemd_scanner.ixx`
+
+Purpose: checks a small set of systemd hardening knobs on services with `ExecStart`.
+
+Gating:
+
+- Runs only when `hardening` is enabled.
+
+Signal sources (searched):
+
+- `/etc/systemd/system`
+- `/usr/lib/systemd/system`
+- `/lib/systemd/system`
+
+Checks:
+
+- `NoNewPrivileges=yes`
+- `PrivateTmp=yes`
+- `ProtectSystem=strict` (explicitly treats `full` as not OK)
+- `ProtectHome=read-only`
+
+### `integrity` (IntegrityScanner)
+
+Source: `src/scanners/modules/integrity_scanner.ixx`
+
+Purpose: runs the host package manager verification command and reports mismatches.
+
+Gating:
+
+- Runs only when `integrity` is enabled.
+
+Behavior:
+
+- On Debian-like systems: `dpkg -V`
+- On RPM-based systems: `rpm -Va`
+- Emits up to 10 `medium` mismatch findings and a `high` summary finding if any mismatches are found.
+
+Limitation:
+
+- When `test_root` is set to a non-root snapshot, the scanner emits an `info` finding indicating offline snapshots are not supported.
+
+### `ioc` (IOCScanner)
+
+Source: `src/scanners/modules/ioc_scanner.ixx`
+
+Purpose: simple IOC heuristics over `/proc`.
+
+Signal sources:
+
+- `/proc/<pid>/cmdline` string matching (patterns: `cryptominer`, `xmrig`, `minerd`, `malware`)
+- `/proc/<pid>/environ` for `LD_PRELOAD`
+- `/proc/<pid>/exe` symlink for `(deleted)` executables
+
+### `modules` (ModuleScanner)
+
+Source: `src/scanners/modules/module_scanner.ixx` and helper `module_utils.ixx`
+
+Purpose: summary-level kernel module anomaly detection.
+
+Gating:
+
+- Runs if `hardening` is enabled or `modules_summary_only` is enabled.
+
+Signal sources:
+
+- `/proc/modules`
+- module file probing under `/lib/modules/<release>/...`
+
+Behavior:
+
+- Counts (a) unsigned modules, (b) out-of-tree / tainted indicators (heuristic), and (c) modules with W+X sections.
+- Emits a single `Kernel Module Summary` finding if any count is non-zero.
+
+### `containers` (ContainerScanner)
+
+Source: `src/scanners/modules/container_scanner.ixx`
+
+Purpose: detects whether the host appears to be running inside a container.
+
+Gating:
+
+- Runs only when `containers` is enabled.
+
+Evidence sources:
+
+- `/.dockerenv`
+- `/proc/1/cgroup` substring matching (`docker`, `kubepods`, `lxc`)
+- `/proc/1/environ` for `KUBERNETES_SERVICE_HOST`
+
+### `yara` (YaraScanner)
+
+Source: `src/scanners/modules/yara_scanner.ixx`
+
+Status: currently a **wiring placeholder**.
+
+Gating:
+
+- Requires `rules_enable` and at least one entry in `yara_scan_roots`.
+
+Behavior:
+
+- If built with libyara headers available, emits an informational “YARA Scan” placeholder finding.
+- Otherwise emits an `error` severity finding indicating YARA support wasn’t present at compile time.
+
+### `ebpf_trace` (EbpfScanner)
+
+Source: `src/scanners/modules/ebpf_scanner.ixx`
+
+Purpose: traces process execution and outbound connections.
+
+Gating:
+
+- Runs only when `ioc_exec_trace` is enabled.
+
+Behavior:
+
+- If compiled with `SYS_SCAN_HAVE_EBPF`, attempts to attach an eBPF program and read events.
+- If eBPF is unavailable or fails, falls back to a `/proc` polling method that snapshots PIDs, sleeps for `ioc_exec_trace_seconds` (default ~2s), then reports newly observed PIDs.
+
+## Relationship to JSON schemas
+
+The scanner implementations emit `Finding` objects in-memory. The repository includes the v4 JSON schema (`schema/v4.json`) that describes the structured report format consumed by the intelligence layer.
+
+If you’re working on wiring JSON output, this page provides the authoritative list of scanners and their current behavior.

@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/J-mazz/sys-scan/schema/v4.json",
+  "title": "sys-scan ground-truth compatible report",
+  "description": "Canonical scan output compatible with the ground_truth_v1 structure used by the SFT pipeline.",
+  "type": "object",
+  "required": [
+    "version",
+    "enriched_findings",
+    "correlations",
+    "reductions",
+    "summaries",
+    "actions"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "ground_truth_v1"
+    },
+    "enriched_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/EnrichedFinding"
+      }
+    },
+    "correlations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Correlation"
+      }
+    },
+    "reductions": {
+      "type": "object",
+      "description": "Aggregated reductions; may be empty when the core emits raw-only findings.",
+      "additionalProperties": true
+    },
+    "summaries": {
+      "type": "object",
+      "description": "Narrative summaries; may be empty for raw-only runs.",
+      "additionalProperties": true
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Action"
+      }
+    },
+    "raw_reference": {
+      "type": "object",
+      "description": "Raw scan results as produced by the core scanners.",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scanner", "findings"],
+            "properties": {
+              "scanner": { "type": "string" },
+              "findings": {
+                "type": "array",
+                "items": { "$ref": "#/definitions/RawFinding" }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scanner": {"type": "string"},
+              "message": {"type": "string"}
+            },
+            "required": ["scanner", "message"],
+            "additionalProperties": false
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scanner": {"type": "string"},
+              "message": {"type": "string"}
+            },
+            "required": ["scanner", "message"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "EnrichedFinding": {
+      "type": "object",
+      "required": [
+        "id", "title", "severity", "risk_score",
+        "base_severity_score", "description", "metadata",
+        "risk_subscores", "probability_actionable", "baseline_status", "tags"
+      ],
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "severity": {"enum": ["info", "low", "medium", "high", "critical", "error"]},
+        "risk_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "base_severity_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "description": {"type": "string"},
+        "metadata": {"type": "object", "additionalProperties": true},
+        "operational_error": {"type": "boolean"},
+        "category": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "risk_subscores": {
+          "type": "object",
+          "required": ["impact", "exposure", "anomaly", "confidence"],
+          "properties": {
+            "impact": {"type": "number", "minimum": 0, "maximum": 1},
+            "exposure": {"type": "number", "minimum": 0, "maximum": 1},
+            "anomaly": {"type": "number", "minimum": 0, "maximum": 1},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+          },
+          "additionalProperties": true
+        },
+        "correlation_refs": {"type": "array", "items": {"type": "string"}},
+        "baseline_status": {"enum": ["new", "existing", "unknown"]},
+        "severity_source": {"type": "string"},
+        "allowlist_reason": {"type": ["string", "null"]},
+        "probability_actionable": {"type": "number", "minimum": 0, "maximum": 1},
+        "graph_degree": {"type": "integer"},
+        "cluster_id": {"type": "string"},
+        "rationale": {"type": "string"},
+        "risk_total": {"type": "integer"},
+        "host_role": {"type": "string"},
+        "host_role_rationale": {"type": "string"},
+        "metric_drift": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": true
+    },
+    "Correlation": {
+      "type": "object",
+      "required": ["id", "title", "related_finding_ids"],
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "rationale": {"type": "string"},
+        "related_finding_ids": {"type": "array", "items": {"type": "string"}},
+        "risk_score_delta": {"type": "integer"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "severity": {"enum": ["info", "low", "medium", "high", "critical", null]},
+        "exposure_tags": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "Action": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "priority": {"type": "string"},
+        "severity": {"enum": ["info", "low", "medium", "high", "critical"]}
+      },
+      "additionalProperties": true
+    },
+    "RawFinding": {
+      "type": "object",
+      "required": ["id", "title", "severity", "description"],
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "severity": {"enum": ["info", "low", "medium", "high", "critical", "error"]},
+        "description": {"type": "string"},
+        "metadata": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": true
+    }
+  }
+}

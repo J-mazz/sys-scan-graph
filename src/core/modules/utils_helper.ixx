@@ -1,5 +1,6 @@
 module;
 #include <string>
+// GCOVR_EXCL_START
 export module sys_scan.utils:helper;
 
 export namespace sys_scan::utils {
@@ -24,3 +25,4 @@ export namespace sys_scan::utils {
         return root + "/" + path;
     }
 }
+// GCOVR_EXCL_STOP

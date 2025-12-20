@@ -4,9 +4,7 @@
 
 Welcome to the comprehensive documentation for sys-scan-graph. This index provides quick access to detailed documentation pages covering all aspects of the project.
 
-<div align="center">
-  <img src="../../assets/sys-scan-graph_primary_logo.png" alt="sys-scan-graph Primary Logo" width="400"/>
-</div>
+![sys-scan-graph Primary Logo](../../assets/sys-scan-graph_primary_logo.png)
 
 ## Quick Links
 
@@ -20,6 +18,7 @@ Welcome to the comprehensive documentation for sys-scan-graph. This index provid
 ### Architecture & Design
 
 - **[Architecture Overview](Architecture.md)** - High-level system architecture, core vs intelligence layer responsibilities
+- **[Architecture (Technical Details)](Architecture-Technical-Details.md)** - Data flow, invariants, and implementation notes
 - **[Core Scanners](Core-Scanners.md)** - Scanner implementations, signals, output formats, and schemas
 - **[Intelligence Layer](Intelligence-Layer.md)** - Pipeline stages, LangGraph orchestration, LLM providers, data governance
 
@@ -27,21 +26,15 @@ Welcome to the comprehensive documentation for sys-scan-graph. This index provid
 
 - **[Rules Engine](Rules-Engine.md)** - Rule file formats, MITRE aggregation, severity overrides, validation
 - **[Risk Model](Risk-Model.md)** - Risk and probability modeling, weights, calibration, CLI helpers
-- **[Baseline & Rarity](Baseline-Rarity-Novelty.md)** - Baseline database, process novelty embeddings, fleet rarity
-- **[Correlation & Compliance](Correlation-Compliance-ATTACK.md)** - Correlation heuristics, compliance normalization, ATT&CK coverage
 
 ### Operations & Performance
 
-- **[Performance & Determinism](Performance-Determinism-Provenance.md)** - Performance baselines, canonicalization, reproducible builds, provenance, signing
-- **[Fleet Reporting](Fleet-and-Rarity-Reporting.md)** - Fleet reports and rarity generation
 - **[CLI Guide](CLI-Guide.md)** - Command-line interface for core and agent functionality
 - **[CI and SARIF Integration](CI-and-SARIF-Integration.md)** - Running scans in CI pipelines and SARIF upload
 
 ### Development & Extensibility
 
-- **[Extensibility](Extensibility.md)** - Adding scanners, rule packs, heuristics, knowledge packs, follow-up tools
-- **[Testing & CI](Testing-and-CI.md)** - Test suites, CI/CD setup, performance thresholds, SARIF integration
-- **[Roadmap](Roadmap.md)** - Current roadmap, planned features, and development priorities
+More deep-dive pages will be added over time. This index only links to documents that are currently present in `docs/wiki/`.
 
 ## Licensing & Legal
 
@@ -94,4 +87,4 @@ This documentation is licensed under Creative Commons Attribution 4.0 Internatio
 
 ![Mazzlabs Logo](../../assets/Mazzlabs.png)
 
-Last updated: October 2025
+Last updated: December 2025
