@@ -32,7 +32,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             # For main branch pushes, create a development version
-            sed -i "s/version='5.0.3'/version='5.0.3.dev0'/" setup.py
+            sed -i "s/version='7.0.0'/version='7.0.0.dev0'/" setup.py
           fi
           python -m build
 
