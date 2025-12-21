@@ -38,5 +38,4 @@ export namespace sys_scan::ui {
 
 }
 
-// MOC include moved into implementation TU (finding_model.cpp) to ensure
-// metaobject symbols are compiled into a non-module translation unit.
+#include "finding_model.moc"

@@ -36,5 +36,4 @@ export namespace sys_scan::ui {
     };
 }
 
-// MOC include moved into implementation TU (ipc_service.cpp) to ensure
-// metaobject symbols are compiled into a non-module translation unit.
+#include "ipc_service.moc"

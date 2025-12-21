@@ -30,5 +30,4 @@ export namespace sys_scan::ui {
     };
 }
 
-// MOC include moved into implementation TU (agent_service.cpp) to ensure
-// metaobject symbols are compiled into a non-module translation unit.
+#include "agent_service.moc"
