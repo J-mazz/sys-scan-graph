@@ -28,8 +28,15 @@ cmake --build build-coverage --target coverage
 
 Artifacts (written to the build directory):
 
-- `build-coverage/coverage.html` (HTML details)
+- `build-coverage/coverage.html` (HTML details) — add `--html=coverage.html` to the gcovr invocation if missing
 - `build-coverage/coverage.xml` (XML)
+
+### Measured results (this run, 2025-12-21)
+- lines: **87.7%** (810 / 924)
+- functions: **93.1%** (108 / 116)
+- branches: **45.7%** (1246 / 2728)
+
+Note: branch coverage is reported but not enforced; improving branch coverage requires adding tests that exercise alternate code paths and error handling in low-coverage components.
 
 ### Quality gate
 
@@ -45,11 +52,32 @@ Coverage is intentionally scoped to `src/` and excludes build directories and te
 
 The authoritative list of filters/excludes lives in `CMakeLists.txt` under the `coverage` custom target.
 
-## Python agent tests (optional)
+## Python agent tests and coverage
 
 The Python package is in `agent/`.
+
+Run tests normally:
 
 ```bash
 cd agent
 python -m pytest -v
 ```
+
+Run tests with coverage (requires `pytest-cov`):
+
+```bash
+# activate your environment where pytest-cov is installed (example: .venv-312)
+source .venv-312/bin/activate
+cd agent
+python -m pytest --disable-warnings --maxfail=1 --cov=agent --cov-report=term --cov-report=xml:../build-cov/agent-coverage.xml
+```
+
+### Measured results (this run, 2025-12-21)
+- **Python agent overall coverage**: **88%** (17748 statements, 2195 missed)
+- Coverage XML written to: `build-cov/agent-coverage.xml`
+
+### Notes & next steps
+- Several modules have low coverage (see per-file output). Prioritize tests for:
+  - providers with external dependencies (e.g., `providers/*` implementations)
+  - complex pipeline transforms (`graph/`, `summarization.py`) to improve branch and behavior coverage
+- Consider adding a gated CI job that fails on drop of overall agent coverage below a chosen threshold (e.g., 85%).
