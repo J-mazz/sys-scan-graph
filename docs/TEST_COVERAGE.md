@@ -2,6 +2,42 @@
 
 This document explains how to run tests and coverage for **sys-scan-graph**.
 
+## Summary of measured coverage (2025-12-21)
+
+| Component | Metric | Value |
+|---|---:|---:|
+| C++ (`src/` layer) | lines | **87.7%** (810 / 924) |
+| C++ (`src/` layer) | functions | **93.1%** (108 / 116) |
+| C++ (`src/` layer) | branches | **45.7%** (1246 / 2728) |
+| Python (agent) | overall (statements) | **88%** (17748 stmts, 2195 missed) |
+
+Artifacts:
+- C++ HTML report: `build-cov/coverage.html` and `build-cov/coverage-details.html`
+- C++ XML: `build-cov/coverage.xml`
+- Python agent XML: `build-cov/agent-coverage.xml`
+
+Commands used in this run:
+
+- C++ (gcovr via coverage target):
+
+```bash
+cmake -B build-cov -S . -DSYS_SCAN_ENABLE_COVERAGE=ON
+cmake --build build-cov -j$(nproc)
+cmake --build build-cov --target coverage
+# or direct gcovr (focused on src/):
+cd build-cov
+gcovr -r .. --filter ../src --html --html-details -o coverage.html --xml -o coverage.xml --fail-under-line 85
+```
+
+- Python (agent):
+
+```bash
+# activate a venv with pytest-cov installed (example: .venv-312)
+source .venv-312/bin/activate
+cd agent
+python -m pytest --disable-warnings --maxfail=1 --cov=agent --cov-report=term --cov-report=xml:../build-cov/agent-coverage.xml
+```
+
 ## C++ core tests
 
 The C++ test runner is built as `sys-scan-tests` (CTest target: `sys-scan-tests`).
