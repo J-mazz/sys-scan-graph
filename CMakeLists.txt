@@ -6,10 +6,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  message(FATAL_ERROR "C++ modules build requires Clang; please reconfigure with CC=clang CXX=clang++")
+endif()
+
 include(CTest)
 
 option(SYS_SCAN_ENABLE_COVERAGE "Enable coverage flags (for tests)" OFF)
 set(SYS_SCAN_COVERAGE_MIN 85 CACHE STRING "Minimum coverage percentage for line/function/branch")
+option(BUILD_FUZZERS "Build fuzzing targets" OFF)
 
 # External Dependencies
 find_package(Threads REQUIRED)
@@ -62,6 +67,14 @@ else()
   target_link_libraries(sys_scan_core INTERFACE nlohmann_json::nlohmann_json)
 endif()
 
+
+# Fuzzing targets
+if(BUILD_FUZZERS)
+  add_executable(fuzz_config fuzz/fuzz_config.cpp)
+  target_link_libraries(fuzz_config PRIVATE sys_scan_core)
+  target_compile_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
+  target_link_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
+endif()
 if(OpenSSL_FOUND)
   target_link_libraries(sys_scan_core INTERFACE OpenSSL::SSL OpenSSL::Crypto)
   target_compile_definitions(sys_scan_core INTERFACE SYS_SCAN_HAVE_OPENSSL=1)
