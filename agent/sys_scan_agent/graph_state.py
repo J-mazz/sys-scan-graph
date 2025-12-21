@@ -11,7 +11,7 @@ to ensure deterministic behavior across all LangGraph nodes.
 """
 
 from typing import Dict, List, Any, Optional, TypedDict, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import time
 
 # Import GraphState for type hints
@@ -81,9 +81,8 @@ class GraphStateSchema(BaseModel):
     # Provider configuration
     llm_provider_mode: Optional[str] = "normal"
 
-    class Config:
-        """Pydantic configuration for flexible validation."""
-        extra = "allow"  # Allow additional fields for extensibility
+    # Pydantic v2 configuration
+    model_config = ConfigDict(extra="allow")
 
 
 def normalize_graph_state(state: Dict[str, Any]) -> Dict[str, Any]:
