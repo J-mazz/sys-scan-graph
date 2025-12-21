@@ -4,6 +4,7 @@ module;
 #include <chrono>
 #include <vector>
 #include <QString>
+#include <string>
 
 // llama includes are resolved when FetchContent makes llama available
 #include <llama.h>
@@ -17,32 +18,52 @@ namespace sys_scan::ui {
     struct AgentService::Impl {
         llama_model* model = nullptr;
         llama_context* ctx = nullptr;
-        void* sampler = nullptr; // opaque: initialized when model is loaded
+        llama_sampler* sampler = nullptr; // sampler chain for token sampling
     };
 
     AgentService::AgentService(QObject* parent)
-        : QObject(parent), m_impl(new Impl()) {}
+        : QObject(parent), m_impl(new Impl()) {
+            llama_backend_init(); // Initialize backend once
+    }
 
     AgentService::~AgentService() {
         if (m_impl) {
+            if (m_impl->sampler) llama_sampler_free(m_impl->sampler);
             if (m_impl->ctx) llama_free(m_impl->ctx);
             if (m_impl->model) llama_free_model(m_impl->model);
             delete m_impl;
         }
+        // llama_backend_free(); // Optional depending on app lifecycle
     }
 
     bool AgentService::loadModel(const QString& modelPath) {
-        // Guard: if llama isn't present, return false
 #ifdef LLAMA_API_VERSION
+        // Cleanup previous resources
+        if (m_impl->sampler) { llama_sampler_free(m_impl->sampler); m_impl->sampler = nullptr; }
+        if (m_impl->ctx) { llama_free(m_impl->ctx); m_impl->ctx = nullptr; }
+        if (m_impl->model) { llama_free_model(m_impl->model); m_impl->model = nullptr; }
+
         llama_model_params model_params = llama_model_default_params();
-        model_params.n_gpu_layers = 99; // prefer Vulkan offload
+        model_params.n_gpu_layers = 99; // Attempt to offload all layers to GPU
 
         m_impl->model = llama_load_model_from_file(modelPath.toStdString().c_str(), model_params);
         if (!m_impl->model) return false;
 
         llama_context_params ctx_params = llama_context_default_params();
         ctx_params.n_ctx = 2048;
+        ctx_params.n_batch = 512;
+        
         m_impl->ctx = llama_new_context_with_model(m_impl->model, ctx_params);
+        
+        if (m_impl->ctx) {
+            // Initialize sampler chain: Greedy -> TopK -> TopP
+            m_impl->sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+            llama_sampler_chain_add(m_impl->sampler, llama_sampler_init_temp(0.8f));
+            llama_sampler_chain_add(m_impl->sampler, llama_sampler_init_top_k(40));
+            llama_sampler_chain_add(m_impl->sampler, llama_sampler_init_top_p(0.95f, 1));
+            llama_sampler_chain_add(m_impl->sampler, llama_sampler_init_dist(1234)); // Fixed seed for reproducibility
+        }
+
         return (m_impl->ctx != nullptr);
 #else
         Q_UNUSED(modelPath);
@@ -52,6 +73,7 @@ namespace sys_scan::ui {
 
     void AgentService::promptAsync(const QString& prompt) {
         std::thread([this, p = prompt.toStdString()]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             for (auto token : this->ask(p)) {
                 QMetaObject::invokeMethod(this, [this, t = token]() {
                     emit tokenReceived(t);
@@ -62,7 +84,6 @@ namespace sys_scan::ui {
             });
         }).detach();
     }
-
     Generator<QString> AgentService::ask(std::string prompt) {
 #ifdef LLAMA_API_VERSION
         if (!m_impl || !m_impl->model || !m_impl->ctx) {
