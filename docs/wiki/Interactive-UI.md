@@ -42,7 +42,8 @@ Design notes
 
 - The C++ UI uses a Unix domain socket for IPC by default; the socket path can be overridden by the Agent CLI `--socket` option.
 - The Agent provides `start_ipc_thread()` which starts an IPC server and returns a `GraphCommunicator` instance that can be closed when the run finishes.
-- The Investigation Director node constructs a concise, factual payload (summary + areas) and attempts a best-effort send to any connected UI. This is non-blocking and failures are logged; the node still completes the pipeline when the UI is unavailable.
+- The Investigation Director node constructs a concise, factual payload (summary + areas) and attempts a best-effort send to any connected UI. The payload now includes `report_path` (from the agent `output_path` state key) so the UI can trigger a reload of an enriched report when analysis completes. This is non-blocking and failures are logged; the node still completes the pipeline when the UI is unavailable.
+- The UI's `AgentService::ask` generator has been implemented to use the local `llama.cpp` backend when available; otherwise it falls back to mock streaming. The implementation tokenizes the prompt, runs decode steps, and yields generated text pieces incrementally.
 
 Developer guidance
 

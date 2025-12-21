@@ -44,7 +44,7 @@ from jsonschema import validate as js_validate, ValidationError
 import os
 import urllib.request
 
-def run_intelligence_workflow(report_path: Path) -> tuple:
+def run_intelligence_workflow(report_path: Path, output_path: Path = None) -> tuple:
     """Run the intelligence workflow and return enriched output and final state with metrics."""
     # Load the report data
     import json
@@ -65,6 +65,7 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     
     initial_state = {
         'raw_findings': all_findings,
+        'output_path': str(output_path) if output_path else str(Path.cwd() / "enriched_report.json"),
         'enriched_findings': [],
         'correlated_findings': [],
         'suggested_rules': [],
@@ -229,7 +230,7 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
         except Exception as e:
             print(f"[red]Failed to start IPC server: {e}[/red]")
 
-    enriched, final_state = run_intelligence_workflow(report)
+    enriched, final_state = run_intelligence_workflow(report, output_path=out)
     
     # Apply canonicalization for deterministic output ordering
     enriched_dict = enriched.model_dump()

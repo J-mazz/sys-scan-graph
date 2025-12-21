@@ -17,6 +17,7 @@ namespace sys_scan::ui {
     struct AgentService::Impl {
         llama_model* model = nullptr;
         llama_context* ctx = nullptr;
+        void* sampler = nullptr; // opaque: initialized when model is loaded
     };
 
     AgentService::AgentService(QObject* parent)
@@ -63,19 +64,78 @@ namespace sys_scan::ui {
     }
 
     Generator<QString> AgentService::ask(std::string prompt) {
-        // Mock streaming if model not loaded
-        if (!m_impl || !m_impl->model) {
-            std::vector<std::string> mock = {"Ana", "lyz", "ing", " sys", "tem", " sec", "ur", "ity", "..."};
-            for (const auto& t : mock) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                co_yield QString::fromStdString(t);
-            }
+#ifdef LLAMA_API_VERSION
+        if (!m_impl || !m_impl->model || !m_impl->ctx) {
+            co_yield "Error: Model not loaded.";
             co_return;
         }
 
-        // Real Llama streaming would be implemented here by tokenizing the prompt,
-        // calling llama_eval and llama_sample_token in a loop and co_yield-ing tokens.
+        // 1. Tokenize prompt
+        const int n_ctx = llama_n_ctx(m_impl->ctx);
+        std::vector<llama_token> tokens_list(n_ctx);
+        int n_tokens = llama_tokenize(m_impl->model, prompt.c_str(), (int)prompt.size(), tokens_list.data(), (int)tokens_list.size(), true, true);
+
+        if (n_tokens < 0) {
+            co_yield "Error: Prompt too long.";
+            co_return;
+        }
+        tokens_list.resize(n_tokens);
+
+        // Prepare an evaluation batch
+        llama_batch batch = llama_batch_init(512, 0, 1);
+
+        for (int i = 0; i < n_tokens; ++i) {
+            llama_batch_add(batch, tokens_list[i], i, { 0 }, i == n_tokens - 1);
+        }
+
+        if (llama_decode(m_impl->ctx, batch) != 0) {
+            co_yield "Error: Decode failed.";
+            llama_batch_free(batch);
+            co_return;
+        }
+
+        // Generator loop: sample tokens and yield pieces
+        int n_decode = 0;
+        const int max_gen = 512;
+
+        while (n_decode < max_gen) {
+            // Use sampler if available
+            llama_token new_token = 0;
+            if (m_impl->sampler) {
+                new_token = llama_sampler_sample(reinterpret_cast<llama_sampler*>(m_impl->sampler), m_impl->ctx, -1);
+            } else {
+                // Fallback to basic sampling API if sampler not present
+                new_token = llama_sample_token(m_impl->model, m_impl->ctx, -1);
+            }
+
+            if (llama_token_is_eog(m_impl->model, new_token)) {
+                break;
+            }
+
+            char buf[512];
+            int n = llama_token_to_piece(m_impl->model, new_token, buf, sizeof(buf), 0, true);
+            if (n > 0) {
+                std::string piece(buf, n);
+                co_yield QString::fromStdString(piece);
+            }
+
+            llama_batch_clear(batch);
+            llama_batch_add(batch, new_token, n_tokens + n_decode, { 0 }, true);
+            if (llama_decode(m_impl->ctx, batch) != 0) break;
+            ++n_decode;
+        }
+
+        llama_batch_free(batch);
         co_return;
+#else
+        // Legacy mock streaming if llama not available
+        std::vector<std::string> mock = {"Ana", "lyz", "ing", " sys", "tem", " sec", "ur", "ity", "..."};
+        for (const auto& t : mock) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            co_yield QString::fromStdString(t);
+        }
+        co_return;
+#endif
     }
 
 }

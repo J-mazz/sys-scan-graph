@@ -30,12 +30,7 @@ int main(int argc, char *argv[]) {
     // Initialize Model
     static sys_scan::ui::FindingModel model;
 
-    // Mock Data for Phase 2
-    std::vector<sys_scan::ui::Finding> test_data = {
-        {"CVE-2024-001", "OpenSSH Vulnerability", "Critical buffer overflow", sys_scan::ui::Severity::Critical},
-        {"MISC-002", "Weak Password Policy", "Minimum length not enforced", sys_scan::ui::Severity::Medium}
-    };
-    model.loadFindings(std::move(test_data));
+
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("appModel", &model);

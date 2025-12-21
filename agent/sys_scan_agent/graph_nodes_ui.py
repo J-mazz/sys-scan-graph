@@ -58,6 +58,7 @@ def investigation_director_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if comm.connect_as_client():
             payload = {
                 "type": "investigation_summary",
+                "report_path": state.get('output_path', ''),
                 "summary": summary,
                 "areas": state.get('investigation_areas', [])
             }
