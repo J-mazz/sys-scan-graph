@@ -1,129 +1,113 @@
-# Architecture (Technical Details)
+# Architecture — Technical Details 🔧
 
-This page dives into the **current, code-backed implementation**.
+This document describes the *actual implementation* and runtime behavior of the project as of this repository snapshot. It is intended for maintainers and contributors who need to understand build-time choices, core runtime components, testing harnesses, and practical debugging tips.
 
-If you’re looking for “what runs where,” start with:
+---
 
-- `CMakeLists.txt` (targets + module file sets)
-- `src/main.cpp` (C++ composition root)
-- `src/core/modules/*.ixx` (core module APIs)
-- `src/scanners/modules/*.ixx` (scanner implementations)
-- `agent/sys_scan_agent/cli.py` (Python CLI entrypoints)
+## Quick entry points ✅
+- Build: `CMakeLists.txt` (top-level) — module file-sets, targets, coverage, and `BUILD_FUZZERS` toggle.
+- App entry (C++): `src/main.cpp` — composition root and CLI parsing.
+- Core modules: `src/core/modules/*.ixx` — types, config, report, registry.
+- Scanners: `src/scanners/modules/*.ixx` — scanner implementations.
+- Python agent: `agent/sys_scan_agent/*` — orchestration, LLM/graph, and triage logic.
+- Schema & contracts: `schema/v4.json` and `schema/fleet_report.schema.json`.
 
-## C++ core layout
+---
 
-### Targets and module structure
+## High-level architecture
 
-The build defines a module library (`sys_scan_modules`) and an executable (`sys-scan`). The module library is made from `.ixx` sources under:
+The project is split into three cooperating layers:
 
-- `src/core/modules/`
-- `src/scanners/modules/`
+1. C++ core (fast, platform-level collection and aggregation)
+2. Python analysis / orchestration (LLM-driven enrichment, triage, reporting)
+3. Dev/infra (tests, fuzz targets, CI — coverage, fuzzing and CodeQL)
 
-In this repository snapshot, `src/main.cpp` is intentionally small and acts as a composition root.
+Each layer has explicit contracts:
+- The C++ core emits a JSON report conforming to **v4 / ground_truth_v1**.
+- The Python layer consumes those reports and performs higher-level reasoning and enrichment.
 
-### Core types and interfaces
+---
 
-At a high level, the C++ core revolves around three concepts:
+## C++ Core: Modules, Types, and Contracts 🔩
 
-1. **A common finding model** (`sys_scan.types`)
-2. **A scanner interface that yields findings** (`sys_scan.scanner`)
-3. **A registry/executor that runs scanners and aggregates results** (`sys_scan.registry` + `sys_scan.report`)
+### Module layout & build
+- `sys_scan_modules` is a C++ module library composed from `.ixx` module units under `src/core/modules/` and `src/scanners/modules/`.
+- The project uses CMake with `CMAKE_CXX_SCAN_FOR_MODULES` enabled. **Clang** is the supported compiler for module dependency scanning; you will see a configure-time diagnostic otherwise.
+- Key targets:
+  - `sys-scan`: the CLI/executable
+  - `sys_scan_modules`: archive of modules
+  - `sys-scan-tests`: C++ unit tests
+  - `fuzz_config` (when `BUILD_FUZZERS=ON`): fuzz harness for config/registry
 
-#### Findings
+### Core data models
+- `sys_scan.config` — `Config` struct: flags for scanners, concurrency controls, output format and test-root.
+- `sys_scan.types` — canonical types: `Finding`, `Severity` enum, helpers like `severity_to_string` and `severity_risk_score`.
+- These types are intentionally lightweight and POD-like to make serialization, copying and coroutine yields cheap and predictable.
 
-The core finding object contains:
+### Scanner interface and streaming model
+- `sys_scan::Scanner` exposes `sys_scan::Generator<Finding> scan()`.
+- `Generator` is coroutine-based (`sys_scan.coro`) allowing scanners to `co_yield` findings lazily as they are discovered rather than buffering large results in memory.
+- `sys_scan.report::Report::consume()` iterates a scanner's `Generator` and collects findings into a `ScanResult` per scanner. This streaming model helps keep memory bounded even when scans produce many findings.
 
-- severity (enum)
-- title/description
-- an identifier (often a file path, module name, or other stable key)
-- optional metadata for machine parsing
+### Registry and orchestration
+- `sys_scan.registry::ScannerRegistry` is responsible for:
+  - registering scanner instances
+  - determining if a scanner is enabled/disabled per `Config`
+  - running enabled scanners either **sequentially** or **in parallel** (bounded by `parallel_max_threads` and a semaphore)
+  - catching and recording per-scanner exceptions in `Report` (no process-wide crash)
 
-Severity mapping helpers live in `sys_scan.types` (e.g., `severity_to_string`).
+Design note: the registry intentionally isolates scanner failures (via try/catch) and records errors for downstream triage rather than letting a single faulty scanner break the whole run.
 
-#### Coroutines: streaming findings
+---
 
-Scanners return a coroutine-backed `Generator<Finding>` (exported by `sys_scan.coro`). This supports a streaming-style implementation where scanners can `co_yield` findings as they’re discovered.
+## Scanner modules — implementation notes
+- Each scanner lives in `src/scanners/modules/*` and is written to be testable via DI (swap in `FakeFileSystem`, `FakeProcessRunner`, etc.).
+- Scanners are conservative about resource allocation: they stream results and avoid global state where possible.
+- Many scanners use platform-specific probes (`/proc`, system APIs, package manager invocations) and include robust error handling to surface warnings (e.g., missing files, permission errors) in `Report`.
 
-The report uses a consumption pattern:
+---
 
-- `Report::consume(scanner_name, generator)` iterates the generator and captures its results into a per-scanner `ScanResult` (see `sys_scan.report`).
+## JSON output and schema
+- Output format: JSON `ground_truth_v1` compatible with `schema/v4.json`.
+- The executable prints to `stdout` by default; `--output PATH` writes to a file. Use `--canonical` flag to produce deterministic output suitable for testing.
+- The Python layer and tests rely on the schema for fixture validation and round-trip testing.
 
-### Dependency injection (DI) and system services
+---
 
-Instead of calling the OS directly everywhere, scanners can depend on abstract interfaces.
+## Python intelligence & LangGraph integration 🧠
+- Located under `agent/` — this is the analysis and orchestration layer (LLM-driven summarization, rule suggestion, triage).
+- The `agent` layer consumes the JSON report and constructs `GraphState` objects for LangGraph workflows.
+- Key modules:
+  - `graph.py`: composes the workflow, wraps async nodes into sync-friendly functions for tests
+  - `summarization.py`: normalization + LLM interface
+  - `baseline.py`, `enricher.py`, `rules.py`: domain-specific workflows
+- Tests use lightweight patches/mocks to isolate LLMs and external dependencies. Long-running "full graph" tests are marked or kept out of default CI.
 
-Key abstractions live in `sys_scan.interfaces`:
+---
 
-- filesystem access (`IFileSystem`)
-- command execution (`IProcessRunner`)
-- system information (`ISystemInfo`)
-- sleep/time (`ISleeper`)
+## Testing strategy
+- C++: unit tests in `tests/` (compiled into `sys-scan-tests`); `ctest` runs these.
+- Python: pytest suite under `agent/tests/` with fixtures and monkeypatch usage to isolate LLMs and external tools.
+- Fuzzing: `fuzz/` contains harnesses (e.g., `fuzz_config_module.cpp`) that exercise critical parsing and registry flows with libFuzzer when `BUILD_FUZZERS=ON`.
+- Coverage: `-DSYS_SCAN_ENABLE_COVERAGE=ON` produces coverage instrumentation and `ninja coverage` runs `gcovr` to produce reports.
 
-Concrete implementations like `RealFileSystem` and `RealProcessRunner` live in `sys_scan.system_services`.
+---
 
-This DI approach makes it practical to unit-test scanners by swapping in fakes.
+## Fuzzing best practices used here
+- Module-based fuzz harnesses (C++20/C++23 module imports) leverage `FuzzedDataProvider` to avoid fragile splitters and produce higher-quality, varied inputs.
+- Fuzz harnesses are small, bounded (limit arg counts/lengths) and exercise parser and executor paths safely to avoid unbounded memory or CPU usage.
 
-### Execution orchestration
+---
 
-`ScannerRegistry` owns scanner instances and runs them into a shared `Report` (see `sys_scan.registry`).
+## CI / Deployment notes
+- CI runs unit tests, coverage, and static analysis. `codeql.yml` is present for security scans; modify with caution.
+- The CMake module scanning step requires a modules-aware compiler (Clang) in CI. Provide `CC=clang CXX=clang++` when configuring.
 
-Important behaviors:
+---
 
-- Supports **sequential** execution.
-- Supports **parallel** execution when enabled via `Config`.
-	- Concurrency is bounded by a semaphore and `parallel_max_threads`.
+## Debugging and performance tips 🔍
+- If `ninja` or `cmake` fails with module scanning errors, confirm you’re using Clang (module scanning is not stable on some GCC versions).
+- To diagnose memory pressure during scans: look at scanner implementations that allocate large buffers (use streaming where possible) and leverage `Report::consume` streaming behavior.
+- For flaky or slow Python graph tests, prefer patched nodes that simulate behavior deterministically and then add a gated integration test for the full LLM path.
 
-The configuration type (`sys_scan.config`) also includes toggles for enabling/disabling families of scanners and for output formatting preferences.
-
-## Scanner modules
-
-Scanner implementations are C++ modules under `src/scanners/modules/*.ixx`. Each scanner is responsible for a specific signal source or domain.
-
-Examples you can trace end-to-end:
-
-- `ProcessScanner` reads process information from `/proc` (and emits collection warnings when process metadata can’t be read).
-- `KernelScanner` checks kernel parameters under `/proc/sys/...`.
-- `ModuleScanner` enumerates loaded kernel modules.
-- `MACScanner` inspects SELinux/AppArmor state.
-- `IntegrityScanner` can call out to package managers (e.g., `dpkg -V` / `rpm -Va`) via `IProcessRunner`.
-
-For a scanner-by-scanner index, see **[Core Scanners](Core-Scanners.md)**.
-
-## JSON schemas and report formats
-
-The repository includes a single active JSON schema in `schema/` (`schema/v4.json`). The Python intelligence layer expects the raw scan report to conform to that schema.
-
-The repository root also includes a sample `report.json` showing a v4/ground_truth_v1-compatible shape.
-
-### Current limitation
-
-In this workspace snapshot:
-
-- The core emits a v4 (ground_truth_v1 compatible) JSON report by default (stdout), or to `--output`.
-
-The schema and sample report are useful as a stable contract and for testing the Python analysis pipeline with fixtures.
-
-## Python intelligence layer
-
-The Python layer is packaged under `agent/` and implements a Typer CLI in `agent/sys_scan_agent/cli.py`.
-
-Key capabilities implemented in code:
-
-- report validation against `schema/v4.json` (`validate-report`)
-- enrichment workflow (`analyze`) producing `enriched_report.json`
-- canonicalization of output for stable diffs
-- optional metrics export (`--metrics-out`) and optional HTML/diff artifacts
-
-## If you’re extending the system
-
-### Add a new C++ scanner
-
-1. Create a new module in `src/scanners/modules/` implementing the scanner interface.
-2. Register it in `src/main.cpp` (current composition root) and/or in a future CLI entrypoint.
-3. Add tests for the scanner using DI-friendly fake services.
-
-### Add a new Python enrichment step
-
-1. Add a node/function under `agent/sys_scan_agent/`.
-2. Wire it into the workflow called by `run_intelligence_workflow()`.
-3. Add a fixture report and a pytest validating the new behavior.
+---
