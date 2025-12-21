@@ -100,49 +100,49 @@ sys-scan-ui /path/to/enriched_report.json
 
 ## LangGraph Integration
 
-The `/integration` directory provides human-in-the-loop capabilities:
+**Note:** The human-in-the-loop integration code previously shipped under `UI/integration/` has been consolidated into the Python Agent package so interactive features work reliably as a first-class capability.
+
+### Where the integration lives now
+
+- `agent/sys_scan_agent/graph_nodes_ui.py` — **Investigation Director** node (concise post-analysis summaries and investigation areas)
+- `agent/sys_scan_agent/ipc_server.py` — IPC utilities and `GraphCommunicator`
 
 ### Investigation Director Node
 
-Runs at the END of automated analysis to present:
+Runs at the END of automated analysis to produce:
 - Concise findings summary (total, by severity, novel count)
 - Specific correlations discovered
 - Concrete investigation areas with exact finding IDs
-- Attack patterns detected
+- Attack patterns detected (e.g., privilege escalation chains)
 
-Example output:
+Example payload sent to the UI (or stored in state):
 ```json
 {
-  "findings": {"total": 45, "by_severity": {"critical": 5, ...}, "novel": 7},
-  "correlations": {"total": 3, "details": [...]},
-  "investigation_areas": [
-    {
-      "title": "Privilege escalation chain detected",
-      "what_was_found": "4 privilege escalation vectors found, 2 correlations",
-      "finding_ids": ["finding_1", "finding_2", ...],
-      "impact": "critical"
-    }
-  ]
+  "type": "investigation_summary",
+  "summary": { "findings": {"total": 45, ... }, ... },
+  "areas": [ ... ]
 }
 ```
 
-### Usage
+### How to run (two options)
 
-```python
-from integration.workflow_extension import run_graph_with_ui
+- **UI-first (recommended):** Launch the UI binary; if no IPC socket exists the UI will attempt to spawn the Agent subprocess and wait for the socket (`/tmp/sys-scan-ui.sock` by default):
 
-# Run with Investigation Director
-final_state = run_graph_with_ui(
-    initial_state={...},
-    interactive_mode=True
-)
-
-# Access results
-summary = final_state['investigation_summary']
-areas = final_state['investigation_areas']
+```bash
+./build/dist/bin/sys-scan-ui
 ```
 
-See [`INTEGRATION_SUMMARY.md`](INTEGRATION_SUMMARY.md) for complete details.
+- **Agent-first:** Run the Agent with the `--interactive` flag to start its IPC server and expose the Investigation Director node to incoming UI connections:
+
+```bash
+sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
+```
+
+### Developer notes
+- Tests for the Agent-side integration live in `tests/test_graph_nodes_ui.py`.
+- The Agent tries a best-effort send from the Investigation Director node when a UI is available; when starting long-running interactive services consider creating a persistent communicator (see `agent/sys_scan_agent/ipc_server.py`).
+
+For more design details and troubleshooting steps, see `docs/wiki/Interactive-UI.md`.
 
 ## Project Structure
 

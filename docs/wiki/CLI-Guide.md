@@ -83,6 +83,21 @@ sys-scan-graph analyze \
 
 Supported extensions: `.json`, `.csv`, `.prom`.
 
+### Interactive / UI mode
+
+The Agent supports an interactive mode that enables IPC with a UI dashboard. These options are intended for local, interactive workflows (not CI):
+
+- `--interactive` — start IPC server and enable the Investigation Director node at the end of the pipeline.
+- `--socket <path>` — path for the Unix domain socket used for UI<->Agent communication (default: `/tmp/sys-scan-ui.sock`).
+
+Example (start interactive run with socket):
+
+```bash
+sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
+```
+
+Note: When `--interactive` is set, the agent will attempt to start the IPC server (via `agent.sys_scan_agent.ipc_server.start_ipc_thread`).
+
 ### Environment variables (optional)
 
 The agent supports several `AGENT_*` environment variables. Common ones include:

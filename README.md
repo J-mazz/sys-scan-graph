@@ -64,6 +64,39 @@ pip install \
 pip install langchain langchain-openai langchain-anthropic
 ```
 
+### Optional Dashboard (Interactive UI) ✅
+
+We provide an optional Qt/QML dashboard (`UI/`) that can run the Agent interactively and display investigation summaries. The UI build is controlled from the root CMake **master** using the `BUILD_UI` option.
+
+- Enable UI build:
+
+```bash
+cmake -B build -S . -DBUILD_UI=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+```
+
+- Requirements: Qt6 (install platform packages e.g. `qt6-base-dev`, `qt6-declarative-dev` on Debian/Ubuntu) or let CMake disable the UI when Qt6 is not found.
+
+- Running options:
+  - UI-first (recommended for interactive sessions): run the UI binary (`sys-scan-ui`). If the UI cannot find an existing agent IPC socket it will attempt to spawn the Agent as a worker subprocess using the default socket (`/tmp/sys-scan-ui.sock`).
+
+```bash
+# Launch UI; it will try to start the agent if needed
+./build/dist/bin/sys-scan-ui
+```
+
+  - Agent-first: run the Agent with the `--interactive` flag which starts an IPC server and enables the Investigation Director node in the graph. The Agent exposes a `--socket` option to set the socket path.
+
+```bash
+sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
+```
+
+- Developer notes:
+  - Integration code for the Investigation Director and IPC lives inside the Agent package (`agent/sys_scan_agent/graph_nodes_ui.py` and `agent/sys_scan_agent/ipc_server.py`).
+  - Unit tests for the Investigation Director node are in `tests/test_graph_nodes_ui.py`.
+
+For full developer details and troubleshooting, see `docs/wiki/Interactive-UI.md`.
+
 ### Run (memory-safe defaults)
 
 ```bash
