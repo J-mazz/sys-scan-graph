@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=sys-scan Security Dashboard
+GenericName=Security Analysis Dashboard
+Comment=Interactive dashboard for sys-scan-graph security reports
+Icon=sys-scan-ui
+Exec=sys-scan-ui
+Terminal=false
+Categories=System;Security;Monitor;
+Keywords=security;analysis;scan;report;
