@@ -77,12 +77,39 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    container: fedora:latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build lcov gcovr python3-pip
-      - name: Configure coverage build
+      - name: Install system deps (dnf)
         run: |
+          sudo dnf -y update || true
+          sudo dnf -y install cmake ninja-build lcov gcovr python3-pip tar xz curl
+      - name: Install Clang 18+ (prebuilt LLVM tarball)
+        run: |
+          set -euo pipefail
+          LLVM_VER=18.0.0
+          LLVM_TAR=clang+llvm-${LLVM_VER}-x86_64-linux-gnu-ubuntu-22.04.tar.xz
+          LLVM_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VER}/${LLVM_TAR}
+          echo "Downloading LLVM from ${LLVM_URL}"
+          curl -sSL ${LLVM_URL} -o /tmp/${LLVM_TAR}
+          sudo mkdir -p /opt/clang18
+          sudo tar -xJf /tmp/${LLVM_TAR} -C /opt/clang18 --strip-components=1
+          sudo chown -R $(id -u):$(id -g) /opt/clang18
+          echo "/opt/clang18/bin" | sudo tee /etc/paths.d/clang18 || true
+          export PATH=/opt/clang18/bin:$PATH
+          clang --version
+          CLANG_MAJOR=$(clang --version | head -n1 | sed -E 's/.*version ([0-9]+).*/\1/') || true
+          if [ -z "$CLANG_MAJOR" ] || [ "$CLANG_MAJOR" -lt 18 ]; then
+            echo "Clang version $CLANG_MAJOR is less than required 18" >&2
+            exit 1
+          fi
+      - name: Configure coverage build
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          export CC=clang
+          export CXX=clang++
           cmake -B build-coverage -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSYS_SCAN_ENABLE_COVERAGE=ON
       - name: Build coverage
         run: cmake --build build-coverage -j$(nproc)
