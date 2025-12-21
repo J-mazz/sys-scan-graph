@@ -3,35 +3,41 @@ name: CodeQL
 on:
   push:
     branches: [ main ]
-  pull_request:
+  pull_request: 
     branches: [ main ]
   schedule:
-    - cron: '0 3 * * 0'
+    - cron:  '0 3 * * 0'
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    permissions:
+    container: 
+      image: fedora:latest
+    permissions: 
       actions: read
-      contents: read
+      contents:  read
       security-events: write
     strategy:
       fail-fast: false
-      matrix:
+      matrix: 
         language: [ 'cpp' ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses:  actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y gcc g++ cmake ninja-build libbpf-devel kernel-devel git
+      
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages:  ${{ matrix.language }}
+      
       - name: Build
         run: |
-          sudo apt-get update && sudo apt-get install -y libbpf-dev linux-tools-common ninja-build g++-13 gcc-13
-          export CXX=g++-13
-          export CC=gcc-13
           cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
           cmake --build build -j$(nproc)
+      
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
