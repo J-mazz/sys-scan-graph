@@ -43,13 +43,14 @@ jobs:
         run: |
           cd agent
           python -m pip install --upgrade pip
-          pip install pytest-timeout
+          pip install pytest-timeout pytest-cov
           pip install -r requirements.txt
           pip install -e .
-      - name: Run Python tests
+      - name: Run Python tests + coverage
         run: |
           cd agent
-          python -m pytest tests/ -v --tb=short --maxfail=5 --timeout=300
+          python -m pytest tests/ -v --tb=short --maxfail=5 --timeout=300 \
+            --cov=agent --cov-report=xml:../build-cov/agent-coverage.xml --cov-fail-under=85
         env:
           SYS_SCAN_SKIP_CHECK: "1"
 
