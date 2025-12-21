@@ -216,7 +216,7 @@ def baseline_tools_sync(state: GraphState) -> GraphState:
 # Workflow Builder
 # ==============================================================================
 
-def build_workflow(enhanced: Optional[bool] = None):
+def build_workflow(enhanced: Optional[bool] = None, interactive: bool = False):
     """Build and compile a robust StateGraph workflow.
 
     Features:
@@ -270,7 +270,18 @@ def build_workflow(enhanced: Optional[bool] = None):
     wf.add_edge("integrate_baseline", "risk_analysis")
     wf.add_edge("risk_analysis", "compliance_checker_node")
     wf.add_edge("compliance_checker_node", "metrics_collection")
-    wf.add_edge("metrics_collection", END)
+    # Final edge: either to END (non-interactive) or to Investigation Director when interactive
+    if interactive:
+        try:
+            from .graph_nodes_ui import investigation_director_node
+            wf.add_node("investigation_director", investigation_director_node)
+            wf.add_edge("metrics_collection", "investigation_director")
+            wf.add_edge("investigation_director", END)
+        except Exception as e:  # pragma: no cover - optional
+            logger.warning(f"Interactive mode requested but could not add Investigation Director: {e}")
+            wf.add_edge("metrics_collection", END)
+    else:
+        wf.add_edge("metrics_collection", END)
 
     try:
         compiled = wf.compile()

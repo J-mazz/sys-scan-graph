@@ -15,11 +15,24 @@ include(CTest)
 option(SYS_SCAN_ENABLE_COVERAGE "Enable coverage flags (for tests)" OFF)
 set(SYS_SCAN_COVERAGE_MIN 85 CACHE STRING "Minimum coverage percentage for line/function/branch")
 option(BUILD_FUZZERS "Build fuzzing targets" OFF)
+option(BUILD_UI "Build the Qt/QML Dashboard" ON) # <--- NEW OPTION
 
 # External Dependencies
 find_package(Threads REQUIRED)
 find_package(nlohmann_json QUIET)
 find_package(OpenSSL QUIET)
+
+# --- UI Build Option: attempt to find Qt6 if requested ---
+if(BUILD_UI)
+    # Ensure Qt6 is available before descending
+    find_package(Qt6 COMPONENTS Quick Core Qml QUIET)
+    if(Qt6_FOUND)
+        message(STATUS "Qt6 found, enabling UI build.")
+        add_subdirectory(UI)
+    else()
+        message(WARNING "Qt6 not found. UI build disabled.")
+    endif()
+endif()
 
 # --- Module Library Definition ---
 add_library(sys_scan_modules)
