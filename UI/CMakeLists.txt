@@ -54,10 +54,10 @@ target_sources(sys_scan_core_ui
         src/core/ipc_service.ixx
 )
 # Implementation units for modules
-qt6_wrap_cpp(MOC_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/agent_service.ixx
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/ipc_service.ixx
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/finding_model.ixx
+qt6_wrap_cpp(MOC_FROM_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/moc_includes/agent_service_moc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/moc_includes/ipc_service_moc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/moc_includes/finding_model_moc.h
 )
 
 target_sources(sys_scan_core_ui
@@ -66,10 +66,13 @@ target_sources(sys_scan_core_ui
         src/core/finding_model.cpp
         src/core/agent_service.cpp
         src/core/ipc_service.cpp
+        src/core/finding_model.ixx
+        src/core/agent_service.ixx
+        src/core/ipc_service.ixx
 )
 
-if(MOC_SRCS)
-    target_sources(sys_scan_core_ui PRIVATE ${MOC_SRCS})
+if(MOC_FROM_HEADERS)
+    target_sources(sys_scan_core_ui PRIVATE ${MOC_FROM_HEADERS})
 endif()
 
 
