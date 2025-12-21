@@ -54,6 +54,12 @@ target_sources(sys_scan_core_ui
         src/core/ipc_service.ixx
 )
 # Implementation units for modules
+qt6_wrap_cpp(MOC_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/agent_service.ixx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/ipc_service.ixx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/finding_model.ixx
+)
+
 target_sources(sys_scan_core_ui
     PRIVATE
         src/core/report_parser.cpp
@@ -61,6 +67,10 @@ target_sources(sys_scan_core_ui
         src/core/agent_service.cpp
         src/core/ipc_service.cpp
 )
+
+if(MOC_SRCS)
+    target_sources(sys_scan_core_ui PRIVATE ${MOC_SRCS})
+endif()
 
 
 # Ensure Qt's moc (automoc) runs for meta-object macros inside module sources
