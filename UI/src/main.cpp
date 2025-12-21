@@ -12,6 +12,11 @@ import sys_scan.ui.report_parser;
 import sys_scan.ui.finding_model;
 import sys_scan.ui.types;
 import sys_scan.ui.agent;
+import sys_scan.ui.ipc;
+#include <QProcess>
+
+// Instantiate the model at file scope so it is accessible in signal handlers
+static sys_scan::ui::FindingModel model;
 
 int main(int argc, char *argv[]) {
     // Prefer Vulkan rendering backend when available
@@ -27,8 +32,7 @@ int main(int argc, char *argv[]) {
     qmlRegisterType<sys_scan::ui::FindingModel>("SysScan.UI", 1, 0, "FindingModel");
     qRegisterMetaType<sys_scan::ui::Finding>("sys_scan::ui::Finding");
 
-    // Initialize Model
-    static sys_scan::ui::FindingModel model;
+    // Initialize Model (already at file scope)
 
 
 
@@ -88,7 +92,7 @@ int main(int argc, char *argv[]) {
 
     // Reload model when Python pipeline notifies of new report
     QObject::connect(&ipc, &sys_scan::ui::IpcService::analysisCompleted,
-        [&model](QString path) {
+        [](QString path) {
             // Load file content and parse; guard failures silently
             QFile f(path);
             if (!f.open(QIODevice::ReadOnly)) return;

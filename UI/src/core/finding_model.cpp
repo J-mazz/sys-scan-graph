@@ -73,7 +73,4 @@ namespace sys_scan::ui {
 
 } // namespace sys_scan::ui
 
-// Place the moc-generated implementation into a private module fragment so
-// the meta-object and related symbols are compiled into this translation unit
-module :private;
-#include "finding_model.moc"
+// moc generated in the interface unit (finding_model.ixx)

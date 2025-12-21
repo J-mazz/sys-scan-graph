@@ -2,6 +2,8 @@ module;
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
+#include <QLocalSocket>
+#include <QTimer>
 
 module sys_scan.ui.ipc;
 
@@ -84,6 +86,4 @@ namespace sys_scan::ui {
 
 }
 
-// ensure moc symbols are emitted in this TU
-module :private;
-#include "ipc_service.moc"
+// moc generated in the interface unit (ipc_service.ixx)

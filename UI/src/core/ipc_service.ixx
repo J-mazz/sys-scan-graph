@@ -35,3 +35,6 @@ export namespace sys_scan::ui {
         QTimer* m_retryTimer{};
     };
 }
+
+// Ensure moc symbols for Q_OBJECT in the interface are generated
+#include "moc_ipc_service.moc"

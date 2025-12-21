@@ -29,3 +29,6 @@ export namespace sys_scan::ui {
         Impl* m_impl;
     };
 }
+
+// Ensure moc symbols for Q_OBJECT in the interface are generated
+#include "moc_agent_service.moc"

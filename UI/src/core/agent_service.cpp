@@ -5,6 +5,7 @@ module;
 #include <vector>
 #include <QString>
 #include <string>
+#include <coroutine>
 
 // llama includes are resolved when FetchContent makes llama available
 #include <llama.h>
@@ -161,6 +162,4 @@ namespace sys_scan::ui {
 
 }
 
-// Place moc compile into a private module fragment so vtable and metaobject are emitted here
-module :private;
-#include "agent_service.moc"
+// moc generated in the interface unit (agent_service.ixx)

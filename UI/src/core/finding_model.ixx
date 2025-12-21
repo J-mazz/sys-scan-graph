@@ -37,3 +37,6 @@ export namespace sys_scan::ui {
     };
 
 }
+
+// Ensure moc symbols for Q_OBJECT in the interface are generated
+#include "moc_finding_model.moc"

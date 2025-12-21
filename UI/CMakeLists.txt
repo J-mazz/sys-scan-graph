@@ -19,8 +19,17 @@ find_package(nlohmann_json REQUIRED)
 # --- AI Backend: llama.cpp (Vulkan) ---
 include(FetchContent)
 
-# Force Vulkan backend for GGML
-set(GGML_VULKAN ON CACHE BOOL "Enable Vulkan Backend" FORCE)
+# Prefer Vulkan backend for GGML when shader compiler (glslc) is available.
+# If the host doesn't have glslc installed (common on minimal images), fall back to CPU-only.
+find_program(GLSLC_EXECUTABLE glslc)
+if(GLSLC_EXECUTABLE)
+    message(STATUS "glslc found (${GLSLC_EXECUTABLE}) — enabling GGML Vulkan backend")
+    set(GGML_VULKAN ON CACHE BOOL "Enable Vulkan Backend" FORCE)
+else()
+    message(STATUS "glslc not found — building llama.cpp without Vulkan (CPU-only)")
+    set(GGML_VULKAN OFF CACHE BOOL "Enable Vulkan Backend" FORCE)
+endif()
+
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "Disable Llama Tests" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "Disable Llama Examples" FORCE)
 
@@ -51,16 +60,16 @@ target_sources(sys_scan_core_ui
         src/core/finding_model.cpp
         src/core/agent_service.cpp
         src/core/ipc_service.cpp
+        src/core/moc_agent_service.cpp
+        src/core/moc_finding_model.cpp
+        src/core/moc_ipc_service.cpp
 )
 # Ensure Qt's moc (automoc) runs for meta-object macros inside module sources
 set_target_properties(sys_scan_core_ui PROPERTIES AUTOMOC ON)
-# Skip automoc for module interface files where we include the moc in a private TU
-set_source_files_properties(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/finding_model.ixx
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/types.ixx
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/agent_service.ixx
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/ipc_service.ixx
-    PROPERTIES SKIP_AUTOMOC ON)
+# Allow automoc to scan and process module interface files that contain Q_OBJECT.
+# We include the generated moc files directly in the interface units, so automoc
+# must be able to find and process the Q_OBJECT locations.
+# (No SKIP_AUTOMOC set here.)
 
 # Add Network for QLocalSocket
 find_package(Qt6 REQUIRED COMPONENTS Network)
@@ -82,7 +91,7 @@ endif()
 qt_add_executable(sys-scan-ui
     MANUAL_FINALIZATION
     src/main.cpp
-    resources/qml/Main.qml
+    assets/qml/Main.qml
 )
 
 target_link_libraries(sys-scan-ui PRIVATE Qt6::Quick sys_scan_core_ui)

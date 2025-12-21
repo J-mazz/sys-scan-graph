@@ -12,10 +12,44 @@ from agent.sys_scan_agent.ipc_server import GraphCommunicator, FeedbackChannel
 
 
 def test_investigation_director_no_ui():
-    state = {'enriched_findings': [], 'correlations': [], 'risk_assessment': {}}
+    state = {'enriched_findings': [], 'correlations': [], 'risk_assessment': {}, 'output_path': '/tmp/foo.json'}
     out = investigation_director_node(state)
     assert out.get('investigation_complete') is True
     assert 'investigation_summary' in out
+
+
+def test_investigation_director_reports_path_in_payload(tmp_path):
+    sock = str(tmp_path / 'graph_ui.sock')
+    comm = GraphCommunicator(channel=FeedbackChannel(socket_path=sock))
+    assert comm.start_as_server()
+    client = GraphCommunicator(channel=FeedbackChannel(socket_path=sock))
+    assert client.connect_as_client()
+
+    class FakeComm:
+        def __init__(self):
+            self.payload = None
+        def connect_as_client(self):
+            return True
+        def send_graph_state(self, payload):
+            self.payload = payload
+            return True
+        def close(self):
+            pass
+
+    import agent.sys_scan_agent.graph_nodes_ui as gnu
+    orig = gnu.GraphCommunicator
+    fake = FakeComm()
+    gnu.GraphCommunicator = lambda: fake
+
+    try:
+        state = {'enriched_findings': [], 'correlations': [], 'risk_assessment': {}, 'output_path': '/tmp/foo.json'}
+        out = investigation_director_node(state)
+        assert fake.payload is not None
+        assert fake.payload.get('report_path') == '/tmp/foo.json'
+    finally:
+        gnu.GraphCommunicator = orig
+        client.close()
+        comm.close()
 
 
 def test_investigation_director_sends_when_ui_available(tmp_path):
