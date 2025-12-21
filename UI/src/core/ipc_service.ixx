@@ -36,5 +36,5 @@ export namespace sys_scan::ui {
     };
 }
 
-// Ensure moc symbols for Q_OBJECT in the interface are generated
-#include "moc_ipc_service.moc"
+// MOC include moved into implementation TU (ipc_service.cpp) to ensure
+// metaobject symbols are compiled into a non-module translation unit.

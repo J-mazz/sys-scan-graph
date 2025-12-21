@@ -38,5 +38,5 @@ export namespace sys_scan::ui {
 
 }
 
-// Ensure moc symbols for Q_OBJECT in the interface are generated
-#include "moc_finding_model.moc"
+// MOC include moved into implementation TU (finding_model.cpp) to ensure
+// metaobject symbols are compiled into a non-module translation unit.

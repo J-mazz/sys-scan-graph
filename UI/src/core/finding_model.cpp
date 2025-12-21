@@ -73,4 +73,5 @@ namespace sys_scan::ui {
 
 } // namespace sys_scan::ui
 
-// moc generated in the interface unit (finding_model.ixx)
+// Ensure moc symbols for Q_OBJECT are emitted in this TU
+#include "finding_model.moc"

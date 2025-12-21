@@ -60,10 +60,9 @@ target_sources(sys_scan_core_ui
         src/core/finding_model.cpp
         src/core/agent_service.cpp
         src/core/ipc_service.cpp
-        src/core/moc_agent_service.cpp
-        src/core/moc_finding_model.cpp
-        src/core/moc_ipc_service.cpp
 )
+
+
 # Ensure Qt's moc (automoc) runs for meta-object macros inside module sources
 set_target_properties(sys_scan_core_ui PROPERTIES AUTOMOC ON)
 # Allow automoc to scan and process module interface files that contain Q_OBJECT.

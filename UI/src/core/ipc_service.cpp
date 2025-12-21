@@ -86,4 +86,5 @@ namespace sys_scan::ui {
 
 }
 
-// moc generated in the interface unit (ipc_service.ixx)
+// Ensure moc symbols for Q_OBJECT are emitted in this TU
+#include "ipc_service.moc"
