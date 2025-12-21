@@ -81,7 +81,7 @@ target_link_libraries(sys-scan PRIVATE sys_scan_core)
 
 # Fuzzing targets
 if(BUILD_FUZZERS)
-  add_executable(fuzz_config fuzz/fuzz_config.cpp)
+  add_executable(fuzz_config fuzz/fuzz_config_module.cpp)
   target_link_libraries(fuzz_config PRIVATE sys_scan_core)
   target_compile_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
   target_link_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
