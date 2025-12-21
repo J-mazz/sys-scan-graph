@@ -21,7 +21,7 @@ INJECTED_INDICATORS = {
 
 
 def load_fixture(name: str) -> PathLibPath:
-    base = Path(__file__).parent / 'fixtures' / 'malicious'
+    base = Path(__file__).resolve().parents[1] / 'fixtures' / 'malicious'
     path = base / f'{name}.json'
     if not path.exists():
         raise FileNotFoundError(path)

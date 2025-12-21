@@ -71,6 +71,12 @@ setup(
             'safetensors>=0.4.0',
             'huggingface_hub>=0.20.0',
         ],
+        'api': [
+            'langchain>=0.3,<1',
+            'langchain-core>=0.3,<1',
+            'langchain-openai>=0.2,<1',
+            'langchain-anthropic>=0.2,<1',
+        ],
         'dev': [
             'pytest>=8.0,<9',
             'pytest-asyncio>=0.23,<0.24',

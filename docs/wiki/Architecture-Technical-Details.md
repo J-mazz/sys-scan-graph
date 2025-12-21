@@ -93,15 +93,15 @@ For a scanner-by-scanner index, see **[Core Scanners](Core-Scanners.md)**.
 
 The repository includes a single active JSON schema in `schema/` (`schema/v4.json`). The Python intelligence layer expects the raw scan report to conform to that schema.
 
-The repository root also includes a sample `report.json` showing the v2 shape.
+The repository root also includes a sample `report.json` showing a v4/ground_truth_v1-compatible shape.
 
 ### Current limitation
 
 In this workspace snapshot:
 
-- The core emits the v4 ground-truth-compatible JSON when requested by CLI flags.
+- The core emits a v4 (ground_truth_v1 compatible) JSON report by default (stdout), or to `--output`.
 
-The schema and sample report are still useful as a stable contract and for testing the Python analysis pipeline with fixtures.
+The schema and sample report are useful as a stable contract and for testing the Python analysis pipeline with fixtures.
 
 ## Python intelligence layer
 

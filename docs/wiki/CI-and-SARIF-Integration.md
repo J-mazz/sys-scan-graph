@@ -1,16 +1,18 @@
-# CI and SARIF Integration
+# CI integration (artifacts-first)
 
-This guide shows how to run sys-scan-graph in CI and upload SARIF to GitHub Code Scanning in YOUR repository (the consumer of the scanner).
+This guide shows how to run sys-scan-graph in CI and publish the **JSON artifacts** (`report.json` and `enriched_report.json`) for review.
+
+> Note: the C++ core in this repository emits **JSON**; SARIF/NDJSON switches are not currently implemented in `src/main.cpp`.
 
 ## Prerequisites
 
-- A built binary available to the workflow (either download from Releases or build from source).
-- Permissions: `security-events: write`.
+- A built `sys-scan` binary available to the workflow (either download from Releases or build from source).
 
-## Example: Ubuntu Runner with SARIF Upload
+## Example: GitHub Actions (Ubuntu)
 
 ```yaml
 name: Security Scan (sys-scan-graph)
+
 on:
   schedule:
     - cron: "0 3 * * *"
@@ -20,7 +22,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   scan:
@@ -37,26 +38,34 @@ jobs:
           fileName: "sys-scan-graph-*-linux-x86_64.tar.gz"
           extract: true
 
-      - name: Run scan
+      - name: Run core scan (JSON)
         run: |
           chmod +x sys-scan
-          ./sys-scan --sarif --min-severity low --modules-summary > sys-scan.sarif
+          ./sys-scan --canonical --output report.json
 
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Enrich (optional)
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install -U pip
+          pip install sys-scan-agent
+          sys-scan-graph analyze --report report.json --out enriched_report.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: sys-scan.sarif
+          name: sys-scan-graph-results
+          path: |
+            report.json
+            enriched_report.json
 ```
 
 ## Notes
 
-- The scanner emits SARIF suitable for ingestion. Use `--min-severity` to tune noise.
-- For deterministic artifacts, prefer `--canonical` for JSON outputs. SARIF is for visualization and triage in GitHub.
-- The core scanner runs locally and produces artifacts you can upload (e.g., SARIF) as part of your CI workflow.
+- For deterministic artifacts, prefer `--canonical` for core JSON output.
+- If you need GitHub Code Scanning integration, you can treat the JSON output as a build artifact, or add a JSON→SARIF conversion step (not shipped in this repository today).
 
-## Alternative: Build from Source
-
-If you prefer to build from source in your CI:
+## Alternative: build from source
 
 ```yaml
 - name: Setup dependencies
@@ -64,95 +73,11 @@ If you prefer to build from source in your CI:
     sudo apt-get update
     sudo apt-get install -y build-essential cmake ninja-build
 
-- name: Build sys-scan-graph
+- name: Build sys-scan
   run: |
     cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build -j$(nproc)
 
 - name: Run scan
-  run: ./build/sys-scan --sarif --min-severity medium > security-scan.sarif
+  run: ./build/sys-scan --canonical --output report.json
 ```
-
-## Configuration Options
-
-### Severity Filtering
-
-```bash
-# Only report high and critical findings
-./sys-scan --sarif --min-severity high > scan.sarif
-
-# Include all findings (verbose)
-./sys-scan --sarif --min-severity info > scan.sarif
-```
-
-### Scanner Modules
-
-```bash
-# Run specific modules
-./sys-scan --sarif --modules-only suid,network > scan.sarif
-
-# Skip certain modules
-./sys-scan --sarif --skip-modules auditd,ebpf > scan.sarif
-```
-
-### Output Formats
-
-```bash
-# SARIF for GitHub Security tab
-./sys-scan --sarif > scan.sarif
-
-# JSON for custom processing
-./sys-scan --canonical --json > scan.json
-
-# NDJSON for streaming
-./sys-scan --ndjson > scan.ndjson
-```
-
-## Integration with Other CI Systems
-
-### GitLab CI
-
-```yaml
-scan_security:
-  image: ubuntu:22.04
-  before_script:
-    - apt-get update && apt-get install -y wget tar
-    - wget https://github.com/J-mazz/sys-scan-graph/releases/latest/download/sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
-    - tar -xzf sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
-  script:
-    - chmod +x sys-scan
-    - ./sys-scan --sarif --min-severity medium > gl-sast-sys-scan-graph.sarif
-  artifacts:
-    reports:
-      sast: gl-sast-sys-scan-graph.sarif
-```
-
-### Jenkins
-
-```groovy
-pipeline {
-    agent { docker { image 'ubuntu:22.04' } }
-    stages {
-        stage('Security Scan') {
-            steps {
-                sh '''
-                    apt-get update && apt-get install -y wget tar
-                    wget https://github.com/J-mazz/sys-scan-graph/releases/latest/download/sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
-                    tar -xzf sys-scan-graph-v5.0.1-linux-x86_64.tar.gz
-                    chmod +x sys-scan
-                    ./sys-scan --sarif --min-severity high > scan.sarif
-                '''
-                publishSARIF(file: 'scan.sarif')
-            }
-        }
-    }
-}
-```
-
-## Best Practices
-
-1. **Schedule Regular Scans**: Use cron schedules for nightly security scans
-2. **Adjust Severity Thresholds**: Start with `medium` or `high` to reduce noise
-3. **Monitor Results**: Set up notifications for new critical findings
-4. **Baseline Management**: Use `--baseline` for known acceptable findings
-5. **Deterministic Builds**: Use `--canonical` for reproducible results in CI

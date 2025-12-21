@@ -5,9 +5,7 @@ It is intended to be **accurate and repo-aligned**, not legal advice.
 
 ## Summary
 
-- **Code (core + agent):** Apache License 2.0 (see `../../LICENSE`)
-- **Documentation (`docs/`):** Creative Commons Attribution 4.0 International (CC BY 4.0)
-- **Brand assets (`assets/`):** All rights reserved (see `../../NOTICE`)
+- **Repository content (code + docs + assets):** Apache License 2.0 (see `../../LICENSE`)
 
 If you are redistributing or embedding sys-scan-graph, also review:
 
@@ -52,7 +50,7 @@ http://www.apache.org/licenses/
 ### Documentation
 
 - **Content**: Wiki pages, guides, architecture docs
-- **License**: Creative Commons Attribution 4.0 International
+- **License**: Apache License 2.0
 - **Copyright**: Joseph Mazzini
 
 ### Build Tools and Scripts
@@ -148,7 +146,7 @@ See `../../LICENSE`.
 
 ### Documentation License
 
-[Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/legalcode)
+See `../../LICENSE`.
 
 ---
 

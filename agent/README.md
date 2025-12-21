@@ -1,24 +1,14 @@
 # sys-scan-graph
 
-<div align="center">
-  <img src="../assets/sys-scan-graph_badge.jpg" alt="sys-scan-graph Logo" width="500"/>
-</div>
+![sys-scan-graph Logo](../assets/sys-scan-graph_badge.jpg)
 
 ## System Security Scanner & Intelligence Graph
 
 **Sys-Scan-Graph** is a high-speed security analysis tool that transforms raw data from multiple security surfaces into a unified, actionable report.
 
-<div align="center">
-  <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/images/analyzed-by-codescene-badge.svg" alt="CodeScene Analysis" />
-  </a>
-  <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/projects/71206/status-badges/average-code-health" alt="CodeScene Average Code Health" />
-  </a>
-  <a href="https://codescene.io/projects/71206">
-    <img src="https://codescene.io/projects/71206/status-badges/system-mastery" alt="CodeScene System Mastery" />
-  </a>
-</div>
+[![CodeScene Analysis](https://codescene.io/images/analyzed-by-codescene-badge.svg)](https://codescene.io/projects/75070)
+[![CodeScene Average Code Health](https://codescene.io/projects/71206/status-badges/average-code-health)](https://codescene.io/projects/75070)
+[![CodeScene System Mastery](https://codescene.io/projects/71206/status-badges/system-mastery)](https://codescene.io/projects/75070)
 
 This directory contains the optional **Python intelligence layer**, published as the `sys-scan-agent` package. It consumes JSON produced by the C++ core scanner and enriches/summarizes results locally.
 
@@ -26,8 +16,8 @@ This directory contains the optional **Python intelligence layer**, published as
 
 - **Local-first analysis** of `sys-scan` JSON reports
 - **CLI entry points** provided by the package (`sys-scan-graph`, `sys-scan-intelligence`)
-- **Multiple output formats** including canonical JSON, NDJSON, SARIF, and self-contained HTML
-
+- **Deterministic outputs** via canonicalization and stable ordering
+- **Optional artifacts** such as HTML reports (configured via `config.yaml`) and metrics export (`--metrics-out`)
 
 ---
 
@@ -48,7 +38,16 @@ pip install sys-scan-agent
 Optional local-LLM dependencies:
 
 ```bash
-pip install 'sys-scan-agent[ai]'
+pip install \
+  langgraph langchain-core \
+  torch transformers peft accelerate safetensors huggingface_hub
+```
+
+Optional external inference dependencies (LangChain API provider):
+
+```bash
+# IMPORTANT: You must provide your own provider credentials (not bundled with this project).
+pip install langchain langchain-openai langchain-anthropic
 ```
 
 ### Basic Usage
@@ -65,8 +64,8 @@ sys-scan-graph analyze --report report.json --out enriched_report.json
 ### Generate HTML Report
 
 ```bash
-# Enable HTML generation in config.yaml, then run:
-sys-scan-graph analyze --report report.json --out enriched_v4.json --prev enriched_report.json
+# Enable HTML generation in ./config.yaml, then run:
+sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
 ---
@@ -102,8 +101,8 @@ This repository contains:
 ## Key Design Principles
 
 - **Type-safe architecture** with a C++23 toolchain using C++20 modules and dependency injection via ScanContext
-- **Deterministic, reproducible results** with canonical JSON (RFC 8785 JCS) and stable ordering
-- **Zero-trust security** with embedded LLM, capability dropping, and seccomp sandboxing
+- **Deterministic, reproducible results** with stable ordering and canonicalization in the Python layer
+- **Local-first security posture**: no outbound LLM API calls by default; optional external inference is explicit opt-in
 - **Thread-safe parallelization** with mutex-protected report aggregation
 - **Extensible plugin system** supporting custom scanners, rules, and LLM providers
 - **Comprehensive testing** via CTest (C++) and pytest (Python)
@@ -118,15 +117,12 @@ This project is licensed under the **Apache License 2.0**. See [`LICENSE`](../LI
 
 ## Support & Community
 
-- **Documentation**: [Wiki](docs/wiki/_index.md) | [GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)
-- **Documentation**: [Wiki](../docs/wiki/_index.md) | [GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)
+- **Documentation**: [Wiki](../docs/wiki/_index.md)
 - **Issues**: [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
-- **Security**: See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure
+- **Security**: See [`SECURITY.md`](../SECURITY.md) for vulnerability disclosure
 
 ---
 
-<div align="center">
-  <img src="../assets/Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>
-</div>
+![Mazzlabs Logo](../assets/Mazzlabs.png)
 

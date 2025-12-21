@@ -1,101 +1,46 @@
-# Security Invariants & Privilege Requirements
+# Security invariants & privilege requirements
 
-This document enumerates the core security assumptions ("invariants") and the minimum privileges each scanner or subsystem requires. Operators can use this to make informed decisions about running `sys-scan` with `--drop-priv`, containerization, or additional sandboxing.
+This document enumerates the core security assumptions ("invariants") and the **minimum privileges** each scanner or subsystem typically requires.
 
-> Goal: Principle of Least Privilege. If a capability / privilege is *not* needed for your use-case, drop it before scanning.
+> Goal: Principle of Least Privilege. If a privilege is not needed for your use-case, don’t grant it.
 
-## Legend
-- Priv Columns:
-  - R: requires read access
-  - C: may create / open (non-destructive)
-  - CAP: Linux capability dependency (best-effort)
-  - Root*: effectively requires UID 0 for reliable / full fidelity
-- Severity Impact: Reduction in finding fidelity if missing privilege.
+> Note: the current `sys-scan` CLI in this repository does **not** implement privilege dropping or seccomp sandbox flags. If you want containment, use your OS/container runtime (user namespaces, containers, seccomp profiles, etc.).
 
-## Global Invariants
-1. Scanner execution must never perform writes outside ephemeral in-memory structures except the designated output file (and optional signature / env file).
-2. No scanner should execute external binaries except explicitly documented cases (GPG signing with `--sign-gpg`).
+## Global invariants
+
+1. Scanner execution must never perform writes outside ephemeral in-memory structures except the designated output file.
+2. External commands (when used) must be invoked without shell interpolation and treated as untrusted output.
 3. All file reads are treated as untrusted; parsers must bound memory and handle malformed input gracefully.
-4. Failure to access a resource MUST NOT crash the process; it should emit a structured warning (future: unified warnings array) or degrade gracefully.
+4. Failure to access a resource must not crash the process; emit warnings and degrade gracefully.
 5. Deterministic output ordering regardless of privilege level (absence of data => missing findings, not reordering).
 
-## Capability / Privilege Matrix (Summary)
-| Scanner / Subsystem | Needs Root? | Needs CAP_DAC_READ_SEARCH | Other Caps | Notes on Degradation |
-|---------------------|------------|---------------------------|------------|----------------------|
-| ProcessScanner | Recommended | Yes (for full /proc/<pid>/exe & cmdline of other users) |  | Without: some processes hidden / limited cmdline |
-| NetworkScanner | Recommended | No (mostly /proc/net) | CAP_NET_RAW (optional for future raw socket metrics) | Without root: still works but some inode->process mapping may degrade |
-| KernelParamScanner | Yes (for certain /proc/sys) | Yes |  | Non-root cannot read some sysctl entries; findings reduced |
-| ModuleScanner | Yes | Yes |  | Without: cannot read module files for signature / anomaly checks |
-| WorldWritableScanner | No (root improves coverage) | CAP_DAC_READ_SEARCH |  | Non-root skips unreadable paths (risk of false negatives) |
-| SuidScanner | Yes (for exhaustive ownership / permission checks) | Yes |  | Non-root may miss restricted directories |
-| IOCScanner (env trust) | Recommended | CAP_DAC_READ_SEARCH |  | Missing capability reduces trust correlation scope |
-| MACScanner / IntegrityScanner | Yes | Yes | CAP_SYS_ADMIN (sometimes required for IMA) | IMA stats may be unavailable |
-| ContainerScanner | Recommended | No |  | Namespace introspection limited non-root |
-| AuditdScanner | Yes | Yes | CAP_AUDIT_READ (future) | Without: cannot query audit status |
-| YaraScanner (if enabled) | Yes (memory scan) | Yes | CAP_SYS_PTRACE (future) | Degraded to file-only scan |
-| Integrity (pkg verify) | Yes | Yes |  | Non-root cannot read package DB fully |
-| eBPF Exec Trace | Yes | No | CAP_BPF, CAP_PERFMON, CAP_SYS_ADMIN (depending on kernel) | Without: feature disabled |
-| Rule Engine | No | No |  | Only reads rules directory |
-| GPG Signing | No | No |  | Uses fork/exec gpg; keyring must be accessible |
+## Capability / privilege matrix (summary)
 
-## Detailed Notes
-### Process Enumeration
-- Requires `procfs` readability. If running inside a container, host processes outside namespace will be invisible (expected isolation).
-- Without CAP_DAC_READ_SEARCH, some `/proc/<pid>/exe` symlinks or cmdlines may read as empty -> severity logic should not misclassify.
+Scanner names below match what is wired in `src/main.cpp`.
 
-### Network Enumeration
-- Reads `/proc/net/{tcp,udp,...}`. Root not strictly required. Socket inode to PID mapping can miss short-lived connections without elevated privileges.
+| Scanner | Needs root? (typical) | Why | Degradation when unprivileged |
+|--------|------------------------|-----|------------------------------|
+| `ProcessScanner` | Recommended | full `/proc/<pid>/...` visibility | reduced process metadata for other users / namespaces |
+| `NetworkScanner` | Recommended | full socket/process correlation | partial visibility; still reads `/proc/net/*` |
+| `KernelScanner` | Sometimes | some kernel tunables and procfs/sysfs details | fewer kernel parameter findings |
+| `ModuleScanner` | Recommended | module file probing under `/lib/modules/...` | reduced module anomaly checks |
+| `FsPermsScanner` | Recommended | filesystem traversal across protected paths | permission-denied skips (risk of false negatives) |
+| `MountScanner` | No (usually) | mount table inspection | typically minimal impact |
+| `MACScanner` | No (usually) | SELinux/AppArmor state checks | minimal impact |
+| `IntegrityScanner` | Recommended | package DB and verification commands | reduced package verification coverage |
+| `IOCScanner` | Recommended | deeper filesystem inspection | reduced scope |
+| `AuditdScanner` | Recommended | audit subsystem visibility | reduced fidelity |
+| `SystemdUnitScanner` | No (usually) | unit state inspection | minimal impact |
+| `ContainerScanner` | Recommended | namespace/container introspection | reduced container visibility |
+| `YaraScanner` | Depends | scanning more paths / protected locations | reduced scan scope |
+| `EbpfScanner` | Yes | attaching to tracepoints requires elevated privilege | feature disabled or degraded |
 
-### Module Analysis
-- Reads `/lib/modules/<kernel>/modules.dep`, module binaries, and sysfs `/sys/module`. Many module files require root to read; signature / anomaly heuristics degrade otherwise.
-- Decompression uses bounded in-process streaming (caps in `ModuleScanner.cpp`), no external decompressors.
+## Operational guidance
 
-### Filesystem Hygiene (world-writable, SUID)
-- Traverses common system paths. Without CAP_DAC_READ_SEARCH some directories are skipped (permission denied). Future: emit structured warnings per skipped root path.
+- For the highest fidelity, run as root (or with equivalent privileges in a container namespace).
+- For lower risk, run in a container with read-only mounts and minimal capabilities, accepting reduced coverage.
+- If you run non-root, expect fewer findings in protected areas; treat that as reduced visibility, not a clean bill of health.
 
-### Integrity & Compliance (IMA / pkg verify)
-- IMA requires kernel support and generally root or CAP_SYS_ADMIN to read securityfs entries.
-- Package verification invokes dpkg/rpm queries; requires root for complete metadata in some distributions.
+## Planned hardening (future)
 
-### eBPF Exec Trace
-- Attaching to tracepoints requires recent kernels and capabilities (`CAP_BPF` and `CAP_PERFMON`, or root). Fallback: feature silently disabled (future improvement: explicit warning).
-
-## Privilege Recommendation Levels
-| Deployment Scenario | Recommended Flags |
-|---------------------|-------------------|
-| Full host audit (root) | `--drop-priv` (after initial module & rule load) only if capability retention not required; otherwise run as root without dropping |
-| Minimal container introspection | Run as container root inside namespace (isolated), disable module & integrity scanners |
-| Developer workstation quick scan | Non-root; accept reduced module / integrity coverage |
-| CI pipeline (build artifact verification) | Non-root + `--sign-gpg` + disable network & eBPF features |
-
-## Interaction With `--drop-priv`
-- Capability drop currently removes all unless `--keep-cap-dac` specified.
-- If you need full filesystem traversal but want to minimize privilege, combine: `--drop-priv --keep-cap-dac`.
-- After drop: eBPF, IMA, some integrity, and module hashing may be partially or fully disabled.
-
-## Planned Structured Warnings
-Future unified warnings array (JSON meta) will include codes such as:
-- `perm_denied:path` – scanner skipped path
-- `ebpf_attach_failed:tracepoint` – eBPF feature unavailable
-- `module_read_failed:path` – module file unreadable
-- `integrity_pkg_db_inaccessible` – package DB read issue
-
-## Defensive Defaults
-- Bounded decompression (2MB limit) prevents resource abuse by anomalous module files.
-- GPG signing uses fork/exec and argument vector (no shell interpolation).
-- Seccomp profile (if enabled) applied early; `--seccomp-strict` enforces failure-as-error.
-
-## Verification Checklist (Operators)
-1. Run once with high privileges and record summary metrics (module counts, integrity stats).
-2. Re-run with `--drop-priv` (and optional `--keep-cap-dac`) and compare high-level counts.
-3. Investigate large discrepancies (could indicate missing privileges or genuine anomalies).
-
-## Contributions
-When adding a new scanner:
-1. Document its privilege needs here.
-2. Ensure graceful degradation without required privilege.
-3. Add bounds to all external input parsing.
-4. Emit warnings instead of silent skips.
-
----
-This document will evolve; suggestions welcome via normal issue tracker (non-sensitive) or security advisory if you believe a missing invariant exposes risk.
+The project may add optional hardening features over time (e.g., structured warnings, privilege dropping, seccomp profiles). Until then, prefer external sandboxing.

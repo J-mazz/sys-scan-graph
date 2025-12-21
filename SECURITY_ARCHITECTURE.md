@@ -2,7 +2,7 @@
 
 ## Zero-Trust AI Posture
 
-**Core principle:** no external LLM APIs. All intelligence runs locally using the default **local-qwen** provider; deterministic heuristic fallback remains available. No outbound network calls are made during analysis when offline flags are set.
+**Core principle (default):** no external LLM APIs. All intelligence runs locally using the default **local-qwen** provider; deterministic heuristic fallback remains available.
 
 ```mermaid
 flowchart TD
@@ -20,22 +20,44 @@ flowchart TD
 - Local inference only (default `AGENT_LLM_PROVIDER=local-qwen`); heuristic fallback if models are absent.
 - Deterministic settings: low-temperature generation, canonical ordering, reproducible outputs.
 - Offline-capable: set `TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1` to avoid network calls; models load from disk.
-- Data stays on-host: no telemetry, metering, or remote logging.
+- Data stays on-host by default: outputs are written locally; the project does not ship built-in telemetry, metering, or remote logging.
 - Bounded resources: thread caps and batch processing to avoid OOM in default configs.
 
 ### ❌ What we never do
-- No OpenAI/Anthropic/Cohere/Together/Groq or any cloud LLM APIs.
-- No API keys required, stored, or transmitted.
-- No outbound telemetry or data exfiltration.
+- No cloud LLM API calls **by default**.
+- No built-in outbound telemetry or remote logging.
+- No project-managed API keys: if you opt into an external provider, you must supply and manage your own credentials.
+
+## Optional external inference (LangChain API provider)
+
+If you explicitly opt in, the intelligence layer can call an external inference API through LangChain.
+
+**Important:** This may transmit analysis content to your chosen provider, may incur cost, and requires outbound network access.
+
+Enable it explicitly:
+
+```bash
+AGENT_EXTERNAL_LLM_ENABLED=1 \
+AGENT_LLM_PROVIDER=langchain-api \
+AGENT_LANGCHAIN_PROVIDER=openai \
+AGENT_LANGCHAIN_MODEL=<your-model-name> \
+sys-scan-graph analyze --report report.json --out enriched_report.json
+```
+
+Credentials are **not** bundled with this project. You must provide your own credentials for the provider you choose.
+For example, OpenAI and Anthropic integrations typically use environment variables like `OPENAI_API_KEY` or
+`ANTHROPIC_API_KEY` (see your provider’s documentation).
 
 ## Dependency stance
 
-Safe (local-only): `langgraph`, `langchain-core`, `pydantic`, `sqlalchemy`, `torch`, `transformers`, `peft`, `accelerate`, `huggingface_hub` (for local model loading/caching). Explicitly excluded: `openai`, `anthropic`, `langchain-openai`, `langchain-anthropic`, `cohere`, `together`, or any cloud LLM client.
+Safe (local-first default): `langgraph`, `langchain-core`, `pydantic`, `sqlalchemy`, `torch`, `transformers`, `peft`, `accelerate`, `huggingface_hub` (for local model loading/caching).
+
+Optional (external inference; only installed/used if you opt in): `langchain`, `langchain-openai`, `langchain-anthropic` and their underlying provider SDKs.
 
 ## Quick audit steps
 
 ```bash
-# Check for cloud LLM imports
+# Check for cloud LLM imports (expected only for the optional LangChain API provider)
 grep -R "openai\|anthropic\|ChatOpenAI\|ChatAnthropic" agent/sys_scan_agent || true
 
 # Check for HTTP clients
@@ -58,7 +80,7 @@ Mitigated: data exfiltration, API key leakage, network sniffing of LLM traffic, 
 
 ## Maintainer commitment
 
-- Keep intelligence local-first; no cloud LLM APIs.
+- Keep intelligence local-first by default; any external inference stays opt-in and gated.
 - Audit PRs for networked AI dependencies.
 - Document any new network dependency explicitly and conservatively.
 - Preserve deterministic, offline-friendly defaults.

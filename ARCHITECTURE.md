@@ -1,9 +1,3 @@
-╔══════════════════════════════════╗
-║             MazzLabs             ║
-╟──────────────────────────────────╢
-║           Joseph Mazzini         ║
-╚══════════════════════════════════╝
-
 # Architecture Overview
 
 `sys-scan-graph` has two cooperating layers:
@@ -15,20 +9,24 @@
 flowchart LR
 	A[sys-scan (C++)] -->|report.json| B[sys-scan-graph analyze (Python)]
 	B -->|enriched_report.json| C[Analysts / pipelines]
-	B -->|HTML / SARIF / metrics| D[Dashboards / CI]
+	B -->|HTML / metrics| D[Dashboards / CI]
 ```
 
 ## Core scanner (C++23 with C++20 modules)
 
 - Built with the C++23 standard, using C++20 modules (`src/core/modules/`) plus scanner modules (`src/scanners/modules/*.ixx`).
 - Dependency injection via a scan context (no global config); deterministic registration order.
-- Outputs: JSON, NDJSON, SARIF, and HTML when wired via CLI/config (see `Config` in `src/core/modules/config.ixx`).
+- Outputs: JSON (stdout or `--output`) with optional canonical ordering (`--canonical`).
 
 ## Intelligence layer (Python)
 
 - Packaged as `sys-scan-agent`; entrypoint CLIs: `sys-scan-graph` and `sys-scan-intelligence`.
 - Default provider: **local-qwen** (offline). Heuristic fallback remains available if models are absent.
-- Optional extras (`sys-scan-agent[ai]`) enable local model loading; no outbound LLM calls.
+- Optional extras:
+	- `sys-scan-agent[ai]` enables local model loading (offline-first).
+	- `sys-scan-agent[api]` enables an **opt-in** LangChain API provider for external inference.
+		If you are working from a source checkout, install it with `pip install -e 'agent[api]'`.
+		External inference is disabled by default and requires `AGENT_EXTERNAL_LLM_ENABLED=1`.
 
 ## Data contract
 

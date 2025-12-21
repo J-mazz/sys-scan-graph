@@ -17,7 +17,7 @@ This repository contains the sys-scan-graph project, licensed under the Apache L
 This project is based on and includes modifications to the original sys-scan project:
 
 - **Original sys-scan**: Copyright (c) J-mazz
-- **License**: MIT License (original), now Apache License 2.0
+- **License**: MIT License (upstream project). This repository is licensed under Apache License 2.0.
 - **Source**: https://github.com/J-mazz/sys-scan
 - **Modifications**: Enhanced with intelligence layer, LangGraph orchestration, advanced analytics, and additional security scanners
 
@@ -56,9 +56,9 @@ For licensing inquiries: Joseph@Mazzlabs.works
 
 ## License Summary
 
-- **Entire Project**: Apache License 2.0
-- **Documentation**: Creative Commons Attribution 4.0 International
-- **Assets**: All rights reserved (Joseph Mazzini)
+**Entire Project (repository content)**: Apache License 2.0
+
+Third-party components remain under their respective licenses; see `THIRD_PARTY_NOTICES`.
 
 See individual license files for complete terms:
 - `LICENSE` (Apache License 2.0)

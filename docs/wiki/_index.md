@@ -9,7 +9,7 @@ Welcome to the comprehensive documentation for sys-scan-graph. This index provid
 ## Quick Links
 
 - **[GitHub Repository](https://github.com/J-mazz/sys-scan-graph)** - Main project repository
-- **[GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)** - Community-contributed documentation and guides
+- **[GitHub Wiki](https://github.com/J-mazz/sys-scan-graph/wiki)** - Optional external wiki (may not mirror the in-repo docs)
 - **[Issues](https://github.com/J-mazz/sys-scan-graph/issues)** - Report bugs and request features
 - **[Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)** - Community discussions and Q&A
 
@@ -24,15 +24,17 @@ Welcome to the comprehensive documentation for sys-scan-graph. This index provid
 
 ### Components & Features
 
-- **[Rules Engine](Rules-Engine.md)** - Rule file formats, MITRE aggregation, severity overrides, validation
+- **[Rules Engine](Rules-Engine.md)** - Lightweight YAML/JSON correlation rules and CLI lint/dry-run helpers
 - **[Risk Model](Risk-Model.md)** - Risk and probability modeling, weights, calibration, CLI helpers
 
 ### Operations & Performance
 
 - **[CLI Guide](CLI-Guide.md)** - Command-line interface for core and agent functionality
-- **[CI and SARIF Integration](CI-and-SARIF-Integration.md)** - Running scans in CI pipelines and SARIF upload
+- **[CI Integration](CI-and-SARIF-Integration.md)** - Running scans in CI pipelines and publishing JSON artifacts
 
 ### Development & Extensibility
+
+- **[Extensibility](Extensibility.md)** - Supported extension points (rules, scanners, providers)
 
 More deep-dive pages will be added over time. This index only links to documents that are currently present in `docs/wiki/`.
 
@@ -59,11 +61,9 @@ If you're new to sys-scan-graph, start here:
 
 ## Community Resources
 
-- **GitHub Wiki**: <https://github.com/J-mazz/sys-scan-graph/wiki>
-  - User guides and tutorials
-  - Configuration examples
-  - Troubleshooting tips
-  - Integration guides
+**GitHub Wiki**: <https://github.com/J-mazz/sys-scan-graph/wiki>
+
+If you maintain an external wiki, consider using it for high-churn notes and linking back to the authoritative docs in `docs/wiki/`.
 
 - **Discussions**: <https://github.com/J-mazz/sys-scan-graph/discussions>
   - Ask questions
@@ -81,7 +81,7 @@ If you're new to sys-scan-graph, start here:
 
 ## License
 
-This documentation is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+This documentation is licensed under the Apache License 2.0 (see [`LICENSE`](../../LICENSE)).
 
 ---
 
