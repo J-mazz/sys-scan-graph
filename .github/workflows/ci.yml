@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build clang-tidy cppcheck libseccomp-dev libcap-dev libbpf-dev linux-tools-common
+  run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build clang-tidy cppcheck libseccomp-dev libcap-dev libbpf-dev linux-tools-common nlohmann-json3-dev
       - name: Configure
         run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON
       - name: Static analysis (clang-tidy)
@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build build-essential libseccomp-dev libcap-dev libbpf-dev linux-tools-common
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build build-essential libseccomp-dev libcap-dev libbpf-dev linux-tools-common nlohmann-json3-dev
       - name: Configure (ASan/UBSan)
         run: |
           cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON \
