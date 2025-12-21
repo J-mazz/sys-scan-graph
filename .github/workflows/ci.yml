@@ -15,15 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake clang-tidy cppcheck libseccomp-dev libcap-dev libbpf-dev linux-tools-common
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build clang-tidy cppcheck libseccomp-dev libcap-dev libbpf-dev linux-tools-common
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON
       - name: Static analysis (clang-tidy)
         run: cmake --build build --target sys_scan_core -- -j$(nproc) && clang-tidy --version || true
       - name: cppcheck
         run: cppcheck --enable=warning,performance,portability --inline-suppr --quiet src || true
       - name: Build
-        run: cmake --build build --config ${{matrix.build_type}} -j$(nproc)
+        run: cmake --build build -j$(nproc)
       - name: Run tests
         run: cd build && ctest --output-on-failure
 
@@ -53,10 +53,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential libseccomp-dev libcap-dev libbpf-dev linux-tools-common
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build build-essential libseccomp-dev libcap-dev libbpf-dev linux-tools-common
       - name: Configure (ASan/UBSan)
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON \
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTS=ON -DENABLE_SECCOMP=ON -DENABLE_CAPABILITIES=ON \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
@@ -75,10 +75,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install clang
-        run: sudo apt-get update && sudo apt-get install -y clang cmake build-essential
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build build-essential
       - name: Configure fuzz harness
         run: |
-          cmake -B build -S . -DBUILD_FUZZERS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          cmake -B build -S . -G Ninja -DBUILD_FUZZERS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: Build fuzz target
         run: cmake --build build --target fuzz_config -j$(nproc)
