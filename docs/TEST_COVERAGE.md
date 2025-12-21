@@ -28,15 +28,26 @@ cmake --build build-coverage --target coverage
 
 Artifacts (written to the build directory):
 
-- `build-coverage/coverage.html` (HTML details) — add `--html=coverage.html` to the gcovr invocation if missing
+- `build-coverage/coverage.html` (HTML summary)
+- `build-coverage/coverage-details.html` (per-file HTML details)
 - `build-coverage/coverage.xml` (XML)
 
-### Measured results (this run, 2025-12-21)
+If you prefer running gcovr directly for a focused src-layer report, example command used here:
+
+```bash
+# from repo root, after running tests in build-cov
+cd build-cov
+gcovr -r .. --filter ../src --html --html-details -o coverage.html --xml -o coverage.xml --fail-under-line 85
+```
+
+### Measured results (C++ `src/` layer, this run, 2025-12-21)
 - lines: **87.7%** (810 / 924)
 - functions: **93.1%** (108 / 116)
 - branches: **45.7%** (1246 / 2728)
 
-Note: branch coverage is reported but not enforced; improving branch coverage requires adding tests that exercise alternate code paths and error handling in low-coverage components.
+**Notes & recommendations:**
+- Branch coverage is low (45.7%). Focus on adding tests that exercise alternate branches and error-handling paths in scanner modules and registry logic to raise this metric.
+- The generated HTML reports live in `build-cov/` (`coverage.html`, `coverage-details.html`) and can be reviewed locally or uploaded as CI artifacts for easy browsing.
 
 ### Quality gate
 
