@@ -1,0 +1,63 @@
+# Build directories
+build/
+dist/
+*.egg-info/
+
+# Compiled files
+*.o
+*.so
+*.a
+*.dylib
+*.dll
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debian packaging
+debian/files
+debian/*.substvars
+debian/*.log
+debian/tmp/
+debian/.debhelper/
+
+# Test files
+*.test
+test_*.out
+
+# IPC sockets
+*.sock
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
