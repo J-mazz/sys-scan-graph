@@ -36,4 +36,4 @@ export namespace sys_scan::ui {
     };
 }
 
-#include "ipc_service.moc"
+// MOC generated via dedicated header (moc_includes/ipc_service_moc.h)

@@ -66,6 +66,12 @@ target_sources(sys_scan_core_ui
         src/core/ipc_service.ixx
 )
 
+qt6_wrap_cpp(MOC_FROM_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/moc_includes/agent_service_moc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/moc_includes/ipc_service_moc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/moc_includes/finding_model_moc.h
+)
+
 if(MOC_FROM_HEADERS)
     target_sources(sys_scan_core_ui PRIVATE ${MOC_FROM_HEADERS})
 endif()
@@ -73,7 +79,13 @@ endif()
 
 # Ensure Qt's moc (automoc) runs for meta-object macros inside module sources
 set_target_properties(sys_scan_core_ui PROPERTIES AUTOMOC ON)
-
+# For .ixx module interface files, CMake's automoc support is still evolving; skip automoc
+# for these files and generate moc sources explicitly from dedicated headers.
+set_source_files_properties(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/finding_model.ixx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/agent_service.ixx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/ipc_service.ixx
+    PROPERTIES SKIP_AUTOMOC ON)
 
 # Add Network for QLocalSocket
 find_package(Qt6 REQUIRED COMPONENTS Network)

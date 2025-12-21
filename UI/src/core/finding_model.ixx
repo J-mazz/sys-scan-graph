@@ -38,4 +38,4 @@ export namespace sys_scan::ui {
 
 }
 
-#include "finding_model.moc"
+// MOC generated via dedicated header (moc_includes/finding_model_moc.h)

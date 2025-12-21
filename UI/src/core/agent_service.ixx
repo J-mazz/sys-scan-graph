@@ -30,4 +30,4 @@ export namespace sys_scan::ui {
     };
 }
 
-#include "agent_service.moc"
+// MOC generated via dedicated header (moc_includes/agent_service_moc.h)
