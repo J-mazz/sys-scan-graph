@@ -75,8 +75,34 @@ jobs:
           cd build
           ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=print_stacktrace=1 ctest --output-on-failure || { cat Testing/Temporary/LastTest.log || true; exit 1; }
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build lcov gcovr python3-pip
+      - name: Configure coverage build
+        run: |
+          cmake -B build-coverage -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSYS_SCAN_ENABLE_COVERAGE=ON
+      - name: Build coverage
+        run: cmake --build build-coverage -j$(nproc)
+      - name: Run tests
+        run: |
+          cd build-coverage
+          ctest --output-on-failure || true
+      - name: Generate coverage report and enforce threshold
+        run: |
+          cd build-coverage
+          # Generate HTML and XML and fail if line coverage < 85
+          gcovr -r .. --filter ../src --html --html-details -o coverage.html --xml -o coverage.xml --fail-under-line 85
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cplusplus-coverage
+          path: build-coverage/coverage.html
+
   fuzz-smoke:
-    if: github. ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on:  ubuntu-latest
     steps: 
       - uses: actions/checkout@v4
