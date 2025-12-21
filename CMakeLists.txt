@@ -139,7 +139,8 @@ if(BUILD_TESTING)
           --gcov-ignore-errors source_not_found
           --print-summary
           --xml-pretty -o coverage.xml
-          --html-details -o coverage.html
+          --html=coverage.html
+          --html-details=coverage-details.html
           --fail-under-line ${SYS_SCAN_COVERAGE_MIN}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         VERBATIM
