@@ -54,19 +54,30 @@ target_sources(sys_scan_modules
     src/scanners/modules/ebpf_scanner.ixx
 )
 
-# --- Core Interface Library (transitional shim) ---
-add_library(sys_scan_core INTERFACE)
+# Apply include directories and definitions DIRECTLY to the module library
+target_include_directories(sys_scan_modules PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-target_link_libraries(sys_scan_core INTERFACE sys_scan_modules)
-target_include_directories(sys_scan_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-# Handle dependencies
+# Handle nlohmann_json for module scanning
 if(NOT nlohmann_json_FOUND)
-  target_include_directories(sys_scan_core INTERFACE ${CMAKE_BINARY_DIR}/third_party)
+  # For bundled version - must exist in third_party directory
+  target_include_directories(sys_scan_modules PUBLIC ${CMAKE_BINARY_DIR}/third_party)
 else()
-  target_link_libraries(sys_scan_core INTERFACE nlohmann_json::nlohmann_json)
+  target_link_libraries(sys_scan_modules PUBLIC nlohmann_json::nlohmann_json)
 endif()
 
+# Handle OpenSSL
+if(OpenSSL_FOUND)
+  target_link_libraries(sys_scan_modules PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+  target_compile_definitions(sys_scan_modules PUBLIC SYS_SCAN_HAVE_OPENSSL=1)
+endif()
+
+# --- Core Interface Library (transitional shim) ---
+add_library(sys_scan_core INTERFACE)
+target_link_libraries(sys_scan_core INTERFACE sys_scan_modules)
+
+# Executable
+add_executable(sys-scan src/main.cpp)
+target_link_libraries(sys-scan PRIVATE sys_scan_core)
 
 # Fuzzing targets
 if(BUILD_FUZZERS)
@@ -75,14 +86,6 @@ if(BUILD_FUZZERS)
   target_compile_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
   target_link_options(fuzz_config PRIVATE -fsanitize=fuzzer,address)
 endif()
-if(OpenSSL_FOUND)
-  target_link_libraries(sys_scan_core INTERFACE OpenSSL::SSL OpenSSL::Crypto)
-  target_compile_definitions(sys_scan_core INTERFACE SYS_SCAN_HAVE_OPENSSL=1)
-endif()
-
-# Executable
-add_executable(sys-scan src/main.cpp)
-target_link_libraries(sys-scan PRIVATE sys_scan_core)
 
 if(SYS_SCAN_ENABLE_COVERAGE)
   # Clang supports --coverage (gcov-compatible) and works with lcov/genhtml.
@@ -144,4 +147,3 @@ if(BUILD_TESTING)
     endif()
   endif()
 endif()
-
