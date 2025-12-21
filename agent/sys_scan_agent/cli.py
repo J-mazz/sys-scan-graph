@@ -207,10 +207,28 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
             index_dir: Path = typer.Option(None, help="Directory to append time-series index entries"),
             dry_run: bool = typer.Option(False, help="Sandbox dry-run (no external commands executed)"),
             prev: Path = typer.Option(None, help="Previous enriched report for diff"),
-            metrics_out: Path = typer.Option(None, help="Export node telemetry metrics to file (supports .json, .csv, .prom extensions)")):
+            metrics_out: Path = typer.Option(None, help="Export node telemetry metrics to file (supports .json, .csv, .prom extensions)"),
+            interactive: bool = typer.Option(False, help="Enable UI IPC mode"),
+            socket: str = typer.Option("/tmp/sys-scan-ui.sock", help="IPC socket path")):
     cfg = config.load_config()
+    comm = None
     if dry_run:
         sandbox.configure(dry_run=True)
+
+    # If interactive flag is set, start IPC server and rebuild interactive graph
+    if interactive:
+        try:
+            from .ipc_server import start_ipc_thread
+            comm = start_ipc_thread(socket)
+            try:
+                wf, appobj = graph.build_workflow(interactive=True)
+                graph.workflow = wf
+                graph.app = appobj
+            except Exception as e:
+                print(f"[yellow]Warning: failed to build interactive graph: {e}[/yellow]")
+        except Exception as e:
+            print(f"[red]Failed to start IPC server: {e}[/red]")
+
     enriched, final_state = run_intelligence_workflow(report)
     
     # Apply canonicalization for deterministic output ordering
@@ -271,6 +289,13 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
         print(f"[cyan]Checkpoints in {checkpoint_dir}")
     if index_dir:
         print(f"[cyan]Index updated at {index_dir}/index.json")
+
+    # Clean up IPC server if we started it
+    try:
+        if comm:
+            comm.close()
+    except Exception:
+        pass
 
 @app.command()
 def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw report"),
