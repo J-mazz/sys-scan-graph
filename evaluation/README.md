@@ -4,12 +4,12 @@ This directory stores synthetic attack detection evaluation outputs.
 
 Workflow:
 1. Add or update malicious fixture files under `agent/fixtures/malicious/`.
-2. Define expected indicator titles or substrings in `agent/evaluation.py` (INJECTED_INDICATORS).
+2. Define expected indicator titles or substrings in `agent/sys_scan_agent/evaluation.py` (`INJECTED_INDICATORS`).
 3. Run the evaluator:
 
 ```bash
-. agent/.venv/bin/activate
-python -m agent.evaluation --fixtures compromised_dev_host --out evaluation/report.json
+# Ensure `sys_scan_agent` is importable (for example, `pip install -e agent` in your active venv)
+python -m sys_scan_agent.evaluation --fixtures compromised_dev_host --out evaluation/report.json
 ```
 
 Exit Criteria:

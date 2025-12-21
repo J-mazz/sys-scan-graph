@@ -42,7 +42,16 @@ pip install sys-scan-agent
 Optional local-LLM dependencies:
 
 ```bash
-pip install 'sys-scan-agent[ai]'
+pip install \
+   langgraph langchain-core \
+   torch transformers peft accelerate safetensors huggingface_hub
+```
+
+Optional external inference dependencies (LangChain API provider):
+
+```bash
+# IMPORTANT: You must provide your own provider credentials (not bundled with this project).
+pip install langchain langchain-openai langchain-anthropic
 ```
 
 ### Run from Source
@@ -60,9 +69,11 @@ sys-scan-graph analyze --report report.json --out enriched_report.json
 
 After installation, you may want to:
 
-1. Review the default configuration in `/etc/sys-scan-graph/config.yaml`
-2. Set up baseline databases for your environment
-3. Configure local intelligence features (optional)
+1. Review and tailor the configuration in `config.yaml` (the intelligence layer reads `./config.yaml` from the current working directory)
+2. (Optional) Set up a baseline database for your environment (default: `agent_baseline.db` in the current directory; override via `AGENT_BASELINE_DB`)
+3. (Optional) Configure local intelligence features (provider selection, offline flags, local model directory)
+   - For external inference via LangChain, set `AGENT_LLM_PROVIDER=langchain-api` and **explicitly** opt in with `AGENT_EXTERNAL_LLM_ENABLED=1`.
+   - Provide your own provider credentials (for example `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, depending on your provider).
 4. Set up log aggregation and monitoring
 
 ## Troubleshooting
@@ -73,11 +84,11 @@ After installation, you may want to:
 
 **Permission Errors**: The scanner may require elevated permissions to access system information. Run with `sudo` if needed.
 
-**Local Intelligence Issues**: If you installed `sys-scan-agent[ai]`, ensure any required model files are available locally and your host has sufficient CPU/RAM/GPU resources.
+**Local Intelligence Issues**: Ensure any required model files are available locally and your host has sufficient CPU/RAM/GPU resources.
 
 ### Getting Help
 
-- Check the [troubleshooting section](https://github.com/J-mazz/sys-scan-graph/wiki/Troubleshooting) in the GitHub Wiki
+- Review the docs in `docs/wiki/` (start with the CLI guide and architecture overview)
 - File an issue on [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
 - Ask questions in [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
 

@@ -13,9 +13,8 @@
 
 ## Determinism & Reproducibility
 
-- Built with: `-DSYS_SCAN_REPRO_BUILD=ON` and `-DSYS_SCAN_SLSA_LEVEL=1`
-- Canonical JSON: `SYS_SCAN_CANON_TIME_ZERO=1 ./sys-scan --canonical > report.json`
-- Hash: `sha256sum report.json` (stable under canonical mode + time zero)
+- Canonical JSON (stable ordering): `./sys-scan --canonical --output report.json`
+- Hash: `sha256sum report.json` (stable under canonical mode on the same host/input)
 
 ## Assets
 

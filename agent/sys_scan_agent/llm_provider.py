@@ -303,9 +303,12 @@ def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     # Prefer Qwen local by default; fall back to deterministic heuristic
     prov = os.environ.get('AGENT_LLM_PROVIDER', 'local-qwen').lower()
 
-    # ONLY allow local or null providers - NO external APIs
+    # Default posture is local-first. An external provider may be enabled explicitly.
     qwen_aliases = {'local-qwen', 'qwen', 'localagent', 'local_agent', 'local-llm', 'local_llm'}
     heuristic_aliases = {'local', 'heuristic', 'null-heuristic'}
+    langchain_aliases = {'langchain', 'langchain-api', 'langchain_api', 'langchainapi'}
+
+    external_enabled = os.environ.get('AGENT_EXTERNAL_LLM_ENABLED', '0').lower() in {'1', 'true', 'yes'}
 
     if prov in qwen_aliases:
         try:
@@ -333,8 +336,29 @@ def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     elif prov == 'null':
         _PROVIDER = NullLLMProvider()
         print("✓ Using deterministic null provider (no LLM)")
+    elif prov in langchain_aliases:
+        if not external_enabled:
+            print("⚠️  External LLM provider requested but disabled. Set AGENT_EXTERNAL_LLM_ENABLED=1 to opt in.")
+            try:
+                from .providers.local_llm_provider import LocalLLMProvider
+                _PROVIDER = LocalLLMProvider()
+            except Exception:
+                _PROVIDER = NullLLMProvider()
+            return
+        try:
+            from .providers.langchain_api_provider import LangChainAPIProvider
+            _PROVIDER = LangChainAPIProvider()
+            print("⚠️  External LLM enabled: Using LangChain API provider (network access may occur)")
+        except Exception as e:
+            print(f"⚠️  LangChain API provider failed to initialize: {e}")
+            print("✓ Fallback: Using deterministic local provider")
+            try:
+                from .providers.local_llm_provider import LocalLLMProvider
+                _PROVIDER = LocalLLMProvider()
+            except Exception:
+                _PROVIDER = NullLLMProvider()
     else:
-        print("⚠️  External LLM providers are not allowed. Defaulting to local Qwen provider.")
+        print("⚠️  Unknown provider. Defaulting to local Qwen provider.")
         try:
             from .providers.local_qwen_provider import LocalQwenLLMProvider
             _PROVIDER = LocalQwenLLMProvider()

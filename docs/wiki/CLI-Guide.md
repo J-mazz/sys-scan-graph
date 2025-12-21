@@ -90,6 +90,10 @@ The agent supports several `AGENT_*` environment variables. Common ones include:
 - `AGENT_LLM_PROVIDER=local-qwen` (default): local Qwen provider (when available)
 - `AGENT_LLM_PROVIDER=local`: deterministic local heuristic provider
 - `AGENT_LLM_PROVIDER=null`: deterministic no-LLM provider
+- `AGENT_LLM_PROVIDER=langchain-api`: external inference via LangChain (**requires** `AGENT_EXTERNAL_LLM_ENABLED=1` and your own provider credentials)
+- `AGENT_EXTERNAL_LLM_ENABLED=1`: explicit opt-in gate for external inference
+- `AGENT_LANGCHAIN_PROVIDER=openai|anthropic`
+- `AGENT_LANGCHAIN_MODEL=<provider-model-name>`
 - `AGENT_BASELINE_DB=agent_baseline.db`
 - `AGENT_MAX_SUMMARY_ITERS=3`
 

@@ -1,8 +1,6 @@
 # sys-scan-graph
 
-<div align="center">
-  <img src="assets/sys-scan-graph_badge.jpg" alt="sys-scan-graph Logo" width="500"/>
-</div>
+![sys-scan-graph Logo](assets/sys-scan-graph_badge.jpg)
 
 ## System Security Scanner & Intelligence Graph
 
@@ -13,7 +11,7 @@
 [![CodeScene System Mastery](https://codescene.io/projects/72512/status-badges/system-mastery)](https://codescene.io/projects/72512)
 [![Coverage](https://img.shields.io/badge/coverage-%3E=85%25-brightgreen.svg)](docs/TEST_COVERAGE.md)
 
-**Sys-Scan-Graph** turns raw host signals from 16 security surfaces into a concise, actionable security report.
+**Sys-Scan-Graph** turns raw host signals from multiple security surfaces into a concise, actionable security report.
 
 It combines a **high-performance C++ core** (built with a C++23 toolchain, using C++20 modules) with an **optional local intelligence layer** (Python) that enriches and summarizes results without sending data off-host.
 
@@ -21,11 +19,12 @@ It combines a **high-performance C++ core** (built with a C++23 toolchain, using
 flowchart LR
   A[Core scan (C++)] -->|report.json| B[Python intelligence]
   B -->|enriched_report.json| C[Analysts & pipelines]
-  B -->|HTML / SARIF / metrics| D[Dashboards & CI]
+  B -->|HTML / metrics| D[Dashboards & CI]
 ```
 
 ### Highlights
-- **Deterministic scans**: canonical JSON/NDJSON/SARIF/HTML outputs with stable ordering
+
+- **Deterministic scans**: canonical JSON output with stable ordering
 - **Local intelligence**: default `local-qwen` provider (offline), with heuristic fallback
 - **Performance-aware**: bounded parallelism, batch processing, cache primitives, and memory-safe defaults
 - **Composable**: DI-friendly scanners and pluggable rule/LLM providers
@@ -53,8 +52,16 @@ source .venv/bin/activate
 pip install -U pip
 pip install sys-scan-agent
 
-# For local-LLM extras
-pip install 'sys-scan-agent[ai]'
+# Optional: local model + orchestration dependencies (torch/transformers/etc.)
+# Note: model weights are NOT shipped with the PyPI package. Provide weights locally via
+# AGENT_LOCAL_QWEN_MODEL_DIR (see agent/sys_scan_agent/models/local_qwen/MODEL_CARD.md).
+pip install \
+  langgraph langchain-core \
+  torch transformers peft accelerate safetensors huggingface_hub
+
+# Optional: external inference via LangChain (networked, opt-in)
+# IMPORTANT: You must provide your own provider credentials for your chosen inference provider.
+pip install langchain langchain-openai langchain-anthropic
 ```
 
 ### Run (memory-safe defaults)
@@ -65,38 +72,36 @@ pip install 'sys-scan-agent[ai]'
 
 # 2) Enrich locally (offline, bounded threads)
 AGENT_LLM_PROVIDER=local-qwen \
-AGENT_GRAPH_MODE=baseline \
+AGENT_GRAPH_APP_ENABLED=0 \
 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
 sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
-Tips: use `--metrics-out metrics.json` to capture node timings, and `--html-out report.html` for a self-contained view. Set `TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1` to avoid network calls.
+Tips: use `--metrics-out metrics.json` to capture node timings. HTML output is controlled by `config.yaml` (see `reports.html_enabled` and `reports.html_path`). Set `TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1` to avoid network calls.
 
 ### Common workflows
 
-1) **Scan only (fastest path):**
+1. **Scan only (fastest path):**
 
 ```bash
 ./build/sys-scan --canonical --output report.json
 ```
 
-2) **Scan + enrich locally (recommended):**
+1. **Scan + enrich locally (recommended):**
 
 ```bash
 ./build/sys-scan --canonical --output report.json
 
 AGENT_LLM_PROVIDER=local-qwen \
-AGENT_GRAPH_MODE=baseline \
+AGENT_GRAPH_APP_ENABLED=0 \
 TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 \
 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
 sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
-3) **CI-friendly output (SARIF):**
+1. **CI-friendly output (artifacts):**
 
-```bash
-./build/sys-scan --sarif --output results.sarif
-```
+Persist `report.json` (and optionally `enriched_report.json`) as CI artifacts for review and trend analysis.
 
 ---
 
@@ -131,8 +136,9 @@ Deep dives live in `docs/wiki/`:
 ---
 
 ## Design ethos
+
 - Deterministic, reproducible outputs (canonical JSON, stable ordering)
-- Local-first, zero-trust AI (no outbound LLM APIs; heuristic fallback always available)
+- Local-first, zero-trust AI (no outbound LLM APIs by default; optional external inference is explicit opt-in)
 - Bounded resources by default (thread caps, batch processing, caching)
 - Extensible and testable (DI-friendly scanners; pluggable providers; high coverage)
 
@@ -145,6 +151,4 @@ Deep dives live in `docs/wiki/`:
 - Discussions: [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
 - Security: see [`SECURITY.md`](SECURITY.md)
 
-<div align="center">
-  <img src="assets/Mazzlabs.png" alt="Mazzlabs Logo" width="200"/>
-</div>
+![Mazzlabs Logo](assets/Mazzlabs.png)

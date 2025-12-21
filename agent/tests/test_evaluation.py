@@ -24,47 +24,20 @@ except ImportError:
 class TestEvaluation:
     """Test evaluation utilities for attack detection."""
 
-    @patch('sys_scan_agent.evaluation.Path')
-    def test_load_fixture_success(self, mock_path_class):
-        """Test successful loading of a fixture file."""
-        # Create mock paths
-        mock_file_path = mock_path_class.return_value
-        mock_parent_path = mock_path_class.return_value
-        mock_fixtures_path = mock_path_class.return_value
-        mock_malicious_path = mock_path_class.return_value
-        mock_final_path = mock_path_class.return_value
+    def test_load_fixture_success(self):
+        """Test successful loading of a real fixture file from the repo checkout."""
+        try:
+            path = evaluation.load_fixture('compromised_dev_host')
+        except FileNotFoundError:
+            pytest.skip("Repo fixtures not present; skipping load_fixture integration test")
 
-        # Configure the path chain: __file__ -> parent -> fixtures -> malicious -> name.json
-        mock_file_path.parent = mock_parent_path
-        mock_parent_path.__truediv__ = lambda self, x: mock_fixtures_path if x == 'fixtures' else mock_parent_path
-        mock_fixtures_path.__truediv__ = lambda self, x: mock_malicious_path if x == 'malicious' else mock_fixtures_path
-        mock_malicious_path.__truediv__ = lambda self, x: mock_final_path
-        mock_final_path.exists.return_value = True
+        assert path.name == 'compromised_dev_host.json'
+        assert path.exists()
 
-        result = evaluation.load_fixture('test_fixture')
-
-        assert result == mock_final_path
-        mock_final_path.exists.assert_called_once()
-
-    @patch('sys_scan_agent.evaluation.Path')
-    def test_load_fixture_file_not_found(self, mock_path_class):
+    def test_load_fixture_file_not_found(self):
         """Test loading a fixture that doesn't exist."""
-        # Create mock paths
-        mock_file_path = mock_path_class.return_value
-        mock_parent_path = mock_path_class.return_value
-        mock_fixtures_path = mock_path_class.return_value
-        mock_malicious_path = mock_path_class.return_value
-        mock_final_path = mock_path_class.return_value
-
-        # Configure the path chain
-        mock_file_path.parent = mock_parent_path
-        mock_parent_path.__truediv__ = lambda self, x: mock_fixtures_path if x == 'fixtures' else mock_parent_path
-        mock_fixtures_path.__truediv__ = lambda self, x: mock_malicious_path if x == 'malicious' else mock_fixtures_path
-        mock_malicious_path.__truediv__ = lambda self, x: mock_final_path
-        mock_final_path.exists.return_value = False
-
         with pytest.raises(FileNotFoundError):
-            evaluation.load_fixture('nonexistent')
+            evaluation.load_fixture('this_fixture_should_not_exist_12345')
 
     @patch('sys_scan_agent.evaluation.run_pipeline')
     @patch('sys_scan_agent.evaluation.load_fixture')

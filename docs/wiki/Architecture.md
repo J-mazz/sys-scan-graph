@@ -3,7 +3,7 @@
 sys-scan-graph is split into two layers:
 
 1. A **C++ core scanner** that collects host signals (filesystem, procfs, system commands) and emits findings.
-2. A **Python intelligence layer** that consumes a *structured scan report* and produces enriched output (correlations, risk summaries, optional artifacts like HTML/diffs, and optional metrics export). The default LLM provider is **local-qwen** with deterministic heuristic fallback; no cloud LLM APIs are used.
+2. A **Python intelligence layer** that consumes a *structured scan report* and produces enriched output (correlations, risk summaries, optional artifacts like HTML/diffs, and optional metrics export). The default LLM provider is **local-qwen** with deterministic heuristic fallback; cloud LLM APIs are not used **unless you explicitly opt in**.
 
 This page is intentionally **comprehensive but code-backed**: every major behavior described below is present in the current source tree.
 
@@ -11,7 +11,7 @@ This page is intentionally **comprehensive but code-backed**: every major behavi
 
 ### What it is
 
-The core is implemented as C++23 modules under `src/core/modules/` and scanner modules under `src/scanners/modules/`.
+The core is implemented as **C++20 modules** (built with a **C++23 toolchain**) under `src/core/modules/` and scanner modules under `src/scanners/modules/`.
 
 Key modules to start with:
 
@@ -35,12 +35,16 @@ Scanners are registered into a `ScannerRegistry` and executed via `ScannerRegist
 
 ### Current CLI status
 
-The current repository’s `src/main.cpp` is a **composition-root demo**:
+`src/main.cpp` includes a minimal argument parser and emits a **v4 (ground_truth_v1 compatible) JSON report** to stdout by default, or to a file via `--output`.
 
-- it wires real system services, constructs a default `Config`, registers scanners, runs them, and prints a summary to stdout.
-- it does **not** currently parse CLI flags into `Config`, and it does **not** currently write the JSON report format consumed by the Python layer.
+Supported CLI flags are intentionally small and code-backed:
 
-The `Config` type *does* include options for output formatting (e.g., `canonical`, `ndjson`, `sarif`, `output_file`), but those options are not yet wired in `src/main.cpp` in this workspace.
+- `--output FILE` — write JSON to a file (otherwise stdout)
+- `--canonical` — stable ordering of scanners/findings
+- `--enable NAME` / `--disable NAME` — include/exclude scanners by name
+- `--test-root PATH` — scan against an alternate root (fixtures)
+
+For the full list of currently wired toggles, see **[CLI Guide](CLI-Guide.md)**.
 
 ## 🧠 Intelligence layer (Python)
 
