@@ -22,6 +22,26 @@ Page {
             
             Item { Layout.fillWidth: true }
             
+            // Quick agent query bar
+            RowLayout {
+                spacing: 6
+                TextField {
+                    id: quickQuery
+                    placeholderText: qsTr("Quick query to Agent")
+                    Layout.preferredWidth: 260
+                    background: Rectangle { color: Theme.granite2; radius: 4 }
+                }
+                Button {
+                    text: qsTr("Ask")
+                    background: Rectangle { color: Theme.turquoise; radius: 4 }
+                    onClicked: {
+                        if (quickQuery.text.trim() === "") return;
+                        agentService.promptAsync(quickQuery.text);
+                        quickQuery.text = "";
+                    }
+                }
+            }
+
             Label { text: "Min Severity:"; color: Theme.muted }
             ComboBox {
                 id: severityCombo
@@ -49,8 +69,8 @@ Page {
             CheckBox {
                 id: hideUncorr
                 text: "Hide low/info unless correlated"
-                checked: false
-                onCheckedChanged: appModel.setHideUncorrelatedLow(checked)
+                checked: appSettings.hideUncorrelatedLow
+                onCheckedChanged: { appSettings.hideUncorrelatedLow = checked; appModel.setHideUncorrelatedLow(checked); }
             }
         }
     }

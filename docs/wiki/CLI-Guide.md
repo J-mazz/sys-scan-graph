@@ -85,18 +85,44 @@ Supported extensions: `.json`, `.csv`, `.prom`.
 
 ### Interactive / UI mode
 
-The Agent supports an interactive mode that enables IPC with a UI dashboard. These options are intended for local, interactive workflows (not CI):
+The Agent supports an interactive mode that enables IPC with a UI dashboard. These options are intended for local, interactive workflows (not CI). There are two common ways to use the UI: **UI-first** (launch the GUI and let it spawn or connect to an agent) and **Agent-first** (start the agent and then run the GUI).
 
-- `--interactive` — start IPC server and enable the Investigation Director node at the end of the pipeline.
-- `--socket <path>` — path for the Unix domain socket used for UI<->Agent communication (default: `/tmp/sys-scan-ui.sock`).
+- `--interactive` — start the Agent's IPC server and enable the Investigation Director node at the end of the pipeline.
+- `--socket <path>` — path for the Unix domain socket used for UI↔Agent communication (default: `/tmp/sys-scan-ui.sock`).
 
-Example (start interactive run with socket):
+1) UI-first (recommended for interactive sessions): build and launch the UI binary. If the agent socket is missing the UI will attempt to spawn the Agent subprocess (ensure the `sys-scan-graph` CLI is on PATH or install the Agent into your venv).
 
 ```bash
-sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
+# Build UI (if not already built)
+cmake -B build -S . -DBUILD_UI=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc) --target sys-scan-ui
+
+# Run UI (repo-built binary)
+./build/UI/sys-scan-ui
+# (the UI will try to spawn 'sys-scan-graph' or 'python3 -m sys_scan_agent.cli' if the socket is missing)
 ```
 
-Note: When `--interactive` is set, the agent will attempt to start the IPC server (via `agent.sys_scan_agent.ipc_server.start_ipc_thread`).
+2) Agent-first (recommended when iterating on the Agent): start the Agent in interactive mode, then run the UI which will connect to the socket.
+
+```bash
+# Activate venv and install editable package if needed
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ./agent
+
+# Start the agent (it will start the IPC server on the socket)
+sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
+
+# Start the UI and it will connect to the agent
+./build/UI/sys-scan-ui
+```
+
+Troubleshooting:
+- If the UI prints errors like "module 'QtQuick.Window' is not installed", install the Qt Quick runtime and required QML modules (see Installation Guide).
+- If the UI reports "Main QML not found" or fails to load QML, confirm `build/UI/resources/qml/Main.qml` exists (re-run CMake configure/build after enabling `BUILD_UI`).
+- If the UI cannot spawn the agent, ensure `sys-scan-graph` is available on PATH (install the Agent into your venv or system) or start the Agent first using the Agent-first flow above.
+
+Note: When `--interactive` is set, the Agent will attempt to start the IPC server (via `agent.sys_scan_agent.ipc_server.start_ipc_thread`).
 
 ### Environment variables (optional)
 

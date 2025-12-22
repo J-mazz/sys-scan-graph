@@ -10,9 +10,7 @@ Each release entry corresponds to a git tag in this repository, and the date is 
 - Track local Qwen weights via Git LFS.
 - Implemented C++20/23 features
 - New schema v4 for JSON reports
-- UI migration: replaced legacy GTK4 dashboard with a new Qt/QML dashboard (`UI/`) — includes `BUILD_UI` CMake option, runtime QML resources, and a native binary (`./build/UI/sys-scan-ui`).
-- Interactive integration: Investigation Director and IPC utilities were promoted into the Python Agent (`agent/sys_scan_agent`); IPC uses a Unix domain socket (`/tmp/sys-scan-ui.sock`) and supports UI-first or agent-first workflows.
-- Qt/module/automoc stability: introduced header-first Q_OBJECT declarations with thin `.ixx` module shims to preserve automoc behavior when using C++20 modules.
+- UI migration/integration: replaced legacy GTK4 dashboard with a new Qt/QML dashboard
 
 ## [v6.0.2] - 2025-10-18
 

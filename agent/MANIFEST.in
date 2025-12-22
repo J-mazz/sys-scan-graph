@@ -1,18 +1,13 @@
-include LICENSE
 include README.md
-recursive-include sys_scan_agent *.yaml
-recursive-include sys_scan_agent *.json
-recursive-include sys_scan_agent *.txt
-recursive-include prompt_templates *
-recursive-include executors *
-exclude *.db
-exclude *.log
-exclude artifacts/*
-exclude fixtures/*
-exclude htmlcov/*
-exclude mistral_env/*
-exclude mistral-security-lora/*
-global-exclude *.pyc
-global-exclude __pycache__
-global-exclude .pytest_cache
-global-exclude .coverage
+include LICENSE
+include requirements.txt
+
+# Recursively include data directories found in sources
+recursive-include prompt_templates *.json
+recursive-include knowledge *.json *.yaml
+recursive-include executors *.py
+recursive-include fixtures *.json *.yaml
+recursive-include pypi_init *.py
+
+# Ensure model configs and adapters are included if present
+recursive-include sys_scan_agent/models *.json *.txt

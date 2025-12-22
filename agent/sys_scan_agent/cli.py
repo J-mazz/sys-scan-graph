@@ -44,6 +44,23 @@ from jsonschema import validate as js_validate, ValidationError
 import os
 import urllib.request
 
+def print_banner():
+    print(r"""
+    .________     ._____.____ .______  .______ .______ .___ .______  .___
+    :____.   \    :         |:      \ \____  |\____  |: __|:      \ : __|
+    |    :   |    |   \  /  ||   .   |/  ____|/  ____|| : ||       || : |
+    |    :   |    |   |\/   ||   :   |\      |\      ||   ||   |   ||   |
+    \__. __/      |___| |   ||___|   | \__:__| \__:__||   ||___|   ||   |
+       :/               |___|    |___|    :          :  |___|    |___||___|
+       :                                  •          •                     
+    
+    SysScan Graph v7.0.0 - AI-Driven Security Intelligence
+    """)
+
+@app.callback()
+def main():
+    print_banner()
+    
 def run_intelligence_workflow(report_path: Path, output_path: Path = None) -> tuple:
     """Run the intelligence workflow and return enriched output and final state with metrics."""
     # Load the report data
@@ -230,7 +247,7 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
         except Exception as e:
             print(f"[red]Failed to start IPC server: {e}[/red]")
 
-    enriched, final_state = run_intelligence_workflow(report, output_path=out)
+    enriched, final_state = run_intelligence_workflow(report)
     
     # Apply canonicalization for deterministic output ordering
     enriched_dict = enriched.model_dump()

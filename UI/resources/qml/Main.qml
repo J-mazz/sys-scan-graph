@@ -1,6 +1,9 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
+import QtQuick.Controls.Material 2.15 as Material
+import "Theme.qml" as ThemeQml
+import Qt.labs.settings 1.0
 
 ApplicationWindow {
     id: root
@@ -9,9 +12,18 @@ ApplicationWindow {
     visible: true
     title: "SysScan UI (Vulkan/C++23)"
 
-    // Theme singleton
-    property var Theme: Theme
+    // Theme singleton import
+    property var Theme: ThemeQml
+    Material.theme: Material.Dark
+    Material.accent: Theme.turquoise
     color: Theme.granite
+
+    Settings { id: appSettings; property bool hideUncorrelatedLow: true }
+
+    Component.onCompleted: {
+        // Apply persisted preference
+        appModel.setHideUncorrelatedLow(appSettings.hideUncorrelatedLow)
+    }
 
     menuBar: MenuBar {
         Menu {

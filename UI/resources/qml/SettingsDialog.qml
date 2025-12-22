@@ -20,7 +20,7 @@ Dialog {
         }
 
         Label { text: qsTr("Behavior") ; font.bold: true }
-        CheckBox { id: cbHideUncorrelatedLow; text: qsTr("Hide Info/Low unless correlated"); onCheckedChanged: appModel.setHideUncorrelatedLow(checked) }
+        CheckBox { id: cbHideUncorrelatedLow; text: qsTr("Hide Info/Low unless correlated"); checked: appSettings.hideUncorrelatedLow; onCheckedChanged: { appSettings.hideUncorrelatedLow = checked; appModel.setHideUncorrelatedLow(checked); } }
 
         Label { text: qsTr("Agent") ; font.bold: true }
         RowLayout {

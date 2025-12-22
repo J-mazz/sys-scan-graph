@@ -279,3 +279,5 @@ fuzz-*.profdata
  enriched_*.html 
 
  /artifacts/*
+agent/enriched_report.json
+agent/enriched_report.json

@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QFile>
 #include <QThread>
+#include <QQuickStyle>
 
 #include "core/report_parser.h"
 #include "core/finding_model.h"
@@ -19,6 +20,9 @@
 static sys_scan::ui::FindingModel model;
 
 int main(int argc, char *argv[]) {
+    // Use Material style for Qt Quick Controls to enable consistent theming
+    QQuickStyle::setStyle("Material");
+
     // Prefer Vulkan rendering backend when available
     QQuickWindow::setGraphicsApi(QSGRendererInterface::VulkanRhi);
 

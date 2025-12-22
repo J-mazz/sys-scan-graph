@@ -40,8 +40,18 @@ flowchart LR
 git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+# Recommended: use a C++23-capable toolchain (Clang 17+/GCC 13+/MSVC recent) and the Ninja generator.
+# Example (Linux, system Clang):
+export CC=clang
+export CXX=clang++
+cmake -B build -S . -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_STANDARD=23 \
+  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+  -DCMAKE_CXX_EXTENSIONS=OFF
 cmake --build build -j"$(nproc)"
+
+# If you prefer the default generator, add the same -DCMAKE_CXX_STANDARD=23 options to the configure command above.
 ```
 
 ### Intelligence layer (Python, optional)
@@ -71,8 +81,19 @@ We provide an optional Qt/QML dashboard (`UI/`) that can run the Agent interacti
 - Enable UI build:
 
 ```bash
-cmake -B build -S . -DBUILD_UI=ON -DCMAKE_BUILD_TYPE=Release
+# Make sure you have Qt6 development packages installed and a C++23-capable toolchain.
+# Example (Linux, system Clang + Ninja):
+export CC=clang
+export CXX=clang++
+cmake -B build -S . -G Ninja \
+  -DBUILD_UI=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_STANDARD=23 \
+  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+  -DCMAKE_CXX_EXTENSIONS=OFF
 cmake --build build -j"$(nproc)"
+
+# If your compiler does not support C++23 or modules, install a newer toolchain (see notes above).
 ```
 
 - Requirements: Qt6 (install platform packages e.g. `qt6-base-dev`, `qt6-declarative-dev` on Debian/Ubuntu) or let CMake disable the UI when Qt6 is not found.
