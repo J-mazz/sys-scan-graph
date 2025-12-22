@@ -26,12 +26,15 @@ struct Finding {
     Q_PROPERTY(QString title MEMBER title CONSTANT)
     Q_PROPERTY(QString description MEMBER description CONSTANT)
     Q_PROPERTY(Severity::Value severity MEMBER severity CONSTANT)
+    Q_PROPERTY(bool correlated MEMBER correlated CONSTANT)
 
 public:
     QString id;
     QString title;
     QString description;
     Severity::Value severity{};
+    bool correlated{false};
+
 
     // Custom three-way comparison; QString doesn't provide <=> directly
     auto operator<=>(const Finding& other) const noexcept -> std::strong_ordering {

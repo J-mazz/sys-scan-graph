@@ -18,7 +18,8 @@ public:
         TitleRole = Qt::UserRole + 1,
         SeverityRole,
         DescriptionRole,
-        IdRole
+        IdRole,
+        CorrelatedRole
     };
 
     explicit FindingModel(QObject* parent = nullptr);
@@ -34,6 +35,10 @@ public:
 
     Q_INVOKABLE void filterBySeverity(int minSeverity);
     Q_INVOKABLE void sortBySeverity(bool descending);
+
+    // Hide low/info findings unless they are correlated
+    Q_INVOKABLE void setHideUncorrelatedLow(bool hide);
+    Q_INVOKABLE void applyFilters();
 
 private:
     std::unique_ptr<FindingModelImpl> m_impl;

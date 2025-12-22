@@ -3,22 +3,36 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Rectangle {
-    color: "#1e1e1e"
+    color: Theme.slate
     anchors.fill: parent
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 10
 
-        TextArea {
-            id: chatOutput
-            Layout.fillHeight: true
+        // Refinement: Wrap in ScrollView for auto-scrolling
+        ScrollView {
+            id: scrollView
             Layout.fillWidth: true
-            readOnly: true
-            color: "#e0e0e0"
-            background: Rectangle { color: "#2d2d2d"; radius: 4 }
-            font.pixelSize: 14
-            wrapMode: Text.Wrap
+            Layout.fillHeight: true
+            clip: true
+
+            TextArea {
+                id: chatOutput
+                readOnly: true
+                color: Theme.text
+                selectionColor: Theme.turquoise
+                selectedTextColor: "#000000"
+                selectByMouse: true
+                textFormat: TextEdit.MarkdownText // Enable bold/bullets from LLM
+                
+                background: Rectangle { 
+                    color: Theme.granite2
+                    radius: 4 
+                }
+                font.pixelSize: 14
+                wrapMode: Text.Wrap
+            }
         }
 
         RowLayout {
@@ -29,16 +43,25 @@ Rectangle {
                 id: chatInput
                 Layout.fillWidth: true
                 placeholderText: "Ask the Agent (e.g., 'Analyze critical risks')..."
+                color: Theme.text
+                background: Rectangle {
+                    color: Theme.granite2
+                    radius: 4
+                    border.color: chatInput.activeFocus ? Theme.turquoise : Theme.granite2
+                }
                 onAccepted: sendBtn.clicked()
             }
 
             Button {
                 id: sendBtn
                 text: "Send"
+                background: Rectangle { color: Theme.turquoise; radius: 4 }
                 onClicked: {
-                    if (chatInput.text === "") return;
-                    chatOutput.append("\n> " + chatInput.text);
-                    chatOutput.append("Agent: ");
+                    if (chatInput.text.trim() === "") return;
+                    
+                    // formatting input
+                    chatOutput.append("\n**You:** " + chatInput.text);
+                    chatOutput.append("**Agent:** ");
 
                     agentService.promptAsync(chatInput.text);
                     chatInput.text = "";
@@ -51,6 +74,9 @@ Rectangle {
         target: agentService
         function onTokenReceived(token) {
             chatOutput.insert(chatOutput.length, token);
+            // Auto-scroll logic
+            if (chatOutput.cursorPosition < chatOutput.length)
+                chatOutput.cursorPosition = chatOutput.length;
         }
         function onGenerationFinished() {
             chatOutput.append("\n");

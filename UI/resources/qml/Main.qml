@@ -8,7 +8,22 @@ ApplicationWindow {
     height: 800
     visible: true
     title: "SysScan UI (Vulkan/C++23)"
-    color: "#121212"
+
+    // Theme singleton
+    property var Theme: Theme
+    color: Theme.granite
+
+    menuBar: MenuBar {
+        Menu {
+            title: qsTr("Preferences")
+            MenuItem { text: qsTr("Settings..."); onTriggered: settingsDialog.open() }
+            MenuItem { text: qsTr("Reload UI"); onTriggered: Qt.quit(); Qt.processEvents(); Qt.application.exec(); }
+        }
+        Menu {
+            title: qsTr("Help")
+            MenuItem { text: qsTr("About"); onTriggered: Qt.openUrlExternally("https://github.com/J-mazz/sys-scan-graph") }
+        }
+    }
 
     SplitView {
         anchors.fill: parent
@@ -33,4 +48,7 @@ ApplicationWindow {
     }
 
     footer: StatusFooter { }
+
+    // Settings dialog component
+    SettingsDialog { id: settingsDialog }
 }

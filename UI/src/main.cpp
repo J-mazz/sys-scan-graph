@@ -30,6 +30,7 @@ int main(int argc, char *argv[]) {
 
     // Register types for QML access
     qmlRegisterType<sys_scan::ui::FindingModel>("SysScan.UI", 1, 0, "FindingModel");
+    qmlRegisterSingletonType(QUrl("qrc:/Theme.qml"), "SysScan.UI", 1, 0, "Theme");
 
     // Initialize Model (already at file scope)
 

@@ -4,22 +4,53 @@ import QtQuick.Layouts 1.15
 
 Page {
     id: root
+    background: Rectangle { color: "#252525" } // Dark background
 
     header: ToolBar {
+        background: Rectangle { color: Theme.granite2 }
         RowLayout {
             anchors.fill: parent
+            anchors.margins: 5
+            
             Label {
                 text: "Security Dashboard"
-                font.pixelSize: 20
-                Layout.leftMargin: 20
+                font.pixelSize: 18
+                font.bold: true
+                color: Theme.text
+                Layout.leftMargin: 10
             }
+            
             Item { Layout.fillWidth: true }
+            
+            Label { text: "Min Severity:"; color: Theme.muted }
             ComboBox {
-                model: ["All", "Low+", "Medium+", "High+", "Critical"]
+                id: severityCombo
+                model: ["All", "Low", "Medium", "High", "Critical"]
+                currentIndex: 0
+                Layout.preferredWidth: 120
                 onActivated: (index) => {
-                    // map index to severity (0..4)
                     appModel.filterBySeverity(index)
                 }
+            }
+
+            Label { text: "Sort:"; color: Theme.muted; Layout.leftMargin: 8 }
+            ComboBox {
+                id: sortCombo
+                model: ["Severity (desc)", "Severity (asc)", "Title"]
+                currentIndex: 0
+                Layout.preferredWidth: 140
+                onActivated: (i) => {
+                    if (i === 0) appModel.sortBySeverity(true);
+                    else if (i === 1) appModel.sortBySeverity(false);
+                    else appModel.applyFilters();
+                }
+            }
+
+            CheckBox {
+                id: hideUncorr
+                text: "Hide low/info unless correlated"
+                checked: false
+                onCheckedChanged: appModel.setHideUncorrelatedLow(checked)
             }
         }
     }
@@ -28,40 +59,69 @@ Page {
         id: findingList
         anchors.fill: parent
         anchors.margins: 20
-        spacing: 10
+        spacing: 8
         model: appModel
+        clip: true
 
         delegate: Rectangle {
             width: findingList.width
-            height: 60
+            height: 70
             color: "#2b2b2b"
-            radius: 5
+            radius: 4
             border.color: "#3f3f3f"
+            border.width: 1
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 10
+                anchors.margins: 12
+                spacing: 15
 
+                // Severity Indicator
                 Rectangle {
-                    width: 16; height: 16; radius: 8
-                    color: model.severity === 4 ? "#ff4444" : (model.severity === 3 ? "#ff8800" : "#44ff44")
+                    width: 12
+                    height: 12
+                    radius: 6
+                    // Map C++ severity (1-4) to colors
+                    color: {
+                        if (model.severity >= 4) return "#ff4444" // Critical
+                        if (model.severity === 3) return "#ff8800" // High
+                        if (model.severity === 2) return "#ffcc00" // Medium
+                        return "#44ff44" // Low
+                    }
                 }
 
                 ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    
                     Label {
                         text: model.title
                         font.bold: true
+                        font.pixelSize: 15
                         color: "#ffffff"
                     }
+                    
                     Label {
                         text: model.description
-                        font.pixelSize: 12
+                        font.pixelSize: 13
                         color: "#aaaaaa"
                         elide: Text.ElideRight
+                        maximumLineCount: 1
                         Layout.fillWidth: true
                     }
                 }
+                
+                // Optional: Arrow icon or severity text
+                Label {
+                    text: ["?", "LOW", "MED", "HIGH", "CRIT"][Math.min(model.severity, 4)]
+                    color: "#555555"
+                    font.pixelSize: 10
+                    font.bold: true
+                }
             }
         }
+        
+        // ScrollBar for the list
+        ScrollBar.vertical: ScrollBar { }
     }
 }
