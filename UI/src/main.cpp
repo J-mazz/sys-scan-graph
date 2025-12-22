@@ -8,11 +8,11 @@
 #include <QFile>
 #include <QThread>
 
-import sys_scan.ui.report_parser;
-import sys_scan.ui.finding_model;
-import sys_scan.ui.types;
-import sys_scan.ui.agent;
-import sys_scan.ui.ipc;
+#include "core/report_parser.h"
+#include "core/finding_model.h"
+#include "core/types.h"
+#include "core/agent_service.h"
+#include "core/ipc_service.h"
 #include <QProcess>
 
 // Instantiate the model at file scope so it is accessible in signal handlers
@@ -30,7 +30,6 @@ int main(int argc, char *argv[]) {
 
     // Register types for QML access
     qmlRegisterType<sys_scan::ui::FindingModel>("SysScan.UI", 1, 0, "FindingModel");
-    qRegisterMetaType<sys_scan::ui::Finding>("sys_scan::ui::Finding");
 
     // Initialize Model (already at file scope)
 

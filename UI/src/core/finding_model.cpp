@@ -1,76 +1,77 @@
-module;
-#include <QVariant>
-#include <QHash>
-#include <ranges>
+#include "finding_model.h"
+#include <vector>
+#include <QString>
+#include <memory>
 #include <algorithm>
 
-module sys_scan.ui.finding_model;
+import sys_scan.ui.types; // ensure canonical module type for Finding
 
-import sys_scan.ui.types;
+// Define the PIMPL struct in the same namespace as the header declaration
+struct sys_scan::ui::FindingModelImpl {
+    std::vector<sys_scan::ui::Finding> findings;
+};
 
-namespace sys_scan::ui {
+sys_scan::ui::FindingModel::FindingModel(QObject* parent)
+    : QAbstractListModel(parent), m_impl(std::make_unique<sys_scan::ui::FindingModelImpl>()) {}
 
-    FindingModel::FindingModel(QObject* parent) : QAbstractListModel(parent) {}
-    FindingModel::~FindingModel() = default;
+sys_scan::ui::FindingModel::~FindingModel() = default;
 
-    int FindingModel::rowCount(const QModelIndex& parent) const {
-        Q_UNUSED(parent);
-        return static_cast<int>(m_displayed_findings.size());
+int sys_scan::ui::FindingModel::rowCount(const QModelIndex& parent) const {
+    if (parent.isValid()) return 0;
+    return static_cast<int>(m_impl->findings.size());
+}
+
+QVariant sys_scan::ui::FindingModel::data(const QModelIndex& index, int role) const {
+    if (!index.isValid() || index.row() >= m_impl->findings.size())
+        return QVariant();
+
+    const auto& finding = m_impl->findings[index.row()];
+    switch (role) {
+        case IdRole: return finding.id;
+        case TitleRole: return finding.title;
+        case SeverityRole: return finding.severity;
+        case DescriptionRole: return finding.description;
     }
+    return QVariant();
+}
 
-    QVariant FindingModel::data(const QModelIndex& index, int role) const {
-        if (!index.isValid() || index.row() >= static_cast<int>(m_displayed_findings.size()))
-            return {};
+QHash<int, QByteArray> sys_scan::ui::FindingModel::roleNames() const {
+    return {
+        {IdRole, "id"},
+        {TitleRole, "title"},
+        {SeverityRole, "severity"},
+        {DescriptionRole, "description"}
+    };
+}
 
-        const auto& finding = m_displayed_findings[static_cast<size_t>(index.row())];
+void sys_scan::ui::FindingModel::clear() {
+    beginResetModel();
+    m_impl->findings.clear();
+    endResetModel();
+}
 
-        switch (role) {
-            case TitleRole: return finding.title;
-            case SeverityRole: return QVariant::fromValue(static_cast<int>(finding.severity));
-            case DescriptionRole: return finding.description;
-            case IdRole: return finding.id;
-            default: return {};
-        }
-    }
+void sys_scan::ui::FindingModel::loadFindings(std::vector<Finding> findings) {
+    beginResetModel();
+    m_impl->findings = std::move(findings);
+    endResetModel();
+}
 
-    QHash<int, QByteArray> FindingModel::roleNames() const {
-        return {
-            {TitleRole, "title"},
-            {SeverityRole, "severity"},
-            {DescriptionRole, "description"},
-            {IdRole, "id"}
-        };
-    }
+void sys_scan::ui::FindingModel::filterBySeverity(int minSeverity) {
+    beginResetModel();
+    auto& vec = m_impl->findings;
+    vec.erase(std::remove_if(vec.begin(), vec.end(), [minSeverity](const Finding& f) {
+        return static_cast<int>(f.severity) < minSeverity;
+    }), vec.end());
+    endResetModel();
+}
 
-    void FindingModel::loadFindings(std::vector<Finding> findings) {
-        beginResetModel();
-        m_all_findings = std::move(findings);
-        m_displayed_findings = m_all_findings;
-        endResetModel();
-    }
-
-    void FindingModel::filterBySeverity(int minSeverity) {
-        beginResetModel();
-        auto filter_view = m_all_findings |
-            std::views::filter([minSeverity](const Finding& f) {
-                return static_cast<int>(f.severity) >= minSeverity;
-            });
-
-        m_displayed_findings.clear();
-        std::ranges::copy(filter_view, std::back_inserter(m_displayed_findings));
-        endResetModel();
-    }
-
-    void FindingModel::sortBySeverity(bool descending) {
-        layoutAboutToBeChanged();
-        if (descending) {
-            std::ranges::sort(m_displayed_findings, std::greater<>{}, &Finding::severity);
-        } else {
-            std::ranges::sort(m_displayed_findings, std::less<>{}, &Finding::severity);
-        }
-        layoutChanged();
-    }
-
-} // namespace sys_scan::ui
-
-
+void sys_scan::ui::FindingModel::sortBySeverity(bool descending) {
+    beginResetModel();
+    auto& vec = m_impl->findings;
+    std::sort(vec.begin(), vec.end(), [descending](const Finding& a, const Finding& b) {
+        if (descending)
+            return static_cast<int>(a.severity) > static_cast<int>(b.severity);
+        return static_cast<int>(a.severity) < static_cast<int>(b.severity);
+    });
+    endResetModel();
+}

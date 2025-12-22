@@ -1,4 +1,3 @@
-module;
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
@@ -6,9 +5,8 @@ module;
 #include <span>
 #include <QString>
 
-module sys_scan.ui.report_parser;
-
-import sys_scan.ui.types;
+#include "report_parser.h"
+#include "types.h"
 
 using json = nlohmann::json;
 

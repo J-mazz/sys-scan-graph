@@ -300,6 +300,18 @@ _PROVIDER: ILLMProvider = NullLLMProvider()
 
 def _maybe_init_from_env():  # lazy to avoid hard deps unless requested
     global _PROVIDER
+    # Backwards compatibility: allow legacy EXTERNAL_* env vars (e.g. EXTERNAL_LLM_PROVIDER)
+    # to opt-in external inference without forcing users to set AGENT_* variables.
+    external_provider = os.environ.get('EXTERNAL_LLM_PROVIDER')
+    if external_provider:
+        # Turn on the opt-in gate and map to LangChain provider when a vendor is specified
+        os.environ.setdefault('AGENT_EXTERNAL_LLM_ENABLED', '1')
+        os.environ.setdefault('AGENT_LLM_PROVIDER', 'langchain-api')
+        os.environ.setdefault('AGENT_LANGCHAIN_PROVIDER', external_provider)
+        # Map OpenAI specific legacy key into the standard environment variable used by SDKs
+        if 'EXTERNAL_OPENAI_API_KEY' in os.environ:
+            os.environ.setdefault('OPENAI_API_KEY', os.environ['EXTERNAL_OPENAI_API_KEY'])
+
     # Prefer Qwen local by default; fall back to deterministic heuristic
     prov = os.environ.get('AGENT_LLM_PROVIDER', 'local-qwen').lower()
 
