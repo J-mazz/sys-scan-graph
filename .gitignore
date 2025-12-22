@@ -92,6 +92,8 @@ Thumbs.db
 /report.json
 /*_report.json
 /module_summary*.json
+enriched_*.json
+enriched_*.html
 
 # Coverage reports (HTML and other formats)
 /htmlcov/
