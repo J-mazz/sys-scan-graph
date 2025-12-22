@@ -100,10 +100,34 @@ endif()
 qt_add_executable(sys-scan-ui
     MANUAL_FINALIZATION
     src/main.cpp
-    assets/qml/Main.qml
+    resources/qml/Main.qml
 )
 
 target_link_libraries(sys-scan-ui PRIVATE Qt6::Quick sys_scan_core_ui)
+
+# Ensure QML resource files are available at runtime under either "resources/qml/" or "assets/qml/"
+# Prefer `resources/` but fall back to `assets/` to match renames or packaging layouts.
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+    set(UI_RESOURCE_DIR resources)
+elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/assets)
+    set(UI_RESOURCE_DIR assets)
+else()
+    message(WARNING "UI resources directory not found: expected 'resources/' or 'assets/' under UI/. QML files (e.g. Main.qml) may be missing at runtime.")
+    set(UI_RESOURCE_DIR "")
+endif()
+
+if(UI_RESOURCE_DIR)
+    message(STATUS "Using UI resources from: ${UI_RESOURCE_DIR}")
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/${UI_RESOURCE_DIR} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+    # Install the resources alongside the executable for packaging
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${UI_RESOURCE_DIR} DESTINATION share/sys-scan-ui/${UI_RESOURCE_DIR})
+
+    # Sanity check: ensure Main.qml exists in selected layout
+    if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${UI_RESOURCE_DIR}/qml/Main.qml)
+        message(WARNING "UI resource layout found at ${UI_RESOURCE_DIR} but 'qml/Main.qml' is missing - the UI may not load.")
+    endif()
+endif()
 
 # Tests
 option(BUILD_TESTS "Build tests" OFF)

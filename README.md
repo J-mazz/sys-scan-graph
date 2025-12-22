@@ -82,7 +82,7 @@ cmake --build build -j"$(nproc)"
 
 ```bash
 # Launch UI; it will try to start the agent if needed
-./build/dist/bin/sys-scan-ui
+./build/UI/sys-scan-ui
 ```
 
   - Agent-first: run the Agent with the `--interactive` flag which starts an IPC server and enables the Investigation Director node in the graph. The Agent exposes a `--socket` option to set the socket path.

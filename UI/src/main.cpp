@@ -40,8 +40,6 @@ int main(int argc, char *argv[]) {
 
     // AgentService registration & exposure
     static sys_scan::ui::AgentService agent;
-    // Uncomment to preload a model when available:
-    // agent.loadModel("/path/to/model.gguf");
     engine.rootContext()->setContextProperty("agentService", &agent);
 
     // IpcService registration & exposure
@@ -49,12 +47,14 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("ipc", &ipc);
 
     // If the IPC socket does not exist, try to launch the Agent as a subprocess
+    // Use canonical agent entrypoints to avoid shipping demo/legacy names or commented toggles.
     const QString socketPath = QStringLiteral("/tmp/sys-scan-ui.sock");
     if (!QFile::exists(socketPath)) {
-        // Try multiple candidate commands (best-effort)
+        // Try a minimal, canonical set of commands (best-effort) — prefer the packaged Python entrypoint
         const QStringList candidates = {
-            QStringLiteral("sys-scan-agent"),
-            QStringLiteral("sys-scan-intelligence"),
+            // Prefer the top-level CLI package which is the canonical entrypoint for interactive runs
+            QStringLiteral("sys-scan-graph"),
+            // Fallback to invoking the Python module directly if the package isn't on PATH
             QStringLiteral("python3 -m sys_scan_agent.cli")
         };
 
@@ -103,7 +103,28 @@ int main(int argc, char *argv[]) {
             }
     });
 
-    const QUrl url = QUrl::fromLocalFile(QStringLiteral("resources/qml/Main.qml"));
+    // Resolve Main QML file from multiple candidate locations so the UI works
+    // when run from build dir, installed paths, or when assets are packaged.
+    const QStringList qmlCandidates = {
+        QStringLiteral("resources/qml/Main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/resources/qml/Main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../resources/qml/Main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../assets/qml/Main.qml"),
+        QStringLiteral("assets/qml/Main.qml")
+    };
+
+    QString qmlPath;
+    for (const QString &c : qmlCandidates) {
+        if (QFile::exists(c)) { qmlPath = c; break; }
+    }
+    if (qmlPath.isEmpty()) {
+        qWarning().noquote() << "Main QML not found; tried:" << qmlCandidates;
+        qmlPath = QStringLiteral("resources/qml/Main.qml"); // fallback to original path
+    }
+
+    const QUrl url = QUrl::fromLocalFile(qmlPath);
+    qInfo().noquote() << "Loading QML from" << url.toString();
+
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl)

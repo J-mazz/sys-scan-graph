@@ -129,7 +129,7 @@ Example payload sent to the UI (or stored in state):
 - **UI-first (recommended):** Launch the UI binary; if no IPC socket exists the UI will attempt to spawn the Agent subprocess and wait for the socket (`/tmp/sys-scan-ui.sock` by default):
 
 ```bash
-./build/dist/bin/sys-scan-ui
+./build/UI/sys-scan-ui
 ```
 
 - **Agent-first:** Run the Agent with the `--interactive` flag to start its IPC server and expose the Investigation Director node to incoming UI connections:
@@ -137,6 +137,7 @@ Example payload sent to the UI (or stored in state):
 ```bash
 sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
 ```
+
 
 ### Developer notes
 - Tests for the Agent-side integration live in `tests/test_graph_nodes_ui.py`.

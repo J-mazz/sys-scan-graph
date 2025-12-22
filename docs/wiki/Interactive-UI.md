@@ -27,7 +27,7 @@ cmake --build build -j"$(nproc)"
   - Launch the UI binary. If it does not detect an existing IPC socket it will try to spawn the Agent subprocess and wait for a connection.
 
 ```bash
-./build/dist/bin/sys-scan-ui
+./build/UI/sys-scan-ui
 # or installed system-wide as `sys-scan-ui`
 ```
 

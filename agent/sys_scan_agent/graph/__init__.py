@@ -220,7 +220,7 @@ def baseline_tools_sync(state: GraphState) -> GraphState:
     return state
 
 
-def build_workflow(enhanced: Optional[bool] = None):
+def build_workflow(enhanced: Optional[bool] = None, interactive: bool = False):
     """Build and compile a robust StateGraph workflow with memory management, tool calling, and reflection.
 
     Features:
@@ -284,7 +284,38 @@ def build_workflow(enhanced: Optional[bool] = None):
     wf.add_edge("integrate_baseline", "risk_analysis")
     wf.add_edge("risk_analysis", "compliance_checker_node")
     wf.add_edge("compliance_checker_node", "metrics_collection")
-    wf.add_edge("metrics_collection", current_END)
+
+    # If interactive mode is requested, try to add an investigation director node
+    if interactive:
+        investigation_director_node = None
+        try:
+            # Try relative import first
+            from .graph_nodes_ui import investigation_director_node as _idn
+            investigation_director_node = _idn
+        except Exception:
+            try:
+                # Fallback to absolute import if relative fails (handles packaging edge-cases)
+                import importlib
+                m = importlib.import_module('sys_scan_agent.graph_nodes_ui')
+                investigation_director_node = getattr(m, 'investigation_director_node', None)
+            except Exception as e:  # pragma: no cover - optional
+                try:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Interactive mode requested but could not add Investigation Director: {e}")
+                except Exception:
+                    pass
+        if investigation_director_node:
+            try:
+                wf.add_node("investigation_director", investigation_director_node)
+                wf.add_edge("metrics_collection", "investigation_director")
+                wf.add_edge("investigation_director", current_END)
+            except Exception:
+                # If adding the node fails for any reason, fall back to default edge
+                wf.add_edge("metrics_collection", current_END)
+        else:
+            wf.add_edge("metrics_collection", current_END)
+    else:
+        wf.add_edge("metrics_collection", current_END)
 
     try:
         compiled = wf.compile()
