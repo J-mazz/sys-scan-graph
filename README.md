@@ -11,151 +11,59 @@
 [![CodeScene System Mastery](https://codescene.io/projects/72512/status-badges/system-mastery)](https://codescene.io/projects/72512)
 [![Coverage](https://img.shields.io/badge/coverage-%3E=85%25-brightgreen.svg)](docs/TEST_COVERAGE.md)
 
-**Sys-Scan-Graph** turns raw host signals from multiple security surfaces into a concise, actionable security report.
+**Sys-Scan-Graph** turns host signals into concise, actionable findings and analyst-friendly summaries — designed to run offline and at scale.
 
-It combines a **high-performance C++ core** (built with a C++23 toolchain, using C++20 modules) with an **optional local intelligence layer** (Python) that enriches and summarizes results without sending data off-host.
+It pairs a deterministic, high-performance C++ core (strict schema, streaming collectors) with an optional Python intelligence agent that enriches and triages results locally (default provider: `local-qwen`). The project is optimized for reproducibility, CI, and air-gapped deployments.
 
 ```mermaid
 flowchart LR
-  A[Core scan (C++)] -->|report.json| B[Python intelligence]
-  B -->|enriched_report.json| C[Analysts & pipelines]
-  B -->|HTML / metrics| D[Dashboards & CI]
+  subgraph Core [C++ core]
+    direction TB
+    SCANNERS[Scanners\n(process, net, kernel, mounts, fs perms, modules, eBPF, YARA, integrity)]
+    REG[ScannerRegistry]\n(streaming orchestration)
+    SCANNERS --> REG --> REPORT[Report (json, schema/v4.json)]
+  end
+
+  subgraph Agent [Python agent (optional)]
+    direction TB
+    AGENT[sys-scan-agent]\n(LangGraph workflows, enrichment)
+    AGENT --> ENR[enriched_report.json / HTML / metrics]
+    AGENT -->|socket IPC| UI[UI (optional)]
+  end
+
+  REPORT --> AGENT
+  AGENT -.->|artifacts| CI[CI / analysts / pipelines]
 ```
 
-### Highlights
+Highlights — in one line each
 
-- **Deterministic scans**: canonical JSON output with stable ordering
-- **Local intelligence**: default `local-qwen` provider (offline), with heuristic fallback
-- **Performance-aware**: bounded parallelism, batch processing, cache primitives, and memory-safe defaults
-- **Composable**: DI-friendly scanners and pluggable rule/LLM providers
-- **Secure by design**: zero outbound LLM calls; works air-gapped after model download
+- Deterministic, schema-validated JSON: `schema/v4.json` and `--canonical` for stable ordering.
+- Memory-bounded scanners: coroutine-based `Generator<Finding>` and streaming collection via `Report::consume()`.
+- Local-first intelligence: `local-qwen` provider (weights not included; set `AGENT_LOCAL_QWEN_MODEL_DIR`); external providers are opt-in.
+- Safe operation: scanner failures are recorded (no process-wide crash) and the registry runs scanners with bounded parallelism.
+- Developer ergonomics: packaged CLI entrypoints (`sys-scan`, `sys-scan-graph`, `sys-scan-intelligence`), clear CMake flags (Clang required for modules), and an optional UI.
 
 ---
 
-## Quick Start
+Quick start (minimal)
 
-### Core scanner (C++)
+Build core and run (Linux/Clang suggested):
 
 ```bash
-git clone https://github.com/J-mazz/sys-scan-graph.git
-cd sys-scan-graph
-
-# Recommended: use a C++23-capable toolchain (Clang 17+/GCC 13+/MSVC recent) and the Ninja generator.
-# Example (Linux, system Clang):
-export CC=clang
-export CXX=clang++
-cmake -B build -S . -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_STANDARD=23 \
-  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
-  -DCMAKE_CXX_EXTENSIONS=OFF
-cmake --build build -j"$(nproc)"
-
-# If you prefer the default generator, add the same -DCMAKE_CXX_STANDARD=23 options to the configure command above.
+cmake -B build -S . -G Ninja -DCMAKE_CXX_STANDARD=23 && cmake --build build -j$(nproc)
+./build/sys-scan --canonical --output report.json
 ```
 
-### Intelligence layer (Python, optional)
+Enrich with the agent (optional):
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U pip
+python -m venv .venv && source .venv/bin/activate
 pip install sys-scan-agent
-
-# Optional: local model + orchestration dependencies (torch/transformers/etc.)
-# Note: model weights are NOT shipped with the PyPI package. Provide weights locally via
-# AGENT_LOCAL_QWEN_MODEL_DIR (see agent/sys_scan_agent/models/local_qwen/MODEL_CARD.md).
-pip install \
-  langgraph langchain-core \
-  torch transformers peft accelerate safetensors huggingface_hub
-
-# Optional: external inference via LangChain (networked, opt-in)
-# IMPORTANT: You must provide your own provider credentials for your chosen inference provider.
-pip install langchain langchain-openai langchain-anthropic
+AGENT_LLM_PROVIDER=local-qwen TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 \
+  sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
-### Optional Dashboard (Interactive UI) ✅
-
-We provide an optional Qt/QML dashboard (`UI/`) that can run the Agent interactively and display investigation summaries. The UI build is controlled from the root CMake **master** using the `BUILD_UI` option.
-
-- Enable UI build:
-
-```bash
-# Make sure you have Qt6 development packages installed and a C++23-capable toolchain.
-# Example (Linux, system Clang + Ninja):
-export CC=clang
-export CXX=clang++
-cmake -B build -S . -G Ninja \
-  -DBUILD_UI=ON \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_STANDARD=23 \
-  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
-  -DCMAKE_CXX_EXTENSIONS=OFF
-cmake --build build -j"$(nproc)"
-
-# If your compiler does not support C++23 or modules, install a newer toolchain (see notes above).
-```
-
-- Requirements: Qt6 (install platform packages e.g. `qt6-base-dev`, `qt6-declarative-dev` on Debian/Ubuntu) or let CMake disable the UI when Qt6 is not found.
-
-- Running options:
-  - UI-first (recommended for interactive sessions): run the UI binary (`sys-scan-ui`). If the UI cannot find an existing agent IPC socket it will attempt to spawn the Agent as a worker subprocess using the default socket (`/tmp/sys-scan-ui.sock`).
-
-```bash
-# Launch UI; it will try to start the agent if needed
-./build/UI/sys-scan-ui
-```
-
-  - Agent-first: run the Agent with the `--interactive` flag which starts an IPC server and enables the Investigation Director node in the graph. The Agent exposes a `--socket` option to set the socket path.
-
-```bash
-sys-scan-graph analyze --report report.json --out enriched_report.json --interactive --socket /tmp/sys-scan-ui.sock
-```
-
-- Developer notes:
-  - Integration code for the Investigation Director and IPC lives inside the Agent package (`agent/sys_scan_agent/graph_nodes_ui.py` and `agent/sys_scan_agent/ipc_server.py`).
-  - Unit tests for the Investigation Director node are in `tests/test_graph_nodes_ui.py`.
-
-For full developer details and troubleshooting, see `docs/wiki/Interactive-UI.md`.
-
-### Run (memory-safe defaults)
-
-```bash
-# 1) Core scan
-./build/sys-scan --canonical --output report.json
-
-# 2) Enrich locally (offline, bounded threads)
-AGENT_LLM_PROVIDER=local-qwen \
-AGENT_GRAPH_APP_ENABLED=0 \
-OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
-sys-scan-graph analyze --report report.json --out enriched_report.json
-```
-
-Tips: use `--metrics-out metrics.json` to capture node timings. HTML output is controlled by `config.yaml` (see `reports.html_enabled` and `reports.html_path`). Set `TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1` to avoid network calls.
-
-### Common workflows
-
-1. **Scan only (fastest path):**
-
-```bash
-./build/sys-scan --canonical --output report.json
-```
-
-1. **Scan + enrich locally (recommended):**
-
-```bash
-./build/sys-scan --canonical --output report.json
-
-AGENT_LLM_PROVIDER=local-qwen \
-AGENT_GRAPH_APP_ENABLED=0 \
-TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 \
-OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
-sys-scan-graph analyze --report report.json --out enriched_report.json
-```
-
-1. **CI-friendly output (artifacts):**
-
-Persist `report.json` (and optionally `enriched_report.json`) as CI artifacts for review and trend analysis.
+For developer details and deep dives, see `docs/wiki/` (Architecture, CLI Guide, Core Scanners).
 
 ---
 

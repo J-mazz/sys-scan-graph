@@ -75,7 +75,7 @@ Optional outputs (controlled by config and CLI flags) include:
 
 The intended contract between the core scanner and the intelligence layer is a versioned JSON schema (`schema/v4.json`).
 
-This repository includes a sample `report.json` at the repo root, illustrating the v4 ground-truth-compatible shape.
+This repository includes sample report fixtures (for example, `agent/report.json` and `evaluation/report.json`) that illustrate the v4 ground-truth-compatible shape.
 
 ## Design principles (as implemented)
 

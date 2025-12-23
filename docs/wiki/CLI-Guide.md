@@ -68,7 +68,25 @@ Run analysis:
 sys-scan-graph analyze --report report.json --out enriched_report.json
 ```
 
-The `--report` input must be a JSON report. This repository includes sample reports you can use for experimentation (for example, `report.json`).
+The `--report` input must be a JSON report. This repository includes sample fixture reports you can use for experimentation (for example, `agent/report.json` and `evaluation/report.json`).
+
+Developer notes (where to look)
+
+- CLI code: `agent/sys_scan_agent/cli.py`
+- Workflow assembly: `agent/sys_scan_agent/graph.py` (builds graph of sync/async nodes)
+- Canonicalization: `agent/sys_scan_agent/canonicalize.py` (used after analysis to produce stable output)
+- Provider selection: `agent/sys_scan_agent/llm_provider.py` (env-driven factory and aliases)
+
+Environment variables
+
+- `AGENT_LLM_PROVIDER` — provider selection (default: `local-qwen`), aliases supported: `qwen`, `localagent`, `local_llm`, `local` (heuristic), `null` (no LLM), `langchain-api` (external via LangChain).
+- `AGENT_EXTERNAL_LLM_ENABLED=1` — explicit opt-in for networked inference (required for `langchain-api`).
+- `AGENT_LOCAL_QWEN_MODEL_DIR` — path to local Qwen model shards (see `agent/sys_scan_agent/models/local_qwen/MODEL_CARD.md`).
+
+Quick troubleshooting
+
+- If a local provider fails to initialize, the code falls back to a deterministic heuristic provider (Null/LocalLLM). See `llm_provider.py` for fallback behavior.
+- For interactive sessions, use `--interactive` and `--socket` to run with the UI (see `Interactive-UI.md`).
 
 ### Metrics export
 

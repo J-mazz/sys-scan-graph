@@ -188,15 +188,6 @@ sft_adapter/
 # Exception: track the local-qwen shard set (split to <28MB shards) for reproducible offline runs.
 *.safetensors
 
-# Ignore the shards directory by default...
-agent/sys_scan_agent/models/local_qwen/shards/
-# ...but explicitly include the tracked shard set and companion metadata.
-!agent/sys_scan_agent/models/local_qwen/shards/
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.safetensors
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.json
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.txt
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.jinja
-
 # Translations
 *.mo
 *.pot

@@ -213,8 +213,8 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
         print(f"[cyan]Index updated at {index_dir}/index.json")
 
 @app.command()
-def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw v2 report"),
-                    schema: Path = typer.Option(Path("schema/v2.json"), help="Schema path"),
+def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw v4 report"),
+                    schema: Path = typer.Option(Path("schema/v4.json"), help="Schema path"),
                     max_ms: int = typer.Option(500, help="Wall time budget (ms)")):
     start = time.time()
     data = json.loads(report.read_text())
@@ -236,7 +236,7 @@ def validate_report(report: Path = typer.Option(..., exists=True, help="Path to 
 
 @app.command()
 def validate_batch(dir: Path = typer.Option(..., exists=True, help="Directory containing report JSON fixtures"),
-                   schema: Path = typer.Option(Path("schema/v2.json"), help="Schema path"),
+                   schema: Path = typer.Option(Path("schema/v4.json"), help="Schema path"),
                    max_ms: int = typer.Option(500, help="Per-report time budget ms"),
                    require: int = typer.Option(6, help="Minimum number of reports to validate")):
     files = [p for p in dir.glob('*.json')]
@@ -305,7 +305,7 @@ def risk_calibration(show: bool = typer.Option(False, help="Show current calibra
         print(cal)
 
 @app.command()
-def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw v2 report JSON"),
+def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw report JSON (v4)"),
                   finding_id: str = typer.Option(...),
                   decision: str = typer.Option(..., help="tp|fp|ignore"),
                   db: Path = typer.Option(Path("agent_baseline.db"))):
