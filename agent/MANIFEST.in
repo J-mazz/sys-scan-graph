@@ -1,13 +1,31 @@
-include README.md
 include LICENSE
-include requirements.txt
+include README.md
+include pyproject.toml
 
-# Recursively include data directories found in sources
+# Include package source code and data
+recursive-include sys_scan_agent *.py
+recursive-include sys_scan_agent *.yaml
+recursive-include sys_scan_agent *.json
+recursive-include sys_scan_agent *.txt
 recursive-include prompt_templates *.json
-recursive-include knowledge *.json *.yaml
 recursive-include executors *.py
-recursive-include fixtures *.json *.yaml
-recursive-include pypi_init *.py
 
-# Ensure model configs and adapters are included if present
-recursive-include sys_scan_agent/models *.json *.txt
+# INCLUDE MODEL SHARDS
+# Each shard must be <100MB to satisfy PyPI file limit
+recursive-include sys_scan_agent/models/local_qwen/shards *
+
+# Exclude dev artifacts
+exclude *.db
+exclude *.log
+prune artifacts
+prune fixtures
+prune htmlcov
+prune mistral_env
+prune mistral-security-lora
+prune tests
+
+# Exclude python cache
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .pytest_cache
+global-exclude .coverage

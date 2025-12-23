@@ -118,9 +118,6 @@ This project is licensed under the **Apache License 2.0**. See [`LICENSE`](../LI
 ## Support & Community
 
 - **Documentation**: [Wiki](../docs/wiki/_index.md)
-- **Issues**: [GitHub Issues](https://github.com/J-mazz/sys-scan-graph/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/J-mazz/sys-scan-graph/discussions)
-- **Security**: See [`SECURITY.md`](../SECURITY.md) for vulnerability disclosure
 
 ---
 

@@ -1,4 +1,4 @@
-name: Publish Python Package
+name: Publish to PyPI
 
 on:
   release:
@@ -8,37 +8,76 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write  # Required for Trusted Publishing (OIDC)
+
 
 jobs:
-  publish:
+  build-and-publish:
+    name: Build and Publish to PyPI
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/sys-scan-agent
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
 
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
+    - name: Install Build Tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
 
-      - name: Build package
-        working-directory: agent
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # For main branch pushes, create a development version
-            sed -i "s/version='7.0.0'/version='7.0.0.dev0'/" setup.py
+    - name: Build Package (PEP 517)
+      run: python -m build
+
+    - name: 🛡️ Safety Gate: Verify Bundled Shards
+      run: |
+        echo "Inspecting build artifacts..."
+        ls -lh dist/
+        mkdir -p tmp_wheel
+        unzip -q dist/*.whl -d tmp_wheel
+        
+        # Find shard files in the extracted wheel
+        SHARD_FILES=$(find tmp_wheel -type f -name 'qwen3_analyst.gguf.part.*')
+        if [ -z "$SHARD_FILES" ]; then
+          echo "❌ CRITICAL FAILURE: No shard files found in wheel."
+          exit 1
+        fi
+        
+        # Per-shard size check (<=100MB)
+        MAX_SHARD_BYTES=$((100 * 1024 * 1024))
+        for f in $SHARD_FILES; do
+          size=$(stat -c%s "$f")
+          if [ "$size" -gt "$MAX_SHARD_BYTES" ]; then
+            echo "❌ CRITICAL FAILURE: Shard $f exceeds 100MB ($size bytes)."
+            exit 1
           fi
-          python -m build
+        done
+        
+        # Total size sanity check (<=10GB)
+        total=0
+        for f in $SHARD_FILES; do
+          s=$(stat -c%s "$f")
+          total=$((total + s))
+        done
+        echo "Total shards size: $total bytes"
+        if [ "$total" -gt $((10 * 1024 * 1024 * 1024)) ]; then
+          echo "❌ CRITICAL FAILURE: Total shard size exceeds 10GB ($total)."
+          exit 1
+        fi
+        
+        echo "✅ Safety Check Passed: shards included and sizes OK."
+    - name: Check Metadata (Twine)
+      run: twine check dist/*
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: agent/dist/
-          skip-existing: true
-          print-hash: true
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        # verify_metadata is true by default, ensuring description renders correctly
+        verbose: true

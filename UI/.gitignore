@@ -39,6 +39,7 @@ env/
 *.swo
 *~
 .DS_Store
+*.xml
 
 # Debian packaging
 debian/files

@@ -6,11 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "sys-scan-agent"
 version = "7.0.0"
 description = "AI-powered intelligence layer for the sys-scan-graph security scanner."
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 authors = [{ name = "Joseph Mazzini", email = "joseph@mazzlabs.works" }]
 maintainers = [{ name = "Joseph Mazzini", email = "joseph@mazzlabs.works" }]
-license = { text = "Apache-2.0" }
-requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+import-names = ["sys_scan_agent"]
+requires-python = ">=3.8"
 keywords = ["security", "scanner", "ai", "intelligence", "analysis", "linux"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -60,12 +62,49 @@ dev = [
 ]
 
 [project.scripts]
-sys-scan-agent = "sys_scan_agent.cli:app"
 sys-scan-graph = "sys_scan_agent.cli:app"
 sys-scan-intelligence = "sys_scan_agent.cli:app"
+sys-scan-assemble-model = "sys_scan_agent.models.assemble:main"
 
 [project.urls]
 Homepage = "https://github.com/J-mazz/sys-scan-graph"
 Repository = "https://github.com/J-mazz/sys-scan-graph"
 Issues = "https://github.com/J-mazz/sys-scan-graph/issues"
 Documentation = "https://github.com/J-mazz/sys-scan-graph#readme"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "docs*", "artifacts*", "fixtures*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["sys_scan_agent"]
+skip = ["__init__.py"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "langgraph.*",
+    "langchain_core.*",
+    "langchain.*",
+    "transformers.*",
+    "torch.*"
+]
+ignore_missing_imports = true

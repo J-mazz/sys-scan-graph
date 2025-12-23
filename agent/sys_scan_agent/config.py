@@ -124,3 +124,36 @@ def write_manifest(cfg: Config):
     except Exception:
         pass
     return man
+
+# The final reassembled filename expected on systems
+MODEL_FILENAME = "qwen3_analyst-q4_k_m.gguf"
+
+
+def get_model_path() -> Optional[Path]:
+    """
+    Locates the model in FHS-compliant paths.
+    Returns None if not found (caller handles error).
+
+    Fast checks (in order):
+      - AGENT_LOCAL_QWEN_MODEL_FILE (explicit file path override)
+      - /usr/share/sys-scan-agent/models
+      - ~/.local/share/sys-scan-agent/models
+      - ~/.cache/sys-scan-agent/models (post-install / reassembled cache)
+    """
+    # 0. Explicit file override (fast and exact)
+    env_file = os.environ.get("AGENT_LOCAL_QWEN_MODEL_FILE")
+    if env_file:
+        p = Path(env_file)
+        if p.exists():
+            return p
+
+    search_paths = [
+        Path("/usr/share/sys-scan-agent/models") / MODEL_FILENAME,  # Debian Standard
+        Path(os.environ.get("HOME", "")) / ".local/share/sys-scan-agent/models" / MODEL_FILENAME,  # User Override
+        Path(os.environ.get("HOME", "")) / ".cache" / "sys-scan-agent" / "models" / MODEL_FILENAME,  # Reassembled cache
+    ]
+
+    for path in search_paths:
+        if path.exists():
+            return path
+    return None

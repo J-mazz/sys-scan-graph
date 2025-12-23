@@ -7,7 +7,7 @@
 #        :                                  •       •                      
 #                                                                          
 #                                                                          
-#    2925
+#    2025
 #    cli.py
 
 # ==============================================================================
@@ -143,6 +143,57 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
         raise
 
 app = typer.Typer(help="sys-scan intelligence layer")
+
+from .config import get_model_path, MODEL_FILENAME
+import sys
+
+
+def _print_banner() -> None:
+    """Print the ASCII signature/banner for the CLI.
+
+    This is opt-out via the environment variable `SYS_SCAN_AGENT_NO_BANNER=1`.
+    Printing is muted in CI or highly-scripted contexts when that env var is set.
+    """
+    if os.environ.get("SYS_SCAN_AGENT_NO_BANNER") == "1":
+        return
+    banner = r"""
+   .________   ._____.___ .______  .______ .______ .___ .______  .___ 
+   :____.   \   :         |:      \ \____  |\____  |: __|:      \ : __|
+    __|  :/ |   |   \  /  ||   .   |/  ____|/  ____|| : ||       || : |
+   |     :  |   |   |\/   ||   :   |\      |\      ||   ||   |   ||   |
+    \__. __/   |___| |   ||___|   | \__:__| \__:__||   ||___|   ||   |
+        :/        |___|    |___|    :     :    :   |___|    |___||___|
+         :         
+                 
+
+   2025
+    """
+    # Use rich.print if available to have colored output, otherwise fallback to plain print
+    try:
+        from rich import print as rprint
+        rprint(banner)
+    except Exception:
+        print(banner)
+
+@app.callback()
+def main(ctx: typer.Context):
+    """Global startup callback. Performs a fail-fast model availability check only for commands that require the model."""
+    # Print banner early but allow opt-out
+    _print_banner()
+
+    model_dependent_commands = {"analyze", "validate-report", "validate-batch", "rule-gap-mine", "rarity-generate-cmd"}
+    invoked = ctx.invoked_subcommand
+    if invoked and invoked in model_dependent_commands:
+        # Only enforce fail-fast if user requested local model usage via env vars
+        wants_local_qwen = os.environ.get("AGENT_LLM_PROVIDER", "").lower() == "local-qwen" or bool(os.environ.get("AGENT_LOCAL_QWEN_MODEL_DIR"))
+        explicit_fail = os.environ.get("SYS_SCAN_AGENT_FAIL_IF_NO_MODEL", "") == "1"
+        if wants_local_qwen or explicit_fail:
+            model = get_model_path()
+            if not model:
+                print(f"CRITICAL ERROR: AI Model '{MODEL_FILENAME}' not found.")
+                print("Please install the data package: 'sudo apt install sys-scan-models'")
+                print("Or manually place the reassembled GGUF in: /usr/share/sys-scan-agent/models/")
+                sys.exit(1)
 
 @app.command()
 def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="Path to sys-scan JSON report"),

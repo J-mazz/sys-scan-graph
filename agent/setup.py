@@ -1,8 +1,5 @@
-from setuptools import setup, find_packages
+#!/usr/bin/env python3
+from setuptools import setup
 
-setup(
-    name='sys-scan-agent',
-    version='7.0.0',
-    packages=find_packages(),
-    include_package_data=True,
-)
+if __name__ == "__main__":
+    setup()
