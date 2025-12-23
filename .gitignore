@@ -20,6 +20,7 @@ enriched_*.html
 
 #fucking datasets
 *.tar.*
+qwen3_analyst-q4_k_m.gguf
 
 # CMake generator files
 CMakeCache.txt
