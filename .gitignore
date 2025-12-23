@@ -179,20 +179,9 @@ coverage.xml
 base_qwen/
 sft_adapter/
 
-# Local model weights / shards
-#
-# By default, ignore safetensors weights (they're large and often machine-local).
-# Exception: track the local-qwen shard set (split to <28MB shards) for reproducible offline runs.
-*.safetensors
-
-# Ignore the shards directory by default...
+# Local model weights / shards (keep only lightweight docs/placeholders)
 agent/sys_scan_agent/models/local_qwen/shards/
-# ...but explicitly include the tracked shard set and companion metadata.
-!agent/sys_scan_agent/models/local_qwen/shards/
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.safetensors
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.json
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.txt
-!agent/sys_scan_agent/models/local_qwen/shards/**/*.jinja
+*.safetensors
 
 # Translations
 *.mo
