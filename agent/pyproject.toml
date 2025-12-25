@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sys-scan-agent"
-version = "5.0.3"
+version = "7.0.0"
 description = "AI-powered intelligence layer for the sys-scan-graph security scanner."
 readme = "README.md"
 license = {text = "Apache License 2.0"}
