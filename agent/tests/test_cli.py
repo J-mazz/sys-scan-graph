@@ -341,6 +341,33 @@ class TestValidationCommands:
         assert result.exit_code == 3  # Schema validation error
         assert "Schema validation error" in result.output
 
+    def test_validate_report_uses_default_schema(self, runner, sample_report_file, temp_dir):
+        """When --schema is omitted, ensure the CLI uses the default `schema/v4.json`."""
+        minimal = json.dumps({
+            "type": "object",
+            "properties": {
+                "meta": {"type": "object"},
+                "summary": {"type": "object"},
+                "results": {"type": "array"}
+            }
+        })
+
+        # keep a reference to the original Path.read_text
+        orig_read = Path.read_text
+
+        def fake_read(self, *args, **kwargs):
+            # If the CLI tries to read the default schema file, return our minimal schema
+            if str(self).endswith("schema/v4.json"):
+                return minimal
+            return orig_read(self, *args, **kwargs)
+
+        with patch('pathlib.Path.read_text', new=fake_read):
+            with patch('sys_scan_agent.cli.run_intelligence_workflow') as mock_workflow:
+                mock_workflow.return_value = (MagicMock(correlations=[]), {})
+                result = runner.invoke(app, ["validate-report", "--report", str(sample_report_file)])
+                assert result.exit_code == 0
+                assert "Validation OK" in result.output
+
 
 class TestIntelligenceWorkflow:
     """Test the intelligence workflow runner."""
@@ -455,6 +482,9 @@ class TestAnalyzeCommand:
     def test_analyze_basic(self, mock_write_manifest, mock_write_html, mock_run_workflow,
                           mock_load_config, mock_sandbox_config):
         """Test basic analyze command."""
+        # Ensure model check passes during tests
+        with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+            mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
         # Mock config
         mock_config = MagicMock()
         mock_config.reports.html_enabled = True
@@ -466,6 +496,7 @@ class TestAnalyzeCommand:
         # Mock workflow result
         mock_enriched = MagicMock()
         mock_enriched.model_dump.return_value = {"test": "data"}
+        mock_enriched.model_dump_json.return_value = json.dumps({"test": "data"}, indent=2)
         mock_enriched.enriched_findings = []
         mock_run_workflow.return_value = (mock_enriched, {'test': 'state'})
 
@@ -479,11 +510,13 @@ class TestAnalyzeCommand:
             out_path = Path(tmpdir) / "output.json"
 
             try:
-                result = runner.invoke(app, [
-                    'analyze',
-                    '--report', report_path,
-                    '--out', str(out_path)
-                ])
+                with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+                    mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+                    result = runner.invoke(app, [
+                        'analyze',
+                        '--report', report_path,
+                        '--out', str(out_path)
+                    ])
 
                 assert result.exit_code == 0
                 assert "Wrote enriched output" in result.output
@@ -502,14 +535,17 @@ class TestAnalyzeCommand:
     @patch('sys_scan_agent.cli.run_intelligence_workflow')
     def test_analyze_dry_run(self, mock_run_workflow, mock_load_config, mock_sandbox):
         """Test analyze command with dry run."""
-        mock_sandbox.configure = MagicMock()
-        
+        # Ensure model check passes during tests
+        with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+            mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+            mock_sandbox.configure = MagicMock()        
         mock_config = MagicMock()
         mock_config.reports.html_enabled = False
         mock_load_config.return_value = mock_config
 
         mock_enriched = MagicMock()
         mock_enriched.model_dump.return_value = {"test": "data"}
+        mock_enriched.model_dump_json.return_value = json.dumps({"test": "data"}, indent=2)
         mock_run_workflow.return_value = (mock_enriched, {})
 
         runner = CliRunner()
@@ -519,11 +555,13 @@ class TestAnalyzeCommand:
             report_path = f.name
 
         try:
-            result = runner.invoke(app, [
-                'analyze',
-                '--report', report_path,
-                '--dry-run'
-            ])
+            with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+                mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+                result = runner.invoke(app, [
+                    'analyze',
+                    '--report', report_path,
+                    '--dry-run'
+                ])
 
             assert result.exit_code == 0
             mock_sandbox.configure.assert_called_with(dry_run=True)
@@ -537,13 +575,17 @@ class TestAnalyzeCommand:
     @patch('sys_scan_agent.cli.metrics_exporter.print_metrics_summary')
     def test_analyze_with_metrics_json(self, mock_print_summary, mock_write_json,
                                       mock_run_workflow, mock_load_config):
-        """Test analyze command with JSON metrics export."""
+        # Ensure model check passes during tests
+        with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+            mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+            """Test analyze command with JSON metrics export."""
         mock_config = MagicMock()
         mock_config.reports.html_enabled = False
         mock_load_config.return_value = mock_config
 
         mock_enriched = MagicMock()
         mock_enriched.model_dump.return_value = {"test": "data"}
+        mock_enriched.model_dump_json.return_value = json.dumps({"test": "data"}, indent=2)
         mock_run_workflow.return_value = (mock_enriched, {'metrics': 'data'})
 
         runner = CliRunner()
@@ -556,11 +598,13 @@ class TestAnalyzeCommand:
             metrics_path = Path(tmpdir) / "metrics.json"
 
             try:
-                result = runner.invoke(app, [
-                    'analyze',
-                    '--report', report_path,
-                    '--metrics-out', str(metrics_path)
-                ])
+                with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+                    mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+                    result = runner.invoke(app, [
+                        'analyze',
+                        '--report', report_path,
+                        '--metrics-out', str(metrics_path)
+                    ])
 
                 assert result.exit_code == 0
                 assert "Metrics exported to JSON" in result.output
@@ -574,7 +618,10 @@ class TestAnalyzeCommand:
     @patch('sys_scan_agent.cli.run_intelligence_workflow')
     @patch('sys_scan_agent.cli.metrics_exporter.export_metrics_csv')
     def test_analyze_with_metrics_csv(self, mock_export_csv, mock_run_workflow, mock_load_config):
-        """Test analyze command with CSV metrics export."""
+        # Ensure model check passes during tests
+        with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+            mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+            """Test analyze command with CSV metrics export."""
         mock_config = MagicMock()
         mock_config.reports.html_enabled = False
         mock_load_config.return_value = mock_config
@@ -593,11 +640,13 @@ class TestAnalyzeCommand:
                 report_path = f.name
 
             try:
-                result = runner.invoke(app, [
-                    'analyze',
-                    '--report', report_path,
-                    '--metrics-out', str(metrics_path)
-                ])
+                with patch('sys_scan_agent.cli.get_model_path') as mock_get_model:
+                    mock_get_model.return_value = Path('/tmp/qwen3_analyst-q4_k_m.gguf')
+                    result = runner.invoke(app, [
+                        'analyze',
+                        '--report', report_path,
+                        '--metrics-out', str(metrics_path)
+                    ])
 
                 assert result.exit_code == 0
                 assert "Metrics exported to CSV" in result.output

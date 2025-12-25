@@ -20,6 +20,7 @@ enriched_*.html
 
 #fucking datasets
 *.tar.*
+qwen3_analyst-q4_k_m.gguf
 
 # CMake generator files
 CMakeCache.txt
@@ -92,6 +93,8 @@ Thumbs.db
 /report.json
 /*_report.json
 /module_summary*.json
+enriched_*.json
+enriched_*.html
 
 # Coverage reports (HTML and other formats)
 /htmlcov/
@@ -179,8 +182,10 @@ coverage.xml
 base_qwen/
 sft_adapter/
 
-# Local model weights / shards (keep only lightweight docs/placeholders)
-agent/sys_scan_agent/models/local_qwen/shards/
+# Local model weights / shards
+#
+# By default, ignore safetensors weights (they're large and often machine-local).
+# Exception: track the local-qwen shard set (split to <28MB shards) for reproducible offline runs.
 *.safetensors
 
 # Translations
@@ -266,3 +271,5 @@ fuzz-*.profdata
  enriched_*.html 
 
  /artifacts/*
+agent/enriched_report.json
+agent/enriched_report.json

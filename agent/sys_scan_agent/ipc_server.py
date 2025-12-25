@@ -53,6 +53,8 @@ class FeedbackChannel:
     def __init__(self, socket_path: str = "/tmp/sys-scan-ui.sock"):
         self.socket_path = socket_path
         self.socket: Optional[socket.socket] = None
+        # For server mode, this is the accepted connection socket
+        self.conn: Optional[socket.socket] = None
         self.is_server = False
         self.running = False
         self.message_queue: queue.Queue = queue.Queue()
@@ -112,6 +114,7 @@ class FeedbackChannel:
             # Accept connection
             try:
                 conn, _ = self.socket.accept()
+                self.conn = conn
                 logger.info("Client connected")
             except Exception as e:
                 logger.error(f"Failed to accept connection: {e}")
@@ -145,6 +148,13 @@ class FeedbackChannel:
 
         if not self.is_server:
             conn.close()
+        else:
+            # Close accepted connection if present
+            if self.conn:
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
 
     def _handle_message(self, msg: Message):
         """Handle incoming message."""
@@ -161,14 +171,16 @@ class FeedbackChannel:
 
     def send_message(self, msg: Message) -> bool:
         """Send a message through the channel."""
-        if not self.socket or not self.running:
+        # Determine which socket to use for sending: accepted conn for server, socket for client
+        send_sock = self.conn if self.is_server else self.socket
+        if not send_sock or not self.running:
             logger.error("Cannot send message: channel not active")
             return False
 
         try:
             # Send message with newline delimiter
             data = msg.to_json() + '\n'
-            self.socket.sendall(data.encode('utf-8'))
+            send_sock.sendall(data.encode('utf-8'))
             logger.debug(f"Sent message: {msg.msg_type} (ID: {msg.msg_id})")
             return True
         except Exception as e:
@@ -322,4 +334,81 @@ def start_ipc_thread(socket_path: str = "/tmp/sys-scan-ui.sock"):
     return comm
 
 
-__all__ = ["Message", "FeedbackChannel", "GraphCommunicator", "start_ipc_thread"]
+# File-based fallback for systems without Unix sockets
+class FileFeedbackChannel:
+    """
+    File-based communication channel as fallback.
+
+    Uses JSON files in a shared directory for communication. Less efficient but
+    works on systems without Unix domain sockets (or for test harnesses).
+    """
+
+    def __init__(self, base_dir: str = "/tmp/sys-scan-ui-ipc"):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.request_dir = self.base_dir / "requests"
+        self.response_dir = self.base_dir / "responses"
+        self.request_dir.mkdir(exist_ok=True)
+        self.response_dir.mkdir(exist_ok=True)
+        self.running = False
+
+    def write_request(self, request_id: str, data: Dict[str, Any]) -> bool:
+        try:
+            request_file = self.request_dir / f"{request_id}.json"
+            with open(request_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            logger.info(f"Wrote request to {request_file}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to write request: {e}")
+            return False
+
+    def read_response(self, request_id: str, timeout: float = 300.0) -> Optional[Dict[str, Any]]:
+        response_file = self.response_dir / f"{request_id}.json"
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            if response_file.exists():
+                try:
+                    with open(response_file, 'r') as f:
+                        data = json.load(f)
+                    # Clean up
+                    response_file.unlink()
+                    request_file = self.request_dir / f"{request_id}.json"
+                    request_file.unlink(missing_ok=True)
+                    logger.info(f"Read response from {response_file}")
+                    return data
+                except Exception as e:
+                    logger.error(f"Failed to read response: {e}")
+                    return None
+
+            time.sleep(0.1)
+
+        logger.warning(f"Timeout waiting for response to {request_id}")
+        return None
+
+    def write_response(self, request_id: str, data: Dict[str, Any]) -> bool:
+        try:
+            response_file = self.response_dir / f"{request_id}.json"
+            with open(response_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            logger.info(f"Wrote response to {response_file}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to write response: {e}")
+            return False
+
+    def get_pending_requests(self):
+        requests = []
+        for request_file in self.request_dir.glob("*.json"):
+            try:
+                with open(request_file, 'r') as f:
+                    data = json.load(f)
+                data['request_id'] = request_file.stem
+                requests.append(data)
+            except Exception as e:
+                logger.error(f"Failed to read request {request_file}: {e}")
+        return requests
+
+
+__all__ = ["Message", "FeedbackChannel", "GraphCommunicator", "start_ipc_thread", "FileFeedbackChannel"]

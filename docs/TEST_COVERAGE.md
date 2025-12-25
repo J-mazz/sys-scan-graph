@@ -17,11 +17,12 @@ Python (agent)
 
 ### Quality gate
 
-The build enforces a **minimum line coverage** threshold (default: **85%**) via:
+The build enforces a **minimum line coverage** threshold (default: **85%**) for both C++ and Python:
 
-- `SYS_SCAN_COVERAGE_MIN` (CMake cache variable)
+- **C++**: enforced via the `coverage` build target (gcovr) and the `SYS_SCAN_COVERAGE_MIN` CMake cache variable. The CI `coverage` job runs `gcovr --fail-under-line 85` and will fail the build if line coverage for `src/` drops below 85%.
+- **Python (Agent)**: enforced in CI via pytest-cov. The CI `python-test` job runs pytest with `--cov-fail-under=85` for the `agent` package and will fail the job if coverage is under 85%.
 
-Function/branch/region coverage is still *reported* in the summary output, but it is not used to fail the `coverage` target.
+Function/branch/region coverage is still *reported* in the summary output, but line coverage is the primary gate used to determine pass/fail of the coverage job.
 
 ### What is (and is not) counted
 

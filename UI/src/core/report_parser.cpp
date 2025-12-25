@@ -1,4 +1,3 @@
-module;
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
@@ -6,9 +5,8 @@ module;
 #include <span>
 #include <QString>
 
-module sys_scan.ui.report_parser;
-
-import sys_scan.ui.types;
+#include "report_parser.h"
+#include "types.h"
 
 using json = nlohmann::json;
 
@@ -41,6 +39,21 @@ std::variant<std::vector<Finding>, ParseError> ReportParser::parse_json(std::spa
                 );
                 f.description = QString::fromStdString(item.value("description", std::string("")));
                 f.id = QString::fromStdString(item.value("id", std::string("")));
+
+                // Determine if a finding is correlated. We check for an explicit "tags" array
+                // and look for a "correlated" marker or common tags like "correlation" or "baseline:new".
+                f.correlated = false;
+                if (item.contains("tags") && item["tags"].is_array()) {
+                    for (const auto& t : item["tags"]) {
+                        if (!t.is_string()) continue;
+                        const auto tag = t.get<std::string>();
+                        if (tag == "correlated" || tag == "correlation" || tag.rfind("baseline:", 0) == 0) {
+                            f.correlated = true;
+                            break;
+                        }
+                    }
+                }
+
                 results.push_back(std::move(f));
             }
         }

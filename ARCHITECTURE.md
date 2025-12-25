@@ -1,40 +1,44 @@
-# Architecture Overview
+# Architecture — Overview
 
-`sys-scan-graph` has two cooperating layers:
-
-1. **Core scanner (C++23 toolchain, C++20 modules)** — deterministic host scanner that enumerates security surfaces and emits structured findings.
-2. **Intelligence layer (Python, optional)** — the `sys-scan-agent` package that enriches, correlates, and summarizes the core report.
+A compact explanation of responsibilities and how the system works.
 
 ```mermaid
 flowchart LR
-	A[sys-scan (C++)] -->|report.json| B[sys-scan-graph analyze (Python)]
-	B -->|enriched_report.json| C[Analysts / pipelines]
-	B -->|HTML / metrics| D[Dashboards / CI]
+  subgraph Core [C++ core]
+    direction TB
+    SCANNERS[scanners: process, network, kernel, mount, fs-perms, module, ebpf, yara, integrity]
+    REG[ScannerRegistry]
+    REPORT[Report (json, schema/v4.json)]
+    SCANNERS --> REG --> REPORT
+  end
+
+  subgraph Agent [Python agent (optional)]
+    direction TB
+    AGENT[sys-scan-agent]\n(enrichment, correlation, routing)
+    GRAPH[LangGraph workflow]\n(enrich -> reflect -> summarize -> risk/compliance)
+    AGENT --> GRAPH --> ENR[enriched_report.json / HTML / metrics]
+  end
+
+  REPORT --> AGENT
+  AGENT -.->|IPC socket| UI[UI / Investigation Director (optional)]
+  AGENT -.->|artifacts| CI[CI / analysts / pipelines]
 ```
 
-## Core scanner (C++23 with C++20 modules)
+How it accomplishes the goal (brief)
 
-- Built with the C++23 standard, using C++20 modules (`src/core/modules/`) plus scanner modules (`src/scanners/modules/*.ixx`).
-- Dependency injection via a scan context (no global config); deterministic registration order.
-- Outputs: JSON (stdout or `--output`) with optional canonical ordering (`--canonical`).
+- Scanners are modular C++ components that `co_yield` `Finding` objects; `Report::consume()` streams those findings into per-scanner `ScanResult` objects to keep memory bounded.
+- `ScannerRegistry` composes and runs scanners (sequential or bounded parallel), captures per-scanner warnings/errors, and prevents a single faulty scanner from crashing the run.
+- The executable writes `schema/v4.json`-compatible JSON; use `--canonical` to produce deterministic ordering for tests and CI.
+- The Python agent assembles a LangGraph-like workflow (`agent/sys_scan_agent/graph.py`) to enrich, correlate, and triage findings; local providers (e.g., `local-qwen`) are default and networked providers are opt-in.
+- CMake enforces a Clang compiler for module scanning; fuzz harnesses and coverage modes are provided for robustness.
 
-## Intelligence layer (Python)
+Where to find details
 
-- Packaged as `sys-scan-agent`; entrypoint CLIs: `sys-scan-graph` and `sys-scan-intelligence`.
-- Default provider: **local-qwen** (offline). Heuristic fallback remains available if models are absent.
-- Optional extras:
-	- `sys-scan-agent[ai]` enables local model loading (offline-first).
-	- `sys-scan-agent[api]` enables an **opt-in** LangChain API provider for external inference.
-		If you are working from a source checkout, install it with `pip install -e 'agent[api]'`.
-		External inference is disabled by default and requires `AGENT_EXTERNAL_LLM_ENABLED=1`.
+- Core implementation: `src/core/modules/`, `src/scanners/modules/` (scanner logic), `src/main.cpp` (composition root).
+- Agent: `agent/sys_scan_agent/` (CLI, graph orchestration, providers, models).
+- Schemas & fixtures: `schema/v4.json`, `schema/fleet_report.schema.json`.
+- Tests & CI: `tests/` (C++), `agent/tests/` (Python), `docs/TEST_COVERAGE.md`.
 
-## Data contract
+Design choices in one line:
 
-- Primary schema: `schema/v4.json` (sample `report.json` in repo root).
-- Canonicalization for stable ordering lives in `agent/sys_scan_agent/canonicalize.py` and is invoked by the CLI.
-
-## Pointers for contributors
-
-- Coverage & testing: `docs/TEST_COVERAGE.md`
-- Architecture deep dive: `docs/wiki/Architecture.md`
-- Scanner registry and execution: `src/core/modules/registry.ixx` and `src/main.cpp` (composition root)
+- Determinism, local-first intelligence, bounded resources, testability, and minimal external dependencies.

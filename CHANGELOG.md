@@ -10,6 +10,7 @@ Each release entry corresponds to a git tag in this repository, and the date is 
 - Track local Qwen weights via Git LFS.
 - Implemented C++20/23 features
 - New schema v4 for JSON reports
+- UI migration/integration: replaced legacy GTK4 dashboard with a new Qt/QML dashboard
 
 ## [v6.0.2] - 2025-10-18
 

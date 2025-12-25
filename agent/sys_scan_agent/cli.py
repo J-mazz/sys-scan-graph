@@ -7,7 +7,7 @@
 #        :                                  •       •                      
 #                                                                          
 #                                                                          
-#    2925
+#    2025
 #    cli.py
 
 # ==============================================================================
@@ -32,7 +32,6 @@ from . import graph
 from . import graph_state
 from . import models
 from . import metrics_exporter
-from . import canonicalize
 from .audit import tail_since
 from .rule_gap_miner import mine_gap_candidates, refine_with_llm
 from .rules import load_rules_dir, dry_run_apply
@@ -49,12 +48,6 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     # Load the report data
     import json
     raw_data = json.loads(report_path.read_text())
-
-    # Default to local, zero-trust provider wiring (allows override via env)
-    os.environ.setdefault("AGENT_LLM_PROVIDER", "local-qwen")
-    default_qwen_dir = Path(__file__).parent / "models" / "local_qwen" / "shards"
-    if default_qwen_dir.exists() and not os.environ.get("AGENT_LOCAL_QWEN_MODEL_DIR"):
-        os.environ["AGENT_LOCAL_QWEN_MODEL_DIR"] = str(default_qwen_dir)
     
     # Initialize state - aggregate findings from all scanners
     all_findings = []
@@ -93,92 +86,20 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
     
     # Normalize initial state
     state = graph_state.normalize_graph_state(initial_state)
-
-    def _build_enriched_output(final_state):
-        from .models import EnrichedOutput, Reductions, Summaries
-        enriched_findings = final_state.get('enriched_findings', [])
-        correlations = final_state.get('correlations', [])
-        risk_assessment = final_state.get('risk_assessment', {})
-        reductions_data = final_state.get('reductions')
-        if reductions_data is None:
-            reductions_data = graph._create_reductions(enriched_findings)
-        elif hasattr(reductions_data, 'model_dump'):
-            reductions_data = reductions_data.model_dump()
-        executive_summary = None
-        summary_blob = final_state.get('summary') or {}
-        if hasattr(summary_blob, 'model_dump'):
-            summary_blob = summary_blob.model_dump()
-        if isinstance(summary_blob, dict):
-            executive_summary = summary_blob.get('executive_summary') or summary_blob.get('text') or summary_blob.get('summary')
-        if not executive_summary:
-            executive_summary = graph._generate_executive_summary(enriched_findings, correlations, risk_assessment)
-        actions = final_state.get('actions') or []
-        return EnrichedOutput(
-            correlations=correlations,
-            reductions=Reductions(**reductions_data).model_dump(),
-            summaries=Summaries(executive_summary=executive_summary),
-            actions=actions,
-            enriched_findings=enriched_findings
-        )
-
-    # Fast path: LangGraph intelligence app (LLM-enabled) — opt-in via env
-    use_graph_app = os.environ.get('AGENT_GRAPH_APP_ENABLED', '0').lower() in {'1', 'true', 'yes'}
-    compiled_app = getattr(graph, 'app', None) if use_graph_app else None
-    if compiled_app is not None:
-        try:
-            runner = getattr(compiled_app, 'invoke', None) or getattr(compiled_app, '__call__', None)
-            if runner is None:
-                raise RuntimeError('compiled graph missing invoke()')
-            final_state = runner(state)
-            enriched = _build_enriched_output(final_state)
-            return enriched, final_state
-        except Exception as e:
-            print(f"[yellow]Graph app failed, falling back to scaffold: {e}[/yellow]")
-
-    # Fallback: existing scaffolded workflow (no tool graph)
-    # Check for missing optional components and set degraded mode
-    missing_components = []
-    try:
-        from .metrics_node import time_node
-    except ImportError:
-        missing_components.append("metrics_node")
     
-    if not hasattr(graph, 'enrich_findings') or graph.enrich_findings is None:
-        missing_components.append("enrich_findings")
-    if not hasattr(graph, 'correlate_findings') or graph.correlate_findings is None:
-        missing_components.append("correlate_findings")
-    if not hasattr(graph, 'risk_analyzer') or graph.risk_analyzer is None:
-        missing_components.append("risk_analyzer")
-    if not hasattr(graph, 'compliance_checker') or graph.compliance_checker is None:
-        missing_components.append("compliance_checker")
-    if not hasattr(graph, 'metrics_collector') or graph.metrics_collector is None:
-        missing_components.append("metrics_collector")
-
-    if missing_components:
-        state['degraded_mode'] = True
-        state['warnings'].append({
-            'type': 'degraded_mode',
-            'message': f'Workflow running in degraded mode due to missing components: {", ".join(missing_components)}',
-            'missing_components': missing_components
-        })
-        print(f"[yellow]Warning: Running in degraded mode - missing: {', '.join(missing_components)}[/yellow]")
-
+    # Run intelligence workflow
     try:
-        try:
-            from .metrics_node import time_node
-        except ImportError:
-            from contextlib import contextmanager
-            @contextmanager
-            def time_node(state, node_name):
-                yield state
-            print("[yellow]Warning: metrics_node not available, running without telemetry[/yellow]")
-
+        # Import telemetry for node timing
+        from .metrics_node import time_node
+        
+        # Run synchronous nodes with telemetry
         with time_node(state, 'enrich_findings') as timed_state:
             state = graph.enrich_findings(timed_state)
-
+        
         with time_node(state, 'correlate_findings') as timed_state:
             state = graph.correlate_findings(timed_state)
-
+        
+        # Run async nodes with telemetry
         import asyncio
         async def run_async_nodes(current_state):
             with time_node(current_state, 'risk_analyzer') as timed_state:
@@ -188,16 +109,91 @@ def run_intelligence_workflow(report_path: Path) -> tuple:
             with time_node(current_state, 'metrics_collector') as timed_state:
                 current_state = await graph.metrics_collector(timed_state)
             return current_state
-
+        
+        # Run async workflow
         final_state = asyncio.run(run_async_nodes(state))
-        enriched = _build_enriched_output(final_state)
+        
+        # Create enriched output (simplified version)
+        from .models import EnrichedOutput, Reductions, Summaries
+        
+        # Generate executive summary
+        executive_summary = graph._generate_executive_summary(
+            final_state.get('enriched_findings', []),
+            final_state.get('correlations', []),
+            final_state.get('risk_assessment', {})
+        )
+        
+        # Generate reductions
+        reductions_data = graph._create_reductions(
+            final_state.get('enriched_findings', [])
+        )
+        
+        enriched = EnrichedOutput(
+            correlations=final_state.get('correlations', []),
+            reductions=Reductions(**reductions_data).model_dump(),
+            summaries=Summaries(executive_summary=executive_summary),
+            actions=[],
+            enriched_findings=final_state.get('enriched_findings', [])
+        )
+        
         return enriched, final_state
-
+        
     except Exception as e:
         print(f"[red]Scaffold workflow failed: {e}[/red]")
         raise
 
 app = typer.Typer(help="sys-scan intelligence layer")
+
+from .config import get_model_path, MODEL_FILENAME
+import sys
+
+
+def _print_banner() -> None:
+    """Print the ASCII signature/banner for the CLI.
+
+    This is opt-out via the environment variable `SYS_SCAN_AGENT_NO_BANNER=1`.
+    Printing is muted in CI or highly-scripted contexts when that env var is set.
+    """
+    if os.environ.get("SYS_SCAN_AGENT_NO_BANNER") == "1":
+        return
+    banner = r"""
+   .________   ._____.___ .______  .______ .______ .___ .______  .___ 
+   :____.   \   :         |:      \ \____  |\____  |: __|:      \ : __|
+    __|  :/ |   |   \  /  ||   .   |/  ____|/  ____|| : ||       || : |
+   |     :  |   |   |\/   ||   :   |\      |\      ||   ||   |   ||   |
+    \__. __/   |___| |   ||___|   | \__:__| \__:__||   ||___|   ||   |
+        :/        |___|    |___|    :     :    :   |___|    |___||___|
+         :         
+                 
+
+   2025
+    """
+    # Use rich.print if available to have colored output, otherwise fallback to plain print
+    try:
+        from rich import print as rprint
+        rprint(banner)
+    except Exception:
+        print(banner)
+
+@app.callback()
+def main(ctx: typer.Context):
+    """Global startup callback. Performs a fail-fast model availability check only for commands that require the model."""
+    # Print banner early but allow opt-out
+    _print_banner()
+
+    model_dependent_commands = {"analyze", "validate-report", "validate-batch", "rule-gap-mine", "rarity-generate-cmd"}
+    invoked = ctx.invoked_subcommand
+    if invoked and invoked in model_dependent_commands:
+        # Only enforce fail-fast if user requested local model usage via env vars
+        wants_local_qwen = os.environ.get("AGENT_LLM_PROVIDER", "").lower() == "local-qwen" or bool(os.environ.get("AGENT_LOCAL_QWEN_MODEL_DIR"))
+        explicit_fail = os.environ.get("SYS_SCAN_AGENT_FAIL_IF_NO_MODEL", "") == "1"
+        if wants_local_qwen or explicit_fail:
+            model = get_model_path()
+            if not model:
+                print(f"CRITICAL ERROR: AI Model '{MODEL_FILENAME}' not found.")
+                print("Please install the data package: 'sudo apt install sys-scan-models'")
+                print("Or manually place the reassembled GGUF in: /usr/share/sys-scan-agent/models/")
+                sys.exit(1)
 
 @app.command()
 def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="Path to sys-scan JSON report"),
@@ -207,35 +203,12 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
             index_dir: Path = typer.Option(None, help="Directory to append time-series index entries"),
             dry_run: bool = typer.Option(False, help="Sandbox dry-run (no external commands executed)"),
             prev: Path = typer.Option(None, help="Previous enriched report for diff"),
-            metrics_out: Path = typer.Option(None, help="Export node telemetry metrics to file (supports .json, .csv, .prom extensions)"),
-            interactive: bool = typer.Option(False, help="Enable UI IPC mode"),
-            socket: str = typer.Option("/tmp/sys-scan-ui.sock", help="IPC socket path")):
+            metrics_out: Path = typer.Option(None, help="Export node telemetry metrics to file (supports .json, .csv, .prom extensions)")):
     cfg = config.load_config()
-    comm = None
     if dry_run:
         sandbox.configure(dry_run=True)
-
-    # If interactive flag is set, start IPC server and rebuild interactive graph
-    if interactive:
-        try:
-            from .ipc_server import start_ipc_thread
-            comm = start_ipc_thread(socket)
-            try:
-                wf, appobj = graph.build_workflow(interactive=True)
-                graph.workflow = wf
-                graph.app = appobj
-            except Exception as e:
-                print(f"[yellow]Warning: failed to build interactive graph: {e}[/yellow]")
-        except Exception as e:
-            print(f"[red]Failed to start IPC server: {e}[/red]")
-
     enriched, final_state = run_intelligence_workflow(report)
-    
-    # Apply canonicalization for deterministic output ordering
-    enriched_dict = enriched.model_dump()
-    canonicalized = canonicalize.canonicalize_enriched_output_dict(enriched_dict)
-    
-    out.write_text(json.dumps(canonicalized, indent=2))
+    out.write_text(enriched.model_dump_json(indent=2))
     print(f"[green]Wrote enriched output -> {out}")
 
     # Export metrics if requested
@@ -290,15 +263,8 @@ def analyze(report: Path = typer.Option(..., exists=True, readable=True, help="P
     if index_dir:
         print(f"[cyan]Index updated at {index_dir}/index.json")
 
-    # Clean up IPC server if we started it
-    try:
-        if comm:
-            comm.close()
-    except Exception:
-        pass
-
 @app.command()
-def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw report"),
+def validate_report(report: Path = typer.Option(..., exists=True, help="Path to raw v4 report"),
                     schema: Path = typer.Option(Path("schema/v4.json"), help="Schema path"),
                     max_ms: int = typer.Option(500, help="Wall time budget (ms)")):
     start = time.time()
@@ -390,7 +356,7 @@ def risk_calibration(show: bool = typer.Option(False, help="Show current calibra
         print(cal)
 
 @app.command()
-def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw v2 report JSON"),
+def risk_decision(report: Path = typer.Option(..., exists=True, help="Raw report JSON (v4)"),
                   finding_id: str = typer.Option(...),
                   decision: str = typer.Option(..., help="tp|fp|ignore"),
                   db: Path = typer.Option(Path("agent_baseline.db"))):
@@ -621,18 +587,4 @@ def _notify(cfg, message: str):
     return
 
 if __name__ == "__main__":
-    # Bootstrap check for core binary at CLI runtime
-    import subprocess
-    import sys
-    try:
-        subprocess.run(["which", "sys-scan-graph"], check=True, capture_output=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print(
-            "Error: 'sys-scan-graph' core not found.\n"
-            "Please install the core package first by running:\n"
-            "sudo apt install sys-scan-graph",
-            file=sys.stderr
-        )
-        sys.exit(1)
-    
     app()

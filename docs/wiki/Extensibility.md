@@ -66,6 +66,19 @@ Notes:
 - Keep scanner output stable: avoid embedding timestamps or non-deterministic identifiers in finding IDs.
 - Prefer explicit feature flags (`--enable/--disable`) consistent with existing scanners.
 
+## Extending the Intelligence Layer — Adding an LLM provider
+
+Providers live under `agent/sys_scan_agent/providers/` and are discovered by the factory in `agent/sys_scan_agent/llm_provider.py`.
+
+Minimal steps:
+
+1. Add a new provider module implementing the `ILLMProvider` Protocol (see `agent/sys_scan_agent/llm_provider.py` for the required methods and telemetry (`ProviderMetadata`)).
+2. Add the new provider to the factory mapping or update `_maybe_init_from_env()` to include alias names and fallback logic. Handle opt-in for networked providers using `AGENT_EXTERNAL_LLM_ENABLED`.
+3. Add tests under `agent/tests/` that mock the provider and validate behavior and telemetry.
+4. Document the provider in `docs/wiki/Intelligence-Layer.md` and `docs/wiki/Extensibility.md` (what data may leave the host, required credentials, how to disable).
+
+Security note: If the provider requires external network access, gate it behind `AGENT_EXTERNAL_LLM_ENABLED=1` and document clearly what is sent to the external service.
+
 ## Extend the Python intelligence workflow (advanced)
 
 The intelligence workflow consumes `report.json` and produces `enriched_report.json`.

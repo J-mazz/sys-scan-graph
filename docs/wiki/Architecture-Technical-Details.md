@@ -1,6 +1,8 @@
 # Architecture — Technical Details 🔧
 
-This document describes the *actual implementation* and runtime behavior of the project as of this repository snapshot. It is intended for maintainers and contributors who need to understand build-time choices, core runtime components, testing harnesses, and practical debugging tips.
+**Note:** the authoritative report schema is `schema/v4.json`; CLI defaults that referenced `v2` have been updated to `v4` to avoid confusion.
+
+This document describes the implementation and runtime behavior of the project as of this repository snapshot. It is intended for maintainers and contributors who need to understand build-time choices, core runtime components, testing harnesses, and practical debugging tips.
 
 ---
 

@@ -23,8 +23,18 @@ git clone https://github.com/J-mazz/sys-scan-graph.git
 cd sys-scan-graph
 
 # Build core scanner
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+# Recommended: use a C++23-capable toolchain (Clang 17+/GCC 13+) and Ninja generator.
+# Example (Linux, system Clang):
+export CC=clang
+export CXX=clang++
+cmake -B build -S . -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_STANDARD=23 \
+  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+  -DCMAKE_CXX_EXTENSIONS=OFF
 cmake --build build -j$(nproc)
+
+# If you encounter module or C++23 errors, update your compiler toolchain to a newer release.
 ```
 
 ## Install the intelligence layer (Python, optional)

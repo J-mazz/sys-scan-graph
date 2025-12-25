@@ -7,13 +7,22 @@
 #include <QObject>
 #include <QFile>
 #include <QThread>
+#include <QQuickStyle>
 
-import sys_scan.ui.report_parser;
-import sys_scan.ui.finding_model;
-import sys_scan.ui.types;
-import sys_scan.ui.agent;
+#include "core/report_parser.h"
+#include "core/finding_model.h"
+#include "core/types.h"
+#include "core/agent_service.h"
+#include "core/ipc_service.h"
+#include <QProcess>
+
+// Instantiate the model at file scope so it is accessible in signal handlers
+static sys_scan::ui::FindingModel model;
 
 int main(int argc, char *argv[]) {
+    // Use Material style for Qt Quick Controls to enable consistent theming
+    QQuickStyle::setStyle("Material");
+
     // Prefer Vulkan rendering backend when available
     QQuickWindow::setGraphicsApi(QSGRendererInterface::VulkanRhi);
 
@@ -25,25 +34,17 @@ int main(int argc, char *argv[]) {
 
     // Register types for QML access
     qmlRegisterType<sys_scan::ui::FindingModel>("SysScan.UI", 1, 0, "FindingModel");
-    qRegisterMetaType<sys_scan::ui::Finding>("sys_scan::ui::Finding");
+    qmlRegisterSingletonType(QUrl("qrc:/Theme.qml"), "SysScan.UI", 1, 0, "Theme");
 
-    // Initialize Model
-    static sys_scan::ui::FindingModel model;
+    // Initialize Model (already at file scope)
 
-    // Mock Data for Phase 2
-    std::vector<sys_scan::ui::Finding> test_data = {
-        {"CVE-2024-001", "OpenSSH Vulnerability", "Critical buffer overflow", sys_scan::ui::Severity::Critical},
-        {"MISC-002", "Weak Password Policy", "Minimum length not enforced", sys_scan::ui::Severity::Medium}
-    };
-    model.loadFindings(std::move(test_data));
+
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("appModel", &model);
 
     // AgentService registration & exposure
     static sys_scan::ui::AgentService agent;
-    // Uncomment to preload a model when available:
-    // agent.loadModel("/path/to/model.gguf");
     engine.rootContext()->setContextProperty("agentService", &agent);
 
     // IpcService registration & exposure
@@ -51,12 +52,14 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("ipc", &ipc);
 
     // If the IPC socket does not exist, try to launch the Agent as a subprocess
+    // Use canonical agent entrypoints to avoid shipping demo/legacy names or commented toggles.
     const QString socketPath = QStringLiteral("/tmp/sys-scan-ui.sock");
     if (!QFile::exists(socketPath)) {
-        // Try multiple candidate commands (best-effort)
+        // Try a minimal, canonical set of commands (best-effort) — prefer the packaged Python entrypoint
         const QStringList candidates = {
-            QStringLiteral("sys-scan-agent"),
-            QStringLiteral("sys-scan-intelligence"),
+            // Prefer the top-level CLI package which is the canonical entrypoint for interactive runs
+            QStringLiteral("sys-scan-graph"),
+            // Fallback to invoking the Python module directly if the package isn't on PATH
             QStringLiteral("python3 -m sys_scan_agent.cli")
         };
 
@@ -93,7 +96,7 @@ int main(int argc, char *argv[]) {
 
     // Reload model when Python pipeline notifies of new report
     QObject::connect(&ipc, &sys_scan::ui::IpcService::analysisCompleted,
-        [&model](QString path) {
+        [](QString path) {
             // Load file content and parse; guard failures silently
             QFile f(path);
             if (!f.open(QIODevice::ReadOnly)) return;
@@ -105,7 +108,28 @@ int main(int argc, char *argv[]) {
             }
     });
 
-    const QUrl url = QUrl::fromLocalFile(QStringLiteral("resources/qml/Main.qml"));
+    // Resolve Main QML file from multiple candidate locations so the UI works
+    // when run from build dir, installed paths, or when assets are packaged.
+    const QStringList qmlCandidates = {
+        QStringLiteral("resources/qml/Main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/resources/qml/Main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../resources/qml/Main.qml"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../assets/qml/Main.qml"),
+        QStringLiteral("assets/qml/Main.qml")
+    };
+
+    QString qmlPath;
+    for (const QString &c : qmlCandidates) {
+        if (QFile::exists(c)) { qmlPath = c; break; }
+    }
+    if (qmlPath.isEmpty()) {
+        qWarning().noquote() << "Main QML not found; tried:" << qmlCandidates;
+        qmlPath = QStringLiteral("resources/qml/Main.qml"); // fallback to original path
+    }
+
+    const QUrl url = QUrl::fromLocalFile(qmlPath);
+    qInfo().noquote() << "Loading QML from" << url.toString();
+
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl)

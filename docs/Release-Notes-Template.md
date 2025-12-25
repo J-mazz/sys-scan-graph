@@ -1,5 +1,17 @@
 # Release Notes Template
 
+## 📦 Packaging Changes
+
+* **Version:** v7.0.0
+* **Architecture:** Split-Distribution (Code on PyPI, Models via System Package)
+* **PyPI Artifact:** `sys-scan-agent` (Pure Python, <1MB)
+
+### ⚠️ Upgrading from v5.x
+This release **removes** bundled model binaries to comply with PyPI limits. If you rely on the agent for AI analysis, you must ensure the model weights are present in your system paths:
+
+* **Debian/Ubuntu:** `apt install sys-scan-models` (if available)
+* **Manual:** Ensure `qwen3_analyst-q4_k_m.gguf` is in `/usr/share/sys-scan-agent/models/`
+
 ## Highlights
 
 - Short bullets of key features, fixes, and performance changes.

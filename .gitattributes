@@ -57,8 +57,7 @@ agent/.venv/** linguist-vendored
 # *.sqlite* filter=lfs diff=lfs merge=lfs -text
 # *.tar.gz  filter=lfs diff=lfs merge=lfs -text
 # Handle specific model file with Git LFS
-agent/mistral-security-lora/adapter_model.safetensors filter=lfs diff=lfs merge=lfs -text
-agent/sys_scan_agent/models/embedded-mistral-agent/adapter_model.safetensors filter=lfs diff=lfs merge=lfs -text
+
 # prevent large C-file from distorting actual scope of project
 vmlinux.h linguist-generated
 # End of .gitattributes

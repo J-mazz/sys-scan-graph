@@ -43,6 +43,7 @@ Provider selection is implemented in `agent/sys_scan_agent/llm_provider.py`.
 By default, the project is **local-first** (no cloud LLM API calls unless you explicitly opt in). Supported values:
 
 - `AGENT_LLM_PROVIDER=local-qwen` (default): attempts to initialize `LocalQwenLLMProvider`.
+  - See `agent/sys_scan_agent/models/local_qwen/MODEL_CARD.md` for local-QWEN model files and usage notes.
 - `AGENT_LLM_PROVIDER=local`: deterministic local heuristic provider (`LocalLLMProvider`).
 - `AGENT_LLM_PROVIDER=null`: deterministic no-LLM provider (`NullLLMProvider`).
 - `AGENT_LLM_PROVIDER=langchain-api`: **external inference via LangChain** (opt-in).
