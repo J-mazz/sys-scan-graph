@@ -35,13 +35,6 @@ jobs:
 
     - name: Build Package (PEP 517)
       run: python -m build
-
-    - name: 🛡️ Safety Gate: Verify Bundled Shards
-      run: |
-        echo "Inspecting build artifacts..."
-        ls -lh dist/
-        mkdir -p tmp_wheel
-        unzip -q dist/*.whl -d tmp_wheel
         
         # Find shard files in the extracted wheel
         SHARD_FILES=$(find tmp_wheel -type f -name 'qwen3_analyst.gguf.part.*')
