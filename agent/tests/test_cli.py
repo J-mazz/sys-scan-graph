@@ -341,6 +341,33 @@ class TestValidationCommands:
         assert result.exit_code == 3  # Schema validation error
         assert "Schema validation error" in result.output
 
+    def test_validate_report_uses_default_schema(self, runner, sample_report_file, temp_dir):
+        """When --schema is omitted, ensure the CLI uses the default `schema/v4.json`."""
+        minimal = json.dumps({
+            "type": "object",
+            "properties": {
+                "meta": {"type": "object"},
+                "summary": {"type": "object"},
+                "results": {"type": "array"}
+            }
+        })
+
+        # keep a reference to the original Path.read_text
+        orig_read = Path.read_text
+
+        def fake_read(self, *args, **kwargs):
+            # If the CLI tries to read the default schema file, return our minimal schema
+            if str(self).endswith("schema/v4.json"):
+                return minimal
+            return orig_read(self, *args, **kwargs)
+
+        with patch('pathlib.Path.read_text', new=fake_read):
+            with patch('sys_scan_agent.cli.run_intelligence_workflow') as mock_workflow:
+                mock_workflow.return_value = (MagicMock(correlations=[]), {})
+                result = runner.invoke(app, ["validate-report", "--report", str(sample_report_file)])
+                assert result.exit_code == 0
+                assert "Validation OK" in result.output
+
 
 class TestIntelligenceWorkflow:
     """Test the intelligence workflow runner."""
