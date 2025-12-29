@@ -1,20 +1,40 @@
-  container:
-  image: debian:stable
+name: CodeQL
 
-  steps:
-  - name: Install dependencies
-    run: |
-      apt-get update
-      apt-get install -y clang g++ cmake ninja-build libbpf-dev linux-headers-$(uname -r) git
+on:
+  push:
+    branches: [ main ]
+  pull_request: 
+    branches: [ main ]
+  schedule:
+    - cron:  '0 3 * * 0'
 
-  - name: Checkout
-    uses: actions/checkout@v4
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:stable
 
-  - name: Configure CMake
-    run: CC=clang CXX=clang++ cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=23
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y clang g++ cmake ninja-build \
+            libbpf-dev linux-headers-$(uname -r) git \
+            python3 python3-pip qtdeclarative5-dev qt5-qmake
 
-  - name: Build
-    run: cmake --build build -j$(nproc)
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Perform CodeQL Analysis
-    uses: github/codeql-action/analyze@v3
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: cpp, python, qml
+
+      - name: Configure CMake
+        run: CC=clang CXX=clang++ cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=23
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
