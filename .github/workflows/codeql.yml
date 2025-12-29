@@ -19,7 +19,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y clang g++ cmake ninja-build \
-            libbpf-dev linux-headers-$(uname -r) git \
+            libbpf-dev linux-headers-amd64 git \
             python3 python3-pip qtdeclarative5-dev qt5-qmake
 
       - name: Checkout
