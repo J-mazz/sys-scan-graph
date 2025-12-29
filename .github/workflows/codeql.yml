@@ -1,7 +1,7 @@
-container:
+  container:
   image: debian:stable
 
-steps:
+    steps:
   - name: Install dependencies
     run: |
       apt-get update
