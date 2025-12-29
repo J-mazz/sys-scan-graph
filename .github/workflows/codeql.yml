@@ -24,28 +24,22 @@ jobs:
     steps:
       - name: Checkout
         uses:  actions/checkout@v4
-      
       - name: Install dependencies
         run: |
           dnf install -y gcc g++ cmake ninja-build libbpf-devel kernel-devel git
+
+      - name: Configure CMake
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=23
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages:  ${{ matrix.language }}
-          
-      - name: Configure CMake
-        run: CC=clang CXX=clang++ cmake .
-  
-      - name: Set up Clang compiler
-        run: |
-          export CC=clang
-          export CXX=clang++
+        
       
-      - name: Build
-        run: |
-          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF 
-          cmake --build build -j$(nproc)
       
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
