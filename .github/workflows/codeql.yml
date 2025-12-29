@@ -33,10 +33,18 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages:  ${{ matrix.language }}
+          
+      - name: Configure CMake
+        run: CC=clang CXX=clang++ cmake .
+  
+      - name: Set up Clang compiler
+        run: |
+          export CC=clang
+          export CXX=clang++
       
       - name: Build
         run: |
-          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF 
           cmake --build build -j$(nproc)
       
       - name: Perform CodeQL Analysis
