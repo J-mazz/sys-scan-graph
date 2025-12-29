@@ -28,7 +28,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: cpp, python, qml
+          languages: cpp, python
 
       - name: Configure CMake
         run: CC=clang CXX=clang++ cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=23
